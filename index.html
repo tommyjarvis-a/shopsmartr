@@ -122,6 +122,26 @@
         <h1 id="ads-title">Weekly ads</h1>
         <p class="muted lead">Official ads for your stores. They open on each store's own website.</p>
         <ul class="card ad-list" data-ad-list></ul>
+        <section class="prices" id="prices" aria-labelledby="prices-title" hidden>
+          <div class="section-h"><h3 id="prices-title">Price snapshot</h3><button type="button" class="btn btn-ghost btn-sm" id="prices-forget" hidden>Forget passphrase</button></div>
+          <div id="prices-locked" class="card prices-card">
+            <p class="muted">Your household price snapshot is locked.</p>
+            <form class="unlock-form" id="unlock-form" novalidate>
+              <input type="text" name="username" value="ShopSmartR household" autocomplete="username" hidden>
+              <div class="field">
+                <label class="label" for="unlock-pass">Household passphrase</label>
+                <input class="input" id="unlock-pass" name="passphrase" type="password" autocomplete="current-password" required>
+              </div>
+              <button type="submit" class="btn btn-primary" id="unlock-btn">Unlock</button>
+            </form>
+            <p class="status" id="unlock-status" role="status" aria-live="polite"></p>
+          </div>
+          <div id="prices-open" hidden>
+            <p class="faint" id="prices-asof"></p>
+            <div id="prices-groups"></div>
+            <p class="faint mt-2">A saved snapshot, not official checkout prices. Shelf, sale and online prices can differ; confirm at the store.</p>
+          </div>
+        </section>
         <p class="tip"><svg class="icon icon-20" aria-hidden="true"><use href="#i-bulb"/></svg><span>Spot a deal? Add it to your list with the store tag so it's grouped for that trip.</span></p>
         <a class="btn btn-ghost" href="#stores">Change stores</a>
         <p class="footer">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. ShopSmartR doesn't show official checkout prices; confirm hours and prices with the store.</p>
@@ -242,6 +262,19 @@
       <span class="ini" data-ini aria-hidden="true"><span class="dot dot-lg" data-dot></span></span>
       <span class="ad-body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
       <a class="go" data-link target="_blank" rel="noopener noreferrer">Open ad<svg class="icon icon-16" aria-hidden="true"><use href="#i-ext"/></svg></a>
+    </li>
+  </template>
+  <template id="tpl-price-group">
+    <section class="price-group">
+      <div class="group-h"><span class="dot" data-dot aria-hidden="true"></span><h3 data-title></h3></div>
+      <ul class="card price-list" data-items></ul>
+    </section>
+  </template>
+
+  <template id="tpl-price">
+    <li class="price-row">
+      <span class="price-body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
+      <span class="price-side"><span class="badge" data-sale hidden>sale</span><span class="price" data-price></span><span class="meta" data-unit></span></span>
     </li>
   </template>
 </body>

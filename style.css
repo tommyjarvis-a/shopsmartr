@@ -160,6 +160,18 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 .screen-ads .ad-list { margin-top: var(--space-5); }
 .screen-ads .btn-ghost { padding: 0; }
 
+/* Price snapshot (only shown when data/prices.enc exists) */
+.prices { margin-top: var(--space-6); }
+.prices-card { padding: var(--space-4); display: grid; gap: var(--space-3); }
+.unlock-form { display: grid; gap: var(--space-3); }
+.price-group { margin-top: var(--space-3); }
+.price-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+.price-row + .price-row { border-top: 1px solid var(--color-border); }
+.price-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.price-body .name { font-weight: var(--fw-medium); }
+.price-side { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.price { font-weight: var(--fw-bold); }
+
 /* Footer */
 .footer { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); text-align: center; padding: var(--space-6) var(--space-4) var(--space-3); }
 .footer-side { text-align: left; padding: 0 var(--space-2); }

@@ -5,7 +5,7 @@ import { validateStoresDoc, indexById, CHAINS } from './stores.js';
 import * as L from './list.js';
 import { loadState, saveState } from './storage.js';
 import { toCSV, toText } from './export.js';
-import { loadPrices } from './prices.js';
+import * as Prices from './prices.js';
 import * as UI from './ui.js';
 
 const el = (id) => document.getElementById(id);
@@ -278,6 +278,47 @@ function bind() {
   if (typeof navigator.share === 'function') menu().querySelector('[data-action="share"]').hidden = false;
 }
 
+// ---------- Optional encrypted price snapshot ----------
+let priceEnv = null;
+function showPrices(doc) {
+  el('prices-locked').hidden = Boolean(doc);
+  el('prices-open').hidden = !doc;
+  el('prices-forget').hidden = !doc;
+  if (!doc) return;
+  const when = Date.parse(doc.asOf);
+  el('prices-asof').textContent = Number.isFinite(when) ? `As of ${new Date(when).toLocaleString()}` : '';
+  UI.renderPrices(el('prices-groups'), Prices.groupPrices(doc));
+}
+
+async function initPrices() {
+  priceEnv = await Prices.loadEnvelope();
+  if (!priceEnv) return;            // no data/prices.enc: price UI stays hidden
+  el('prices').hidden = false;
+  showPrices(await Prices.unlockWithCache(priceEnv));
+  el('unlock-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = el('unlock-pass');
+    const btn = el('unlock-btn');
+    btn.disabled = true;
+    UI.setStatus(el('unlock-status'), 'Unlocking…');
+    try {
+      const doc = await Prices.unlockWithPassphrase(priceEnv, input.value);
+      input.value = '';
+      UI.setStatus(el('unlock-status'), '');
+      showPrices(doc);
+    } catch (err) {
+      input.value = '';
+      input.focus();
+      UI.setStatus(el('unlock-status'), err instanceof Prices.WrongPassphraseError ? 'Wrong passphrase. Please try again.' : 'Could not unlock the price snapshot.', 'error');
+    } finally { btn.disabled = false; }
+  });
+  el('prices-forget').addEventListener('click', async () => {
+    await Prices.forgetKeys();
+    showPrices(null);
+    UI.setStatus(el('unlock-status'), 'Passphrase forgotten on this device.');
+  });
+}
+
 async function init() {
   document.querySelectorAll('[data-version]').forEach((n) => { n.textContent = `v${VERSION}`; });
   UI.fillUnitSelects();
@@ -300,8 +341,7 @@ async function init() {
   r.checked = true;
   route();
   if (state.zip) runSearch({ quiet: true }); else renderAll();
-  // Phase-2 hook: an optional encrypted price feed. Absent file => nothing is shown.
-  loadPrices().then((prices) => { if (prices) document.body.dataset.prices = 'available'; });
+  initPrices();
 }
 
 init();

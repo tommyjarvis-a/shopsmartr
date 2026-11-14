@@ -176,3 +176,24 @@ export function download(filename, text, type) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+const money = (n) => (Number.isFinite(n) ? `$${n.toFixed(2)}` : '');
+
+/** groups: [{store, items}] from prices.groupPrices(). */
+export function renderPrices(container, groups) {
+  container.replaceChildren(...groups.map((g) => {
+    const sec = fromTemplate('tpl-price-group');
+    sec.dataset.chain = g.store.chain;
+    $('[data-title]', sec).textContent = g.store.name || `${g.store.chain} ${g.store.storeId}`;
+    $('[data-items]', sec).replaceChildren(...g.items.map((it) => {
+      const li = fromTemplate('tpl-price');
+      $('[data-name]', li).textContent = it.name || it.staple || '';
+      $('[data-meta]', li).textContent = [it.size, it.priceType === 'pickup_delivery' ? 'online price' : ''].filter(Boolean).join(' · ');
+      $('[data-price]', li).textContent = money(Number(it.price));
+      $('[data-unit]', li).textContent = it.unitPriceText || '';
+      $('[data-sale]', li).hidden = !it.onSale;
+      return li;
+    }));
+    return sec;
+  }));
+}
