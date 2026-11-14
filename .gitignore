@@ -1,0 +1,9 @@
+# Designer working files (mockup PNGs and sources) stay out of the repo.
+design/
+node_modules/
+.DS_Store
+*.log
+# Never commit price feeds or passphrases.
+data/prices.enc
+*.passphrase
+.env

@@ -1,0 +1,14 @@
+{
+  "name": "shopsmartr",
+  "version": "0.1.0-alpha",
+  "private": true,
+  "description": "Client-side shopping list for nearby Western NY grocery stores. No backend, no build step.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test "test/*.test.mjs"",
+    "validate": "node tools/validate-data.mjs",
+    "serve": "python3 -m http.server 8080"
+  },
+  "engines": { "node": ">=20" }
+}
