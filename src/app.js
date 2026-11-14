@@ -84,7 +84,7 @@ function renderAds() {
   const rows = mine.length
     ? mine.map((s) => ({
       chain: s.chain, name: s.name, url: data.chains[s.chain].weeklyAd.url, label: data.chains[s.chain].weeklyAd.label,
-      meta: [s.address, Number.isFinite(s.distanceMi) ? `${s.distanceMi.toFixed(1)} mi` : ''].filter(Boolean).join(' · '),
+      meta: [Number.isFinite(s.distanceMi) ? `${s.distanceMi.toFixed(1)} mi` : '', s.address].filter(Boolean).join(' · '),
     }))
     : CHAINS.filter((c) => data.chains[c]).map((c) => ({ chain: c, name: data.chains[c].name, url: data.chains[c].weeklyAd.url, label: data.chains[c].weeklyAd.label, meta: data.chains[c].weeklyAd.label }));
   UI.renderAdRows(rows);
