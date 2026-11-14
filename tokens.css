@@ -1,0 +1,93 @@
+/* ShopSmartR design tokens — plain CSS custom properties.
+   Light is the default; dark follows the OS unless [data-theme] forces one. */
+:root {
+  color-scheme: light;
+  /* Surfaces */
+  --color-bg: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F3FAF4;        /* soft mint wash for sections / app bar */
+  --color-border: #E3EBE5;
+  --color-border-strong: #C5D3C9;
+  /* Text */
+  --color-text: #15241B;             /* 16.2:1 on white */
+  --color-text-muted: #4D5E54;       /* 6.9:1 on white */
+  --color-text-faint: #5E6D64;       /* 5.4:1 on white, 5.1:1 on mint — meta text only */
+  /* Primary: fresh green */
+  --color-primary: #16A34A;          /* fills, icons, checkmarks (not small text) */
+  --color-primary-strong: #15803D;   /* buttons with white labels (5.0:1), links */
+  --color-primary-text: #166534;     /* green text on white/mint (7.1:1) */
+  --color-primary-soft: #DCFCE7;     /* selected chips, highlights */
+  --color-on-primary: #FFFFFF;
+  /* Secondary: sunny yellow / orange */
+  --color-sun: #FBBF24;              /* fills, badges, accents */
+  --color-sun-soft: #FEF3C7;
+  --color-on-sun: #422006;           /* text on sun fills (10.9:1) */
+  --color-orange-text: #C2410C;      /* orange text on white (5.2:1) */
+  --color-on-sun-soft: #422006;      /* text on sun-soft (13.1:1) */
+  --color-track: rgba(255,255,255,.75);
+  /* Feedback */
+  --color-danger: #B91C1C;           /* 6.5:1 on white */
+  --color-focus: #2563EB;
+  --color-scrim: rgba(16, 32, 22, .42);
+  /* Store tag dots (neutral, not brand colours) */
+  --store-1: #0EA5E9;  --store-1-soft: #E0F2FE;
+  --store-2: #8B5CF6;  --store-2-soft: #EDE9FE;
+  --store-3: #F97316;  --store-3-soft: #FFEDD5;
+  --store-4: #14B8A6;  --store-4-soft: #CCFBF1;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-xs: 12px;  --lh-xs: 16px;
+  --fs-sm: 14px;  --lh-sm: 20px;
+  --fs-md: 16px;  --lh-md: 24px;
+  --fs-lg: 18px;  --lh-lg: 26px;
+  --fs-xl: 22px;  --lh-xl: 28px;
+  --fs-2xl: 28px; --lh-2xl: 34px;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  /* Radii */
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-1: 0 1px 2px rgba(16, 40, 24, .06), 0 1px 3px rgba(16, 40, 24, .08);
+  --shadow-2: 0 4px 12px rgba(16, 40, 24, .10), 0 2px 4px rgba(16, 40, 24, .06);
+  --shadow-3: 0 12px 32px rgba(16, 40, 24, .18);
+
+  /* Sizing */
+  --tap-min: 44px;
+  --control-h: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0F1712; --color-surface: #16211A; --color-surface-2: #1C2A21;
+    --color-border: #2A3A30; --color-border-strong: #3B4F42;
+    --color-text: #ECF5EF; --color-text-muted: #A9BCB0; --color-text-faint: #8A9E91;
+    --color-primary: #4ADE80; --color-primary-strong: #22C55E; --color-primary-text: #86EFAC;
+    --color-primary-soft: #193D27; --color-on-primary: #052E16;
+    --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
+  --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
+    --color-danger: #FCA5A5; --color-scrim: rgba(0,0,0,.6);
+    --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);
+  }
+}
+/* Manual override (wins over the OS setting) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0F1712; --color-surface: #16211A; --color-surface-2: #1C2A21;
+  --color-border: #2A3A30; --color-border-strong: #3B4F42;
+  --color-text: #ECF5EF; --color-text-muted: #A9BCB0; --color-text-faint: #8A9E91;
+  --color-primary: #4ADE80; --color-primary-strong: #22C55E; --color-primary-text: #86EFAC;
+  --color-primary-soft: #193D27; --color-on-primary: #052E16;
+  --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
+  --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
+  --color-danger: #FCA5A5; --color-scrim: rgba(0,0,0,.6);
+  --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);
+}

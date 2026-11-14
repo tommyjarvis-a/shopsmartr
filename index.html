@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ShopSmartR</title>
+  <meta name="description" content="Pick your nearby Western NY grocery stores and keep one shopping list across them.">
+  <meta name="theme-color" content="#FFFFFF">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="src/app.js"></script>
+</head>
+<body data-screen="list">
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.4 11h10.2L20 8H6.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19.5" r="1.3" fill="currentColor"/><circle cx="17" cy="19.5" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V3h8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4M9 13h6M9 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v7h14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0012 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  </svg>
+
+  <div class="app">
+    <aside class="side" aria-label="Main">
+      <div class="brand"><span class="logo"><svg class="icon icon-logo"><use href="#i-cart"/></svg></span><span>ShopSmart<span class="r">R</span></span></div>
+      <nav class="side-nav">
+        <a class="nav" href="#list" data-nav="list"><svg class="icon"><use href="#i-list"/></svg>My list</a>
+        <a class="nav" href="#stores" data-nav="stores"><svg class="icon"><use href="#i-store"/></svg>Stores</a>
+        <a class="nav" href="#ads" data-nav="ads"><svg class="icon"><use href="#i-tag"/></svg>Weekly ads</a>
+      </nav>
+      <div class="spacer"></div>
+      <p class="footer footer-side">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. Not official checkout prices; confirm hours and prices with the store. <span class="version" data-version></span></p>
+    </aside>
+
+    <header class="appbar">
+      <div class="brand"><span class="logo"><svg class="icon icon-logo"><use href="#i-cart"/></svg></span><span>ShopSmart<span class="r">R</span></span></div>
+      <div class="spacer"></div>
+      <button type="button" class="icon-btn only-list" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu" aria-label="List options"><svg class="icon"><use href="#i-more"/></svg></button>
+    </header>
+
+    <main class="main" id="main">
+      <!-- LIST -->
+      <section class="screen screen-list" data-screen="list" aria-labelledby="list-title">
+        <div class="list-head">
+          <div class="grow">
+            <h1 id="list-title">My list</h1>
+            <p class="faint" id="list-meta"></p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm desk-only" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu"><svg class="icon icon-20"><use href="#i-file"/></svg>Export</button>
+        </div>
+
+        <form class="addbar" id="addbar" novalidate>
+          <svg class="icon addbar-plus" aria-hidden="true"><use href="#i-plus"/></svg>
+          <label class="sr-only" for="quick-name">Add an item</label>
+          <input class="addbar-input" id="quick-name" name="text" autocomplete="off" maxlength="200" placeholder='Add an item, e.g. "2 lb apples"'>
+          <label class="sr-only" for="quick-qty">Quantity</label>
+          <input class="chip chip-input" id="quick-qty" name="qty" type="number" min="0" step="any" inputmode="decimal" placeholder="1">
+          <label class="sr-only" for="quick-unit">Unit</label>
+          <select class="chip chip-select" id="quick-unit" name="unit" data-unit-select></select>
+          <label class="sr-only" for="quick-store">Store</label>
+          <select class="chip chip-select" id="quick-store" name="storeId" data-store-select></select>
+          <button type="submit" class="btn btn-primary btn-sm">Add</button>
+        </form>
+
+        <div class="progress" id="progress" hidden>
+          <span id="progress-text"></span>
+          <span class="bar" aria-hidden="true"><i id="progress-fill"></i></span>
+        </div>
+
+        <div class="chips chips-scroll" id="list-filter" role="radiogroup" aria-label="Show stores"></div>
+        <p class="status" id="list-status" role="status" aria-live="polite"></p>
+        <div class="list-groups" id="list-groups"></div>
+      </section>
+
+      <!-- STORES -->
+      <section class="screen screen-stores" data-screen="stores" aria-labelledby="stores-title">
+        <div class="setup-card">
+          <h1 id="stores-title">Where do you shop?</h1>
+          <p class="muted lead">Pick your stores once. Tag items to them on your list.</p>
+          <form class="setup-form" id="find-form" novalidate>
+            <div class="field">
+              <label class="label" for="zip">Zip code</label>
+              <div class="input input-icon">
+                <svg class="icon icon-20" aria-hidden="true"><use href="#i-pin"/></svg>
+                <input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" maxlength="10" placeholder="14221" required>
+              </div>
+            </div>
+            <fieldset class="field">
+              <legend class="label">Distance</legend>
+              <div class="seg" id="radius">
+                <label><input type="radio" name="radius" value="5"><span>5 mi</span></label>
+                <label><input type="radio" name="radius" value="10" checked><span>10 mi</span></label>
+                <label><input type="radio" name="radius" value="25"><span>25 mi</span></label>
+              </div>
+            </fieldset>
+            <button type="submit" class="sr-only">Find stores</button>
+          </form>
+          <div class="chips chips-scroll" id="chain-filter" role="radiogroup" aria-label="Chain"></div>
+          <div class="section-h"><h3>Nearby stores</h3><span class="faint" id="picked-count"></span></div>
+          <p class="status" id="find-status" role="status" aria-live="polite"></p>
+          <ul class="card store-list" id="store-results" aria-label="Nearby stores"></ul>
+          <div class="setup-actions">
+            <a class="btn btn-secondary" href="#list">Skip for now</a>
+            <a class="btn btn-primary" href="#list">Save stores</a>
+          </div>
+          <p class="footer">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. Store list as of <time data-asof></time>; "unconfirmed" stores haven't been checked against the chain's own locator. Confirm hours with the store.</p>
+        </div>
+      </section>
+
+      <!-- WEEKLY ADS -->
+      <section class="screen screen-ads" data-screen="ads" aria-labelledby="ads-title">
+        <h1 id="ads-title">Weekly ads</h1>
+        <p class="muted lead">Official ads for your stores. They open on each store's own website.</p>
+        <ul class="card ad-list" data-ad-list></ul>
+        <p class="tip"><svg class="icon icon-20" aria-hidden="true"><use href="#i-bulb"/></svg><span>Spot a deal? Add it to your list with the store tag so it's grouped for that trip.</span></p>
+        <a class="btn btn-ghost" href="#stores">Change stores</a>
+        <p class="footer">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. ShopSmartR doesn't show official checkout prices; confirm hours and prices with the store.</p>
+      </section>
+    </main>
+
+    <aside class="panel" aria-label="My stores and weekly ads">
+      <section>
+        <div class="section-h"><h3>My stores</h3><a class="btn btn-ghost btn-sm" href="#stores">Edit</a></div>
+        <p class="faint with-icon"><svg class="icon icon-20" aria-hidden="true"><use href="#i-pin"/></svg><span id="panel-where"></span></p>
+        <div class="chips" id="panel-stores"></div>
+      </section>
+      <section>
+        <h3 class="mb-2">Weekly ads</h3>
+        <ul class="card ad-list" data-ad-list></ul>
+        <p class="faint mt-2">Opens the store's official site in a new tab.</p>
+      </section>
+    </aside>
+
+    <button type="button" class="fab" id="fab"><svg class="icon"><use href="#i-plus"/></svg>Add item</button>
+
+    <nav class="tabbar" aria-label="Main">
+      <a class="tab" href="#list" data-nav="list"><span class="pill"><svg class="icon"><use href="#i-list"/></svg></span>List</a>
+      <a class="tab" href="#stores" data-nav="stores"><span class="pill"><svg class="icon"><use href="#i-store"/></svg></span>Stores</a>
+      <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span>Weekly ads</a>
+    </nav>
+  </div>
+
+  <div class="menu" id="export-menu" role="menu" aria-label="Export list" hidden>
+    <p class="mh">Export list</p>
+    <button type="button" class="mi" role="menuitem" data-action="csv"><svg class="icon icon-20"><use href="#i-file"/></svg>Download CSV<span class="sub">.csv</span></button>
+    <button type="button" class="mi" role="menuitem" data-action="txt"><svg class="icon icon-20"><use href="#i-file"/></svg>Download text<span class="sub">.txt</span></button>
+    <button type="button" class="mi" role="menuitem" data-action="copy"><svg class="icon icon-20"><use href="#i-copy"/></svg>Copy as text</button>
+    <button type="button" class="mi" role="menuitem" data-action="share" hidden><svg class="icon icon-20"><use href="#i-share"/></svg>Share…</button>
+    <div class="sep" role="separator"></div>
+    <button type="button" class="mi" role="menuitem" data-action="uncheck"><svg class="icon icon-20"><use href="#i-check"/></svg>Uncheck all</button>
+    <button type="button" class="mi danger" role="menuitem" data-action="clear"><svg class="icon icon-20"><use href="#i-trash"/></svg>Clear checked items</button>
+  </div>
+
+  <dialog class="sheet" id="item-sheet" aria-labelledby="sheet-title">
+    <form method="dialog" id="item-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="sheet-title">Add item</h2>
+        <button type="submit" value="cancel" class="icon-btn" formnovalidate aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="field">
+        <label class="label" for="f-name">Item</label>
+        <input class="input" id="f-name" name="name" required maxlength="200" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="label" for="f-qty">Qty</label>
+          <div class="input stepper">
+            <button type="button" class="step" data-step="-1" aria-label="Decrease quantity"><svg class="icon icon-18"><use href="#i-minus"/></svg></button>
+            <input id="f-qty" name="qty" type="number" min="0" step="any" inputmode="decimal">
+            <button type="button" class="step" data-step="1" aria-label="Increase quantity"><svg class="icon icon-18"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="f-unit">Unit</label>
+          <select class="input" id="f-unit" name="unit" data-unit-select></select>
+        </div>
+      </div>
+      <fieldset class="field">
+        <legend class="label">Store</legend>
+        <div class="chips" id="f-stores"></div>
+      </fieldset>
+      <div class="field">
+        <label class="label" for="f-notes">Note <span class="label-opt">(optional)</span></label>
+        <input class="input" id="f-notes" name="notes" maxlength="500" placeholder="e.g. extra virgin, 1 L" autocomplete="off">
+      </div>
+      <p class="status" id="sheet-status" role="status" aria-live="polite"></p>
+      <button type="submit" value="save" class="btn btn-primary btn-block" id="sheet-submit">Add to list</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-text"></span>
+    <button type="button" class="btn btn-ghost btn-sm" id="toast-undo" hidden>Undo</button>
+  </div>
+
+  <template id="tpl-store">
+    <li class="pick">
+      <label class="cbx-wrap"><input class="cbx" type="checkbox" data-pick><span class="sr-only" data-pick-label></span></label>
+      <span class="dot" data-dot aria-hidden="true"></span>
+      <span class="pick-body">
+        <span class="name" data-name></span>
+        <span class="meta"><span data-addr></span> · <a data-link target="_blank" rel="noopener noreferrer">Hours &amp; info</a></span>
+      </span>
+      <span class="pick-side">
+        <span class="badge" data-unverified hidden>unconfirmed</span>
+        <span class="meta" data-dist></span>
+      </span>
+    </li>
+  </template>
+
+  <template id="tpl-group">
+    <section class="group">
+      <div class="group-h"><span class="dot" data-dot aria-hidden="true"></span><h3 data-title></h3><span class="count" data-count></span></div>
+      <ul class="rows" data-items></ul>
+    </section>
+  </template>
+
+  <template id="tpl-item">
+    <li class="row">
+      <label class="cbx-wrap"><input class="cbx" type="checkbox" data-check><span class="sr-only" data-check-label></span></label>
+      <button type="button" class="body" data-edit>
+        <span class="title"><span data-name></span><span class="qty" data-qty></span></span>
+        <span class="note" data-notes></span>
+      </button>
+      <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
+    </li>
+  </template>
+
+  <template id="tpl-ad">
+    <li class="ad">
+      <span class="ini" data-ini aria-hidden="true"><span class="dot dot-lg" data-dot></span></span>
+      <span class="ad-body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
+      <a class="go" data-link target="_blank" rel="noopener noreferrer">Open ad<svg class="icon icon-16" aria-hidden="true"><use href="#i-ext"/></svg></a>
+    </li>
+  </template>
+</body>
+</html>
