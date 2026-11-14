@@ -6,6 +6,10 @@
   <title>ShopSmartR</title>
   <meta name="description" content="Pick your nearby Western NY grocery stores and keep one shopping list across them.">
   <meta name="theme-color" content="#FFFFFF">
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="src/app.js"></script>
@@ -27,6 +31,9 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.6a4.3 4.3 0 017.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" fill="currentColor"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0012 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   </svg>
 
@@ -35,6 +42,7 @@
       <div class="brand"><span class="logo"><svg class="icon icon-logo"><use href="#i-cart"/></svg></span><span>ShopSmart<span class="r">R</span></span></div>
       <nav class="side-nav">
         <a class="nav" href="#list" data-nav="list"><svg class="icon"><use href="#i-list"/></svg>My list</a>
+        <a class="nav" href="#favorites" data-nav="favorites"><svg class="icon"><use href="#i-star"/></svg>Favorites</a>
         <a class="nav" href="#stores" data-nav="stores"><svg class="icon"><use href="#i-store"/></svg>Stores</a>
         <a class="nav" href="#ads" data-nav="ads"><svg class="icon"><use href="#i-tag"/></svg>Weekly ads</a>
       </nav>
@@ -49,11 +57,15 @@
     </header>
 
     <main class="main" id="main">
+      <div class="notice" id="notice" role="status" hidden>
+        <p id="notice-text"></p>
+        <button type="button" class="btn btn-ghost btn-sm" id="notice-close">OK</button>
+      </div>
       <!-- LIST -->
       <section class="screen screen-list" data-screen="list" aria-labelledby="list-title">
         <div class="list-head">
           <div class="grow">
-            <h1 id="list-title">My list</h1>
+            <h1 id="list-title" tabindex="-1">My list</h1>
             <p class="faint" id="list-meta"></p>
           </div>
           <button type="button" class="btn btn-secondary btn-sm desk-only" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu"><svg class="icon icon-20"><use href="#i-file"/></svg>Export</button>
@@ -80,6 +92,48 @@
         <div class="chips chips-scroll" id="list-filter" role="radiogroup" aria-label="Show stores"></div>
         <p class="status" id="list-status" role="status" aria-live="polite"></p>
         <div class="list-groups" id="list-groups"></div>
+      </section>
+
+      <!-- FAVORITES -->
+      <section class="screen screen-favs" data-screen="favorites" aria-labelledby="favs-title">
+        <div class="list-head">
+          <div class="grow">
+            <h1 id="favs-title">Favorites</h1>
+            <p class="faint" id="favs-meta"></p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="favs-export"><svg class="icon icon-20"><use href="#i-file"/></svg>Export</button>
+        </div>
+        <div class="seg fav-tabs" role="tablist" aria-label="Favorites">
+          <button type="button" role="tab" id="tab-fav-items" aria-controls="fav-items" aria-selected="true" data-fav-tab="items"><span>Items</span></button>
+          <button type="button" role="tab" id="tab-fav-meals" aria-controls="fav-meals" aria-selected="false" data-fav-tab="meals" tabindex="-1"><span>Meals</span></button>
+        </div>
+
+        <div class="fav-panel" id="fav-items" role="tabpanel" aria-labelledby="tab-fav-items">
+          <p class="muted lead">Staples you buy most weeks. Tap + to put one on your list.</p>
+          <form class="addbar fav-add" id="fav-add" novalidate>
+            <svg class="icon addbar-plus" aria-hidden="true"><use href="#i-plus"/></svg>
+            <label class="sr-only" for="fav-name">Add a favorite</label>
+            <input class="addbar-input" id="fav-name" name="text" autocomplete="off" maxlength="200" placeholder='Add a staple, e.g. "1 gal milk"'>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          </form>
+          <p class="status" id="fav-status" role="status" aria-live="polite"></p>
+          <ul class="card fav-list" id="fav-list" aria-label="Favorite items"></ul>
+          <p class="empty" id="fav-empty">No favorites yet. Add the things you buy every week.</p>
+          <button type="button" class="btn btn-primary btn-block fav-all" id="fav-add-all"><svg class="icon icon-20"><use href="#i-plus"/></svg>Add all favorites to this week's list</button>
+        </div>
+
+        <div class="fav-panel" id="fav-meals" role="tabpanel" aria-labelledby="tab-fav-meals" hidden>
+          <p class="muted lead">Name a meal once, then add everything it needs in one tap.</p>
+          <form class="addbar fav-add" id="meal-add" novalidate>
+            <svg class="icon addbar-plus" aria-hidden="true"><use href="#i-plus"/></svg>
+            <label class="sr-only" for="meal-name">New meal name</label>
+            <input class="addbar-input" id="meal-name" name="name" autocomplete="off" maxlength="120" placeholder='New meal, e.g. "Taco night"'>
+            <button type="submit" class="btn btn-primary btn-sm">Create</button>
+          </form>
+          <p class="status" id="meal-status" role="status" aria-live="polite"></p>
+          <div class="meals" id="meal-list"></div>
+          <p class="empty" id="meal-empty">No meals yet. Create one, then add its items.</p>
+        </div>
       </section>
 
       <!-- STORES -->
@@ -165,17 +219,20 @@
 
     <nav class="tabbar" aria-label="Main">
       <a class="tab" href="#list" data-nav="list"><span class="pill"><svg class="icon"><use href="#i-list"/></svg></span>List</a>
+      <a class="tab" href="#favorites" data-nav="favorites"><span class="pill"><svg class="icon"><use href="#i-star"/></svg></span>Favorites</a>
       <a class="tab" href="#stores" data-nav="stores"><span class="pill"><svg class="icon"><use href="#i-store"/></svg></span>Stores</a>
       <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span>Weekly ads</a>
     </nav>
   </div>
 
   <div class="menu" id="export-menu" role="menu" aria-label="Export list" hidden>
+    <div class="love" aria-live="polite"><svg class="icon icon-16" aria-hidden="true"><use href="#i-heart"/></svg><p id="love-text"></p></div>
     <p class="mh">Export list</p>
     <button type="button" class="mi" role="menuitem" data-action="csv"><svg class="icon icon-20"><use href="#i-file"/></svg>Download CSV<span class="sub">.csv</span></button>
     <button type="button" class="mi" role="menuitem" data-action="txt"><svg class="icon icon-20"><use href="#i-file"/></svg>Download text<span class="sub">.txt</span></button>
     <button type="button" class="mi" role="menuitem" data-action="copy"><svg class="icon icon-20"><use href="#i-copy"/></svg>Copy as text</button>
     <button type="button" class="mi" role="menuitem" data-action="share" hidden><svg class="icon icon-20"><use href="#i-share"/></svg>Share…</button>
+    <button type="button" class="mi" role="menuitem" data-action="favcsv"><svg class="icon icon-20"><use href="#i-star"/></svg>Favorites CSV<span class="sub">.csv</span></button>
     <div class="sep" role="separator"></div>
     <button type="button" class="mi" role="menuitem" data-action="uncheck"><svg class="icon icon-20"><use href="#i-check"/></svg>Uncheck all</button>
     <button type="button" class="mi danger" role="menuitem" data-action="clear"><svg class="icon icon-20"><use href="#i-trash"/></svg>Clear checked items</button>
@@ -186,7 +243,7 @@
       <div class="grab" aria-hidden="true"></div>
       <div class="sheet-head">
         <h2 id="sheet-title">Add item</h2>
-        <button type="submit" value="cancel" class="icon-btn" formnovalidate aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
       </div>
       <div class="field">
         <label class="label" for="f-name">Item</label>
@@ -219,6 +276,57 @@
     </form>
   </dialog>
 
+  <dialog class="sheet" id="fav-sheet" aria-labelledby="fav-sheet-title">
+    <form method="dialog" id="fav-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="fav-sheet-title">Edit favorite</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="field">
+        <label class="label" for="ff-name">Item</label>
+        <input class="input" id="ff-name" name="name" required maxlength="200" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="label" for="ff-qty">Qty <span class="label-opt">(optional)</span></label>
+          <input class="input" id="ff-qty" name="qty" type="number" min="0" step="any" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label class="label" for="ff-unit">Unit</label>
+          <select class="input" id="ff-unit" name="unit" data-unit-select></select>
+        </div>
+      </div>
+      <fieldset class="field">
+        <legend class="label">Store <span class="label-opt">(optional)</span></legend>
+        <div class="chips" id="ff-stores"></div>
+      </fieldset>
+      <div class="field">
+        <label class="label" for="ff-notes">Note <span class="label-opt">(optional)</span></label>
+        <input class="input" id="ff-notes" name="notes" maxlength="500" autocomplete="off">
+      </div>
+      <p class="status" id="fav-sheet-status" role="status" aria-live="polite"></p>
+      <button type="submit" value="save" class="btn btn-primary btn-block" id="fav-sheet-submit">Save</button>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="meal-sheet" aria-labelledby="meal-sheet-title">
+    <form method="dialog" id="meal-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="meal-sheet-title">Rename meal</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="field">
+        <label class="label" for="mf-name">Meal name</label>
+        <input class="input" id="mf-name" name="name" required maxlength="120" autocomplete="off">
+      </div>
+      <p class="status" id="meal-sheet-status" role="status" aria-live="polite"></p>
+      <button type="submit" value="save" class="btn btn-primary btn-block">Save</button>
+      <button type="submit" value="delete" class="btn btn-ghost btn-block danger" formnovalidate>Delete meal</button>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span id="toast-text"></span>
     <button type="button" class="btn btn-ghost btn-sm" id="toast-undo" hidden>Undo</button>
@@ -230,7 +338,7 @@
       <span class="dot" data-dot aria-hidden="true"></span>
       <span class="pick-body">
         <span class="name" data-name></span>
-        <span class="meta"><span data-addr></span> · <a data-link target="_blank" rel="noopener noreferrer">Hours &amp; info</a></span>
+        <span class="meta"><span data-addr></span> · <a class="info-link" data-link target="_blank" rel="noopener noreferrer">Hours &amp; info</a></span>
       </span>
       <span class="pick-side">
         <span class="badge" data-unverified hidden>unconfirmed</span>
@@ -255,6 +363,33 @@
       </button>
       <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
     </li>
+  </template>
+
+  <template id="tpl-fav">
+    <li class="row fav-row">
+      <button type="button" class="body" data-fav-edit>
+        <span class="title"><span data-name></span><span class="qty" data-qty></span></span>
+        <span class="note" data-meta></span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm add-one" data-fav-add><svg class="icon icon-18" aria-hidden="true"><use href="#i-plus"/></svg><span>List</span></button>
+      <button type="button" class="rm" data-fav-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
+    </li>
+  </template>
+
+  <template id="tpl-meal">
+    <section class="card meal">
+      <div class="meal-h">
+        <button type="button" class="meal-name" data-meal-rename><span data-name></span><svg class="icon icon-16" aria-hidden="true"><use href="#i-edit"/></svg></button>
+        <span class="count" data-count></span>
+        <button type="button" class="btn btn-primary btn-sm" data-meal-add><svg class="icon icon-18" aria-hidden="true"><use href="#i-plus"/></svg>Add meal</button>
+      </div>
+      <ul class="rows meal-items" data-items></ul>
+      <form class="meal-item-add" data-meal-item-form novalidate>
+        <label class="sr-only" data-meal-item-label>Add an item to this meal</label>
+        <input class="input" name="text" autocomplete="off" maxlength="200" placeholder="Add an item to this meal">
+        <button type="submit" class="btn btn-secondary btn-sm">Add</button>
+      </form>
+    </section>
   </template>
 
   <template id="tpl-ad">

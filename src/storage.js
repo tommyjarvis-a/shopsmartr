@@ -2,6 +2,7 @@
 import { emptyState, cleanItemInput } from './list.js';
 
 export const STORAGE_KEY = 'shopsmartr:v1';
+export const BACKUP_KEY = 'shopsmartr:v1.bak';
 
 export function serialize(state) {
   return JSON.stringify({
@@ -14,12 +15,16 @@ export function serialize(state) {
   });
 }
 
+/** True when json parses as a ShopSmartR v1 document (rows may still be partly invalid). */
+export function isReadable(json) {
+  try { const raw = JSON.parse(json); return Boolean(raw) && typeof raw === 'object' && raw.version === 1; } catch { return false; }
+}
+
 /** Parses saved JSON defensively; bad or foreign data falls back to an empty state. */
 export function deserialize(json) {
   const base = emptyState();
-  let raw;
-  try { raw = JSON.parse(json); } catch { return base; }
-  if (!raw || typeof raw !== 'object' || raw.version !== 1) return base;
+  if (!isReadable(json)) return base;
+  const raw = JSON.parse(json);
   const items = [];
   for (const it of Array.isArray(raw.items) ? raw.items : []) {
     try {
@@ -43,10 +48,31 @@ export function saveState(state, storage = globalThis.localStorage) {
 }
 
 export function loadState(storage = globalThis.localStorage) {
+  return loadStateWithStatus(storage).state;
+}
+
+/**
+ * Loads state and reports problems the UI should tell the user about:
+ *   problem: null | 'unreadable' (saved data could not be read; a copy was kept in BACKUP_KEY)
+ *          | 'unavailable' (this browser won't let us save, e.g. storage blocked)
+ * An unreadable value is copied to BACKUP_KEY before anything can overwrite it.
+ */
+export function loadStateWithStatus(storage = globalThis.localStorage) {
+  let json;
   try {
-    const json = storage.getItem(STORAGE_KEY);
-    return json ? deserialize(json) : emptyState();
-  } catch { return emptyState(); }
+    if (!storage) throw new Error('no storage');
+    json = storage.getItem(STORAGE_KEY);
+    const probe = `${STORAGE_KEY}:probe`;
+    storage.setItem(probe, '1');
+    storage.removeItem(probe);
+  } catch {
+    return { state: json ? deserialize(json) : emptyState(), problem: 'unavailable', backedUp: false };
+  }
+  if (!json) return { state: emptyState(), problem: null, backedUp: false };
+  if (isReadable(json)) return { state: deserialize(json), problem: null, backedUp: false };
+  let backedUp = false;
+  try { storage.setItem(BACKUP_KEY, json); backedUp = true; } catch { /* ignore */ }
+  return { state: emptyState(), problem: 'unreadable', backedUp };
 }
 
 /** Minimal in-memory Storage for tests and private-mode fallback. */

@@ -30,9 +30,11 @@ node tools/validate-data.mjs   # data check (same as CI)
 | `src/list.js` | Shopping-list model and quick-add parser (pure, immutable updates). |
 | `src/storage.js` | Versioned `localStorage` persistence with safe fallback. |
 | `src/export.js` | CSV (RFC 4180, formula-injection guard) and plain-text builders. |
+| `src/favorites.js` | Favorites model: staple items, meals, dedupe when adding to the list, persistence, `starRecipe()` hook for phase 2 (pure). |
+| `src/notes.js`, `src/lovenotes.js` | The love notes shown in the ⋮ menu, and the shuffled no-repeat cycle that picks them. |
 | `src/prices.js` | Optional encrypted price snapshot: decrypt, unlock and key cache (see below). |
 | `src/ui.js` | DOM rendering from the templates. |
-| `src/app.js` | Wiring: loads data, owns state, routes `#list` / `#stores` / `#ads`. |
+| `src/app.js` | Wiring: loads data, owns state, routes `#list` / `#favorites` / `#stores` / `#ads`. |
 
 Reskinning touches `tokens.css`, `style.css` and the markup in `index.html`; the logic modules don't
 change. The renderer finds elements by `id` and `data-*` hooks, so keep those when restyling.
@@ -58,12 +60,52 @@ internal points (public domain).
 or in CI. The weekly check (`ci/data-check.yml`) only validates the checked-in files. To update the directory, re-check
 the official locator pages by hand and edit `data/stores.json` (bump `asOf`).
 
+## Favorites
+
+The Favorites screen has two tabs:
+
+- **Items**: weekly staples (name, qty/unit, optional store tag and note). Each has a + button that
+  puts it on the list, and "Add all favorites to this week's list" adds them all.
+- **Meals**: named groups of items (create, rename, edit items, delete with Undo). "Add meal" puts
+  every item on the list.
+
+Adding never duplicates: a favorite is skipped when an item with the same name (ignoring case,
+spacing and accents) is already on the list and **not checked**. A checked item counts as bought, so
+the favorite is added again. A toast reports how many were added and skipped. Favorites are saved in
+`localStorage` under `shopsmartr:favorites:v1`.
+
+Export: "Download text" and "Copy as text" end with a `== Favorites ==` section (staples, then each
+meal). "Favorites CSV" in the ⋮ menu (or Export on the Favorites screen) downloads a separate
+`shopsmartr-favorites-YYYY-MM-DD.csv` with columns `Type, Meal, Item, Qty, Unit, Store, Notes`
+(`Type` is `staple` or `meal`; an empty meal gets one row with just its name).
+
+Phase-2 hook: `starRecipe(favorites, { id, title, url, ingredients: [{ name, qty, unit }] })` turns a
+recipe into a meal tagged `source: { type: 'recipe', id, url }`; starring the same recipe again updates
+that meal instead of adding a second one.
+
+## Love notes
+
+The ⋮ menu (Export on desktop) opens with a short note from Steven to Lauren in a small pink card.
+There are 321 hand-written one-liners in `src/notes.js`; about a third use her name. They are shown in
+a shuffled order saved in `localStorage` (`shopsmartr:notes:v1`), so none repeats until every note has
+been shown, and a new shuffle never starts with the note you just saw. The repo is public, so keep
+any additions sweet and family-friendly; `test/notes.test.mjs` checks uniqueness, the count, the
+length and the named share.
+
 ## Optional encrypted price snapshot
 
 The Weekly ads screen can show a household price snapshot from `data/prices.enc`. That file is
 produced and published outside this repo (by Steven, on his own machine). The app never fetches a
-retailer site; it only reads its own `data/prices.enc` if one exists. With no file, the price UI is
-hidden.
+retailer site. It first reads the small committed manifest `data/prices.json`:
+
+```json
+{ "schema": "shopsmartr.pricefeed/1", "available": false, "file": "prices.enc", "updated": null }
+```
+
+Only when `available` is `true` does it request `data/prices.enc`. With no feed, nothing is
+requested, so there is no 404 in the console, and the price UI stays hidden. The publisher
+(`publish.sh` in `shopsmartr-data`) writes `data/prices.json` with `"available": true` and the
+publish time in the same commit as `data/prices.enc`.
 
 `src/prices.js` matches `decryptJSON` in the private `shopsmartr-data` repo exactly:
 

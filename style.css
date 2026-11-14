@@ -172,6 +172,49 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 .price-side { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .price { font-weight: var(--fw-bold); }
 
+/* "Hours & info": 44px-tall hit area without changing the layout (L2) */
+.info-link { display: inline-block; padding: 12px 6px; margin: -12px -6px; min-width: var(--tap-min); }
+
+/* One-time notice (unreadable saved data, storage unavailable) */
+.notice { display: flex; align-items: center; gap: var(--space-3); background: var(--color-sun-soft); color: var(--color-on-sun-soft); border-radius: var(--radius-md); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); font-size: var(--fs-sm); line-height: var(--lh-sm); margin-bottom: var(--space-4); }
+.notice p { flex: 1; }
+.notice .btn-ghost { color: var(--color-on-sun-soft); }
+#list-title:focus { outline: none; }
+#list-title:focus-visible { outline: 3px solid var(--color-focus); }
+
+/* Favorites */
+.fav-tabs { margin-top: var(--space-5); }
+.fav-tabs button { flex: 1; border-radius: var(--radius-pill); }
+.fav-tabs button span { height: 40px; display: grid; place-items: center; border-radius: var(--radius-pill); font-weight: var(--fw-semibold); font-size: var(--fs-sm); color: var(--color-text-muted); }
+.fav-tabs [aria-selected="true"] span { background: var(--color-surface); color: var(--color-primary-text); box-shadow: var(--shadow-1); }
+.fav-tabs button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.fav-panel { margin-top: var(--space-4); }
+.screen-favs .fav-add { display: flex; margin-top: var(--space-4); }
+.fav-list, .meals { margin-top: var(--space-4); }
+.fav-list { padding: 0 var(--space-4); }
+.fav-list .row:last-child { border-bottom: 0; }
+.fav-row .add-one { flex: none; }
+.fav-row .add-one span { display: none; }
+.fav-all { margin-top: var(--space-5); }
+.meals { display: grid; gap: var(--space-4); }
+.meal { padding: var(--space-3) var(--space-4) var(--space-4); }
+.meal-h { display: flex; align-items: center; gap: var(--space-2); }
+.meal-name { flex: 1; min-width: 0; min-height: var(--tap-min); display: flex; align-items: center; gap: 6px; text-align: left; font-weight: var(--fw-bold); font-size: var(--fs-lg); line-height: var(--lh-lg); }
+.meal-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meal-name .icon { color: var(--color-text-faint); }
+.meal .count { font-size: var(--fs-xs); color: var(--color-text-faint); white-space: nowrap; }
+.meal-h .btn-primary:disabled { opacity: .5; cursor: default; }
+.meal-items .row:last-child { border-bottom: 0; }
+.meal-item-add { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.meal-item-add .input { height: var(--tap-min); flex: 1; min-width: 0; }
+.meal-item-add .btn { height: var(--tap-min); }
+@media (min-width: 768px) { .fav-row .add-one span { display: inline; } }
+
+/* Love note in the overflow menu */
+.love { display: flex; gap: var(--space-2); align-items: flex-start; background: var(--color-heart-soft); color: var(--color-text); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-1); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.love .icon { color: var(--color-heart); margin-top: 2px; }
+.love p { font-style: italic; }
+
 /* Footer */
 .footer { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); text-align: center; padding: var(--space-6) var(--space-4) var(--space-3); }
 .footer-side { text-align: left; padding: 0 var(--space-2); }
@@ -211,7 +254,7 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 /* ---------- Layout ---------- */
 .app { min-height: 100vh; }
 .screen { display: none; }
-body[data-screen="list"] .screen-list, body[data-screen="stores"] .screen-stores, body[data-screen="ads"] .screen-ads { display: block; }
+body[data-screen="list"] .screen-list, body[data-screen="stores"] .screen-stores, body[data-screen="ads"] .screen-ads, body[data-screen="favorites"] .screen-favs { display: block; }
 
 /* Mobile first (< 768px) */
 .side, .panel, .desk-only, .addbar { display: none; }

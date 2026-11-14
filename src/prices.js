@@ -13,9 +13,14 @@
 //     unlocked without asking again;
 //   - "aes":  the derived AES key plus the salt/iter it belongs to, so normal loads skip the
 //     600k-iteration derivation.
-// If data/prices.enc is absent (404) or malformed, loadEnvelope() returns null and the UI stays hidden.
+// data/prices.json is a small committed manifest, always present:
+//   { "schema": "shopsmartr.pricefeed/1", "available": false|true, "file": "prices.enc", "updated": ISO|null }
+// The app only requests prices.enc when available === true, so a missing feed never produces a
+// 404 (and no red console entry). The publisher (shopsmartr-data publish.sh) sets it to true.
+// If the manifest or the envelope is missing or malformed, loadFeed() returns null and the UI stays hidden.
 
 export const PRICES_URL = 'data/prices.enc';
+export const MANIFEST_URL = 'data/prices.json';
 export const DEFAULT_AAD = 'shopsmartr.prices.enc/v1';
 export const MIN_ITER = 600000;
 const enc = new TextEncoder();
@@ -85,6 +90,26 @@ export async function loadEnvelope(url = PRICES_URL, fetchFn = globalThis.fetch)
     const env = await r.json();
     return checkEnvelope(env) ? null : env;
   } catch { return null; }
+}
+
+/** Reads the manifest; returns { available, file, updated } or null. */
+export async function loadManifest(url = MANIFEST_URL, fetchFn = globalThis.fetch) {
+  try {
+    const r = await fetchFn(url, { cache: 'no-cache' });
+    if (!r.ok) return null;
+    const m = await r.json();
+    if (!m || m.schema !== 'shopsmartr.pricefeed/1' || typeof m.available !== 'boolean') return null;
+    const file = typeof m.file === 'string' && /^[\w.-]+\.enc$/.test(m.file) ? m.file : 'prices.enc';
+    return { available: m.available, file, updated: typeof m.updated === 'string' ? m.updated : null };
+  } catch { return null; }
+}
+
+/** Manifest first; fetches the envelope only when the manifest says a feed exists. */
+export async function loadFeed(fetchFn = globalThis.fetch, manifestUrl = MANIFEST_URL) {
+  const m = await loadManifest(manifestUrl, fetchFn);
+  if (!m || !m.available) return null;
+  const base = manifestUrl.slice(0, manifestUrl.lastIndexOf('/') + 1);
+  return loadEnvelope(base + m.file, fetchFn);
 }
 
 // ---------- device key cache ----------

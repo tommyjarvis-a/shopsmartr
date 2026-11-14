@@ -84,3 +84,27 @@ test('groupPrices groups by store and sorts by staple', async () => {
   assert.deepEqual(g[0].items.map((i) => i.staple), ['eggs', 'milk']);
   assert.deepEqual(P.groupPrices(null), []);
 });
+
+test('L1: manifest gates the envelope fetch, so no feed means no 404', async () => {
+  const calls = [];
+  const respond = (body, ok = true) => ({ ok, status: ok ? 200 : 404, json: async () => body });
+  const fakeFetch = (files) => async (url) => { calls.push(url); return url in files ? respond(files[url]) : respond(null, false); };
+  const committed = JSON.parse(readFileSync(new URL('../data/prices.json', import.meta.url)));
+  assert.deepEqual(committed, { schema: 'shopsmartr.pricefeed/1', available: false, file: 'prices.enc', updated: null });
+
+  calls.length = 0;
+  assert.equal(await P.loadFeed(fakeFetch({ 'data/prices.json': committed })), null);
+  assert.deepEqual(calls, ['data/prices.json']);           // prices.enc never requested
+
+  calls.length = 0;
+  const live = { ...committed, available: true, updated: '2026-11-14T15:00Z' };
+  const env = await P.loadFeed(fakeFetch({ 'data/prices.json': live, 'data/prices.enc': FIXTURE }));
+  assert.deepEqual(calls, ['data/prices.json', 'data/prices.enc']);
+  assert.deepEqual(env, FIXTURE);
+
+  calls.length = 0;
+  assert.equal(await P.loadFeed(fakeFetch({})), null);      // manifest missing
+  assert.equal(await P.loadFeed(fakeFetch({ 'data/prices.json': { available: 'yes' } })), null);
+  assert.deepEqual(await P.loadManifest('data/prices.json', fakeFetch({ 'data/prices.json': { ...live, file: '../evil.js' } })),
+    { available: true, file: 'prices.enc', updated: '2026-11-14T15:00Z' });
+});

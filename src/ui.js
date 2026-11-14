@@ -197,3 +197,64 @@ export function renderPrices(container, groups) {
     return sec;
   }));
 }
+
+// ---------- Favorites ----------
+function favMeta(it, storesById) {
+  const store = it.storeId ? (storesById[it.storeId]?.name ?? 'Store no longer listed') : '';
+  return [store, it.notes].filter(Boolean).join(' · ');
+}
+
+function favRow(it, storesById, { onEdit, onAdd, onRemove }) {
+  const li = fromTemplate('tpl-fav');
+  li.dataset.favId = it.id;
+  const store = storesById[it.storeId];
+  if (store) li.dataset.chain = store.chain;
+  $('[data-name]', li).textContent = it.name;
+  $('[data-qty]', li).textContent = formatQty(it);
+  $('[data-meta]', li).textContent = favMeta(it, storesById);
+  const edit = $('[data-fav-edit]', li);
+  edit.setAttribute('aria-label', `Edit ${it.name}`);
+  edit.addEventListener('click', () => onEdit(it.id));
+  const add = $('[data-fav-add]', li);
+  if (onAdd) {
+    add.setAttribute('aria-label', `Add ${it.name} to list`);
+    add.addEventListener('click', () => onAdd(it.id));
+  } else add.remove();
+  const rm = $('[data-fav-remove]', li);
+  rm.setAttribute('aria-label', `Remove ${it.name} from favorites`);
+  rm.addEventListener('click', () => onRemove(it.id));
+  return li;
+}
+
+export function renderFavItems(container, items, storesById, handlers) {
+  container.replaceChildren(...items.map((it) => favRow(it, storesById, handlers)));
+}
+
+let mealSeq = 0;
+export function renderMeals(container, meals, storesById, h) {
+  container.replaceChildren(...meals.map((m) => {
+    const sec = fromTemplate('tpl-meal');
+    sec.dataset.mealId = m.id;
+    $('[data-name]', sec).textContent = m.name;
+    $('[data-count]', sec).textContent = `${m.items.length} item${m.items.length === 1 ? '' : 's'}`;
+    const ren = $('[data-meal-rename]', sec);
+    ren.setAttribute('aria-label', `Rename or delete ${m.name}`);
+    ren.addEventListener('click', () => h.onRename(m.id));
+    const add = $('[data-meal-add]', sec);
+    add.setAttribute('aria-label', `Add ${m.name} to list`);
+    add.disabled = m.items.length === 0;
+    add.addEventListener('click', () => h.onAddMeal(m.id));
+    $('[data-items]', sec).replaceChildren(...m.items.map((it) => favRow(it, storesById, {
+      onEdit: (id) => h.onEditItem(m.id, id),
+      onRemove: (id) => h.onRemoveItem(m.id, id),
+    })));
+    const form = $('[data-meal-item-form]', sec);
+    const input = form.elements.text;
+    input.id = `meal-item-${(mealSeq += 1)}`;
+    const label = $('[data-meal-item-label]', sec);
+    label.htmlFor = input.id;
+    label.textContent = `Add an item to ${m.name}`;
+    form.addEventListener('submit', (e) => { e.preventDefault(); h.onAddItem(m.id, input.value, input); });
+    return sec;
+  }));
+}

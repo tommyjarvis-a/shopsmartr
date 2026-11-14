@@ -41,3 +41,13 @@ test('toText groups by store, marks checked, flattens newlines', () => {
   assert.ok(lines.indexOf('== Any store ==') > lines.indexOf('== Unknown store (gone-1) =='));
   assert.match(toText([]), /\(empty list\)/);
 });
+
+test('L6: CSV download gets a UTF-8 BOM only when asked', async () => {
+  const { CSV_BOM } = await import('../src/export.js');
+  const plain = toCSV(items, stores);
+  assert.ok(plain.startsWith('Done,'));
+  const withBom = toCSV([{ id: 'u', name: 'Crème fraîche 🧀 日本茶', qty: null, unit: '', notes: '', storeId: '', checked: false }], {}, { bom: true });
+  assert.equal(withBom.charCodeAt(0), 0xFEFF);
+  assert.equal(CSV_BOM, '\uFEFF');
+  assert.equal(new TextEncoder().encode(withBom).slice(0, 3).join(','), '239,187,191');
+});
