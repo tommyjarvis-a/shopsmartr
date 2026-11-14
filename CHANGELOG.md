@@ -18,10 +18,11 @@ First phase-1 build.
   uncheck all, clear checked items (with Undo).
 - Weekly ads screen linking to each chain's official ad page only.
 - Phase-1 design (light default, automatic dark variant via `prefers-color-scheme`).
-- `src/prices.js`: inert stub for a later encrypted price feed (AES-GCM + PBKDF2-SHA256, key cached
-  on device). No price data or passphrase is in the repo; when `data/prices.enc` is absent nothing
-  is shown.
-- Weekly GitHub Action (Sunday 12:00 UTC) that validates the data files and runs the tests. It does
-  not crawl anything.
+- Optional encrypted price snapshot (`src/prices.js`), compatible with `decryptJSON` from
+  shopsmartr-data: PBKDF2-SHA256 (600k) + AES-GCM-256 with AAD. A one-time passphrase unlock, keys
+  cached on the device, a "wrong passphrase" message, and "Forget passphrase". The UI is hidden when
+  `data/prices.enc` is absent. No price data or passphrase is in the repo (the test fixture is fake).
+- Weekly data-check workflow (`ci/data-check.yml`, Sunday 12:00 UTC): validates the data files and
+  runs the tests, with no crawling. Not active until it's moved into `.github/workflows/`.
 - Unit tests (`node --test`): zip/radius, list model, quick-add parser, persistence, CSV/text export
-  escaping, data schema, price-envelope crypto.
+  escaping, data schema, price-envelope crypto and unlock flow.

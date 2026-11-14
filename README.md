@@ -30,7 +30,7 @@ node tools/validate-data.mjs   # data check (same as CI)
 | `src/list.js` | Shopping-list model and quick-add parser (pure, immutable updates). |
 | `src/storage.js` | Versioned `localStorage` persistence with safe fallback. |
 | `src/export.js` | CSV (RFC 4180, formula-injection guard) and plain-text builders. |
-| `src/prices.js` | Inert stub for a future encrypted price feed (see below). |
+| `src/prices.js` | Optional encrypted price snapshot: decrypt, unlock and key cache (see below). |
 | `src/ui.js` | DOM rendering from the templates. |
 | `src/app.js` | Wiring: loads data, owns state, routes `#list` / `#stores` / `#ads`. |
 
@@ -55,16 +55,37 @@ approximations and say so in `notes`. Zip centroids in `data/zips.json` are Cens
 internal points (public domain).
 
 **No scraping.** Nothing in this repo fetches retailer sites, Instacart, or Flipp, in the browser
-or in CI. The weekly Action only validates the checked-in files. To update the directory, re-check
+or in CI. The weekly check (`ci/data-check.yml`) only validates the checked-in files. To update the directory, re-check
 the official locator pages by hand and edit `data/stores.json` (bump `asOf`).
 
-## Future: encrypted price feed
+## Optional encrypted price snapshot
 
-`src/prices.js` can load `data/prices.enc`, a JSON envelope
-`{ "v": 1, "kdf": "PBKDF2-SHA256", "iter": n, "salt": b64, "iv": b64, "ct": b64 }`, decrypt it with
-WebCrypto AES-GCM using a key derived from a household passphrase, and cache the non-extractable key
-on the device (IndexedDB). It is not used by the UI yet; with no file present nothing is shown.
-Never commit real price data or a passphrase here (`data/prices.enc` is git-ignored).
+The Weekly ads screen can show a household price snapshot from `data/prices.enc`. That file is
+produced and published outside this repo (by Steven, on his own machine). The app never fetches a
+retailer site; it only reads its own `data/prices.enc` if one exists. With no file, the price UI is
+hidden.
+
+`src/prices.js` matches `decryptJSON` in the private `shopsmartr-data` repo exactly:
+
+- Envelope `{ "v": 1, "kdf": "PBKDF2-SHA256", "iter": 600000, "alg": "AES-GCM-256", "aad": "shopsmartr.prices.enc/v1", "salt", "iv", "ct" }`;
+  `salt` (16 bytes), `iv` (12 bytes) and `ct` (ciphertext plus the 16-byte GCM tag) are standard base64.
+- Key: PBKDF2-SHA256 over the NFC-normalised passphrase, then AES-GCM-256. Decryption uses the
+  envelope's `aad` as additional data and a 128-bit tag. Envelopes under 600k iterations are refused.
+- Unlock asks for the household passphrase once. The passphrase is never stored. The non-extractable
+  PBKDF2 key and the derived AES key are cached in this browser's IndexedDB, so the snapshot stays
+  unlocked after a refresh and after a new snapshot is published. "Forget passphrase" clears them.
+  A wrong passphrase shows "Wrong passphrase. Please try again."
+
+`test/fixtures/prices-fake.enc.json` was made with the reference `encryptJSON`, a throwaway passphrase
+that appears in the test, and a **fake** payload. Never commit real price data or a real passphrase
+(`data/prices.enc` is git-ignored here; publishing it is a deliberate step outside this repo).
+
+## CI
+
+`ci/data-check.yml` is the weekly workflow (Sunday 12:00 UTC: validate the data files, run the tests,
+no crawling). It sits outside `.github/workflows/` because the push token used to create this repo
+can't write workflow files. To turn it on, move it to `.github/workflows/data-check.yml` from an
+account or token that has the `workflow` scope.
 
 ## License
 
