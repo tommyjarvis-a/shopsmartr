@@ -170,7 +170,7 @@ function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c
   li.classList.toggle('done', it.checked);
   $('[data-name]', li).textContent = it.name;
   $('[data-qty]', li).textContent = formatQty(it);
-  $('[data-notes]', li).textContent = it.notes;
+  $('[data-notes]', li).textContent = [it.notes, it.recipe ? `for ${it.recipe.title}` : ''].filter(Boolean).join(' · ');   // v0.2.0 recipe back-link
   $('[data-check-label]', li).textContent = `Got ${it.name}`;
   const box = $('[data-check]', li);
   box.checked = it.checked;

@@ -16,6 +16,8 @@
 //     unlocked without asking again;
 //   - "aes":  the derived AES key plus the salt/iter it belongs to, so normal loads skip the
 //     600k-iteration derivation.
+//   - "aes-recipes" (v0.2.0): the same for data/recipes.enc (its own salt), derived from "base";
+//     the unlock functions take the slot name as their last argument.
 // data/prices.json is a small committed manifest, always present:
 //   { "schema": "shopsmartr.pricefeed/1", "available": false|true, "file": "prices.enc", "updated": ISO|null }
 // The app only requests prices.enc when available === true, so a missing feed never produces a
@@ -181,8 +183,8 @@ const sameParams = (a, env) => a && a.salt === env.salt && a.iter === env.iter;
  * decode(env, key) defaults to decryptWithKey; the app passes one that decrypts, inflates, parses
  * and indexes in a Worker. It must throw WrongPassphraseError when authentication fails.
  */
-export async function unlockWithCache(env, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle)) {
-  const aes = await cache.get('aes');
+export async function unlockWithCache(env, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle), slot = 'aes') {
+  const aes = await cache.get(slot);
   if (sameParams(aes, env)) {
     try { return await decode(env, aes.key); } catch (err) { if (!(err instanceof WrongPassphraseError)) throw err; }
   }
@@ -191,24 +193,26 @@ export async function unlockWithCache(env, cache = idbKeyCache(), subtle, decode
     try {
       const key = await deriveFromBase(base, env, subtle);
       const doc = await decode(env, key);
-      await cache.set('aes', { key, salt: env.salt, iter: env.iter });
+      await cache.set(slot, { key, salt: env.salt, iter: env.iter });
       return doc;
     } catch (err) {
       if (!(err instanceof WrongPassphraseError)) throw err;
-      await cache.clear();
+      // A wrong base key forgets the device (prices); for another feed (recipes) it only means that
+      // feed has its own passphrase, so the price keys stay.
+      if (slot === 'aes') await cache.clear();
     }
   }
   return null;
 }
 
 /** Unlocks with a typed passphrase; caches keys on success. Throws WrongPassphraseError. */
-export async function unlockWithPassphrase(env, passphrase, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle)) {
+export async function unlockWithPassphrase(env, passphrase, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle), slot = 'aes') {
   if (!passphrase) throw new WrongPassphraseError();
   const base = await importPassphrase(passphrase, subtle);
   const key = await deriveFromBase(base, env, subtle);
   const doc = await decode(env, key);
   await cache.set('base', base);
-  await cache.set('aes', { key, salt: env.salt, iter: env.iter });
+  await cache.set(slot, { key, salt: env.salt, iter: env.iter });
   return doc;
 }
 

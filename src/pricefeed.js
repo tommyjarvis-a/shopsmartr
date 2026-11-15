@@ -2,8 +2,9 @@
 // the heavy work in src/price-worker.js, with a main-thread fallback when Workers are unavailable.
 import { decryptWithKey, WrongPassphraseError, FeedFormatError } from './prices.js';
 import { prepare } from './catalog.js';
+import { prepareRecipes } from './recipes.js';
 
-export function makeDecoder() {
+export function makeDecoder(kind = 'prices') {
   let worker = null;
   try { worker = new Worker(new URL('./price-worker.js', import.meta.url), { type: 'module' }); } catch { worker = null; }
   let seq = 0;
@@ -15,14 +16,15 @@ export function makeDecoder() {
   async function onMain(env, key) {
     const steps = {};
     const doc = await decryptWithKey(env, key, undefined, steps);
+    if (kind === 'recipes') { const t = performance.now(); const recipes = prepareRecipes(doc); return { recipes, ms: { ...steps, prepare: performance.now() - t }, where: 'main' }; }
     const r = prepare(doc, () => performance.now());
     return { ...r, ms: { ...steps, ...r.ms }, where: 'main' };
   }
   return async function decode(env, key) {
     if (!worker) return onMain(env, key);
     const id = (seq += 1);
-    const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, env, key }); });
-    if (res.ok) return { catalog: res.catalog, index: res.index, ms: res.ms, where: 'worker' };
+    const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, env, key, kind }); });
+    if (res.ok) return kind === 'recipes' ? { recipes: res.recipes, ms: res.ms, where: 'worker' } : { catalog: res.catalog, index: res.index, ms: res.ms, where: 'worker' };
     if (res.wrong) throw new WrongPassphraseError();
     if (res.format) throw new FeedFormatError(/\((.+)\)/.exec(res.message)?.[1] ?? 'contents');
     if (res.message === 'worker failed') return onMain(env, key);

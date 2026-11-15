@@ -230,7 +230,7 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 
 /* Menu */
 .menu .love p { min-width: 0; overflow-wrap: anywhere; }
-.menu { position: fixed; z-index: 50; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); border: 1px solid var(--color-border); padding: var(--space-2); width: 248px; }
+.menu { position: fixed; z-index: 50; overflow-y: auto; overscroll-behavior: contain; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); border: 1px solid var(--color-border); padding: var(--space-2); width: 248px; }
 .menu .mh { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--color-text-faint); text-transform: uppercase; letter-spacing: .06em; padding: var(--space-2) var(--space-3) var(--space-1); }
 .menu .mi { display: flex; width: 100%; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-3); border-radius: var(--radius-sm); font-weight: var(--fw-medium); text-align: left; }
 .menu .mi:hover, .menu .mi:focus-visible { background: var(--color-surface-2); }
@@ -851,3 +851,213 @@ body:not([data-screen="list"]) .tb-break { display: none; }
    destructive one (crimson outline + trash) carry colour. */
 .confirm-dlg .btn-secondary { color: var(--color-text); }
 @media (forced-colors: active) { .btn-danger { border-color: ButtonText; } }
+
+/* ===== v0.2.0 Recipes (from design/v02-recipes/recipes.css, tokens only) ===== */
+/* --- Page header with back button (pushed screens: Browse, Cook, Import) --- */
+.rx-top { display: flex; align-items: center; gap: var(--space-1); min-height: 60px; padding: var(--space-2) var(--space-4) var(--space-1) var(--space-2); }
+.rx-top .back { width: var(--tap-min); height: var(--tap-min); display: grid; place-items: center; border-radius: var(--radius-pill); color: var(--color-text); flex: none; }
+.rx-top .t { flex: 1; min-width: 0; }
+.rx-top h1 { font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rx-top .s { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); }
+.rx-h1 { font-size: var(--fs-2xl); line-height: var(--lh-2xl); font-weight: var(--fw-bold); }
+.rx-lead { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); margin-top: 2px; }
+.rx-sec-h { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-6) 0 var(--space-2); }
+.rx-sec-h h2 { font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-bold); }
+.rx-link { display: inline-flex; align-items: center; gap: 2px; min-height: var(--tap-min); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--color-primary-text); }
+
+/* --- App bar: store button (Stores leaves the tab bar, see spec §2) --- */
+.store-btn { display: inline-flex; align-items: center; gap: 6px; height: var(--tap-min); padding: 0 var(--space-3); border-radius: var(--radius-pill); color: var(--color-text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.store-btn .n { color: var(--color-primary-text); }
+
+/* --- Links that are cards/rows: no underline --- */
+.rx-choice, .rx-cat, .rx-card, .rx-row, .rx-import-row, .rx-link, .crumb, .store-btn, .tabbar .tab, .side .nav { text-decoration: none; }
+.rx-choice, .rx-cat, .rx-card, .rx-row, .rx-import-row { color: inherit; }
+
+/* --- Favorite star (same as live v0.1.7 .fav-star; listed here so mocks match) --- */
+.rx-card .fav-star { width: 36px; height: 36px; top: 6px; right: 6px; }
+.rx-card .fav-star::before { content: ""; position: absolute; inset: -4px; } /* 44px hit area */
+
+/* --- 1) Landing: two big choices --- */
+.rx-choices { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.rx-choice { display: grid; grid-template-columns: 56px minmax(0,1fr) 24px; gap: var(--space-4); align-items: center; width: 100%; min-height: 104px; padding: var(--space-4); text-align: left; border-radius: var(--radius-lg); border: 1px solid var(--color-border); background: var(--color-surface-2); box-shadow: var(--shadow-1); }
+.rx-choice .ico { width: 56px; height: 56px; border-radius: var(--radius-md); background: var(--color-primary-strong); color: var(--color-on-primary); display: grid; place-items: center; }
+.rx-choice .ttl { font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-bold); }
+.rx-choice .d { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); margin-top: 2px; }
+.rx-choice .go { color: var(--color-primary-text); }
+.rx-choice.photo { grid-template-columns: minmax(0,1fr) 24px; padding: 0; overflow: hidden; background: var(--color-surface); }
+.rx-choice.photo .strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; height: 92px; }
+.rx-choice.photo .strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-choice.photo .txt { padding: var(--space-3) 0 var(--space-4) var(--space-4); }
+.rx-choice.photo .go { padding-right: var(--space-4); }
+.rx-pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: var(--radius-pill); background: var(--color-sun-soft); color: var(--color-on-sun-soft); font-size: var(--fs-xs); font-weight: var(--fw-semibold); margin-top: 6px; }
+.rx-import-row { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 56px; padding: var(--space-2) var(--space-1); text-align: left; border-top: 1px solid var(--color-border); margin-top: var(--space-5); color: var(--color-text); }
+.rx-import-row .ico { width: 40px; height: 40px; border-radius: var(--radius-pill); background: var(--color-primary-soft); color: var(--color-primary-text); display: grid; place-items: center; flex: none; }
+.rx-import-row .t { flex: 1; min-width: 0; font-weight: var(--fw-semibold); }
+.rx-import-row .t small { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); font-weight: var(--fw-regular); }
+
+/* Horizontal scroller of saved recipes */
+.rx-scroller { display: flex; gap: var(--space-3); overflow-x: auto; margin: 0 calc(-1 * var(--space-4)); padding: 2px var(--space-4) var(--space-1); scroll-snap-type: x mandatory; scrollbar-width: none; }
+.rx-scroller > * { flex: 0 0 148px; scroll-snap-align: start; }
+
+
+/* --- 2) Category tiles --- */
+.rx-cats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.rx-cat { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2); border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-surface); text-align: left; }
+.rx-cat .th { width: 40px; height: 40px; border-radius: 10px; flex: none; overflow: hidden; background: var(--color-surface-2); color: var(--color-primary-text); display: grid; place-items: center; }
+.rx-cat .th img { width: 100%; height: 100%; object-fit: cover; }
+.rx-cat .n { font-weight: var(--fw-semibold); font-size: var(--fs-sm); line-height: var(--lh-sm); display: block; }
+.rx-cat .c { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); display: block; }
+
+/* Category chip rail (results) */
+.rx-rail { display: flex; gap: var(--space-2); overflow-x: auto; margin: 0 calc(-1 * var(--space-4)); padding: 6px var(--space-4); scrollbar-width: none; }
+.rx-rail .chip { flex: none; }
+
+/* Results toolbar: count + sort chip (same .sort-btn / .sort-menu as v0.1.5 List) */
+.rx-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-2) 0 var(--space-3); }
+.rx-toolbar .cnt { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); font-weight: var(--fw-medium); }
+
+/* --- 3) Recipe card --- */
+.rx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-3); }
+.rx-card { position: relative; display: flex; flex-direction: column; min-width: 0; border-radius: var(--radius-lg); background: var(--color-surface); border: 1px solid var(--color-border); overflow: hidden; color: inherit; text-decoration: none; box-shadow: var(--shadow-1); }
+.rx-card .ph { position: relative; aspect-ratio: 4 / 3; background: var(--color-surface-2); }
+.rx-card .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-card .bd { padding: var(--space-2) var(--space-3) var(--space-3); display: flex; flex-direction: column; gap: 2px; }
+.rx-card .ttl { font-weight: var(--fw-semibold); font-size: 15px; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px; }
+.rx-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); }
+.rx-meta .m { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.rx-meta svg { flex: none; }
+.rx-cost { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text); font-weight: var(--fw-semibold); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rx-cost .k { color: var(--color-text-muted); font-weight: var(--fw-regular); }
+/* Conditional rating slot: rendered ONLY when the recipe has ≥1 rating. No empty stars, no placeholder. */
+.rx-rating { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); line-height: var(--lh-xs); font-weight: var(--fw-semibold); color: var(--color-text); white-space: nowrap; }
+.rx-rating .ico { color: var(--color-sun); }        /* decorative; the number carries the meaning */
+.rx-rating .n { color: var(--color-text-muted); font-weight: var(--fw-regular); }
+/* Favorite star overlaid on the photo (same aria-pressed + colours as v0.1.7 .fav-star) */
+.rx-card .fav-star, .rx-hero .fav-star { position: absolute; top: 6px; right: 6px; background: var(--color-surface); box-shadow: var(--shadow-1); }
+.rx-card .fav-star[aria-pressed="true"], .rx-hero .fav-star[aria-pressed="true"] { color: var(--color-orange-text); }
+.rx-tag { position: absolute; left: 8px; bottom: 8px; height: 24px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); font-size: var(--fs-xs); font-weight: var(--fw-semibold); display: inline-flex; align-items: center; gap: 4px; box-shadow: var(--shadow-1); }
+/* Small card (landing scroller, favorites) */
+.rx-card.sm .ttl { font-size: var(--fs-sm); line-height: 18px; min-height: 36px; }
+
+
+/* --- 4) Detail --- */
+.rx-hero { position: relative; height: 236px; flex: none; background: var(--color-surface-2); }
+.rx-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-hero .ovl { position: absolute; top: 12px; width: var(--tap-min); height: var(--tap-min); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-text); display: grid; place-items: center; box-shadow: var(--shadow-2); }
+.rx-hero .ovl.l { left: 12px; }
+.rx-hero .fav-star { top: 12px; right: 12px; box-shadow: var(--shadow-2); }
+.rx-hero .ovl.r2 { right: 64px; }
+.rx-title { font-size: var(--fs-xl); line-height: var(--lh-xl); font-weight: var(--fw-bold); margin-top: var(--space-4); }
+.rx-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); }
+.rx-detail-meta .rx-rating { font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.rx-detail-meta .m { display: inline-flex; align-items: center; gap: 4px; }
+.rx-detail-meta .rx-cost { font-size: var(--fs-sm); }
+
+.serv { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); }
+.serv .l { flex: 1; min-width: 0; }
+.serv .l b { display: block; font-weight: var(--fw-semibold); }
+.serv .l small { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); }
+.stepper { display: inline-flex; align-items: center; background: var(--color-surface); border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-pill); }
+.stepper button { width: var(--tap-min); height: var(--tap-min); display: grid; place-items: center; color: var(--color-primary-text); border-radius: var(--radius-pill); }
+.stepper button[aria-disabled="true"] { color: var(--color-text-faint); }
+.stepper output { min-width: 28px; text-align: center; font-weight: var(--fw-bold); font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+
+.ing-h { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-5) 0 var(--space-1); }
+.ing-h h3 { margin: 0; }                    /* app h3 = uppercase section label */
+.rx-h2 { font-size: var(--fs-lg); line-height: var(--lh-lg); font-weight: var(--fw-bold); color: var(--color-text); text-transform: none; letter-spacing: 0; }
+.ing-h .count { margin-left: 0; }
+.ing-h .count.miss { background: var(--color-sun-soft); color: var(--color-on-sun-soft); }
+.ing-h .count.have { background: var(--color-primary-soft); color: var(--color-primary-text); }
+.ing { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+.ing .mk { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center; }
+.ing.need .mk { border: 2px dashed var(--color-border-strong); }
+.ing.have .mk { background: var(--color-primary); color: var(--color-on-primary); }
+.ing .b { flex: 1; min-width: 0; }
+.ing .q { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+.ing .nm { font-weight: var(--fw-medium); }
+.ing .sub { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); }
+.ing .r { font-size: var(--fs-sm); color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
+.ing .r .dot { width: 8px; height: 8px; }
+.ing.have .nm { color: var(--color-text-muted); }
+.pantry { margin-top: var(--space-2); font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); }
+
+.rx-steps { list-style: none; counter-reset: step; margin-top: var(--space-2); }
+.rx-steps li { counter-increment: step; display: grid; grid-template-columns: 32px minmax(0,1fr); gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); font-size: var(--fs-md); line-height: var(--lh-md); }
+.rx-steps li::before { content: counter(step); width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-soft); color: var(--color-primary-text); font-weight: var(--fw-bold); display: grid; place-items: center; font-size: var(--fs-sm); }
+.rx-steps .tm { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; margin-top: 6px; border-radius: var(--radius-pill); background: var(--color-sun-soft); color: var(--color-on-sun-soft); font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
+
+/* Compact header shown once the hero scrolls away */
+.rx-mini { display: flex; align-items: center; gap: var(--space-1); min-height: 56px; padding: 6px var(--space-2); border-bottom: 1px solid var(--color-border); background: var(--color-surface); flex: none; }
+.rx-mini .t { flex: 1; min-width: 0; font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rx-mini .back { width: var(--tap-min); height: var(--tap-min); display: grid; place-items: center; }
+
+/* Sticky CTA (sits above the tab bar, like the v0.1.3 total bar) */
+.rx-cta { position: relative; z-index: 5; flex: none; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); background: var(--color-surface); border-top: 1px solid var(--color-border); box-shadow: 0 -6px 16px rgba(16, 40, 24, .08); }
+.rx-cta .l { flex: 1; min-width: 0; }
+.rx-cta .l b { display: block; font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+.rx-cta .l small { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); white-space: nowrap; }
+.rx-cta .btn { flex: none; }
+.rx-cta.done .btn { background: var(--color-primary-soft); color: var(--color-primary-text); box-shadow: none; }
+
+
+
+
+/* v0.2.0 wiring */
+body[data-screen="recipes"] .screen-recipes { display: block; }
+.rx-card-link { display: flex; flex-direction: column; color: inherit; text-decoration: none; border-radius: inherit; min-height: 100%; }
+.rx-card-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.rx-card .fav-star { position: absolute; }
+.ph-none { display: grid; place-items: center; width: 100%; height: 100%; color: var(--color-primary-text); }
+.rx-hero .ph { height: 100%; }
+.rx-hero .ph-none .icon { width: 48px; height: 48px; }
+.rx-hero .fav-star { position: absolute; width: var(--tap-min); height: var(--tap-min); }
+.rx-card .ph-none .icon { width: 32px; height: 32px; }
+.rx-choice.photo .strip .ph { height: 100%; background: var(--color-surface-2); }
+.rx-choice.photo .strip .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-choice .txt { display: flex; flex-direction: column; }
+.rx-cat { cursor: pointer; width: 100%; color: inherit; }
+.rx-cat .th .icon { width: 20px; height: 20px; }
+.rx-searchbar { margin-top: var(--space-3); }
+.rx-quick { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
+.rx-cats { margin-top: var(--space-2); }
+.rx-sort { display: inline-flex; align-items: center; gap: var(--space-2); }
+.rx-grid { list-style: none; padding: 0; margin: 0; }
+.rx-scroller { list-style: none; }
+.rx-ings { list-style: none; padding: 0; margin: 0; }
+.rx-steps { padding: 0; }
+.rx-steps p { margin: 0; }
+.rx-state { margin-top: var(--space-4); }
+.rx-foot { margin-top: var(--space-5); }
+.rx-unpriced { margin-top: 2px; font-size: var(--fs-xs); }
+.rx-rating .icon-14, .rx-meta .icon-14, .rx-steps .icon-14 { width: 14px; height: 14px; }
+.rx-rating.big .ico { width: 16px; height: 16px; }
+.rx-dinfo { padding: 0 var(--space-4); }
+.rx-dcols, .rx-cta, .rx-dtop ~ .rx-foot { padding-left: var(--space-4); padding-right: var(--space-4); }
+.desk-only { display: none !important; }
+.crumb.desk-only { display: none !important; }
+/* The CTA bar sits above the tab bar on phones. */
+.rx-cta { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)); margin-top: var(--space-5); }
+@media (max-width: 767px) {
+  body[data-screen="recipes"][data-rx-view="detail"] .appbar { display: none; }
+  body[data-screen="recipes"][data-rx-view="detail"] .main { padding-top: 0; }
+  body[data-screen="recipes"][data-rx-view="detail"] .screen-recipes { margin: 0 calc(-1 * var(--space-4)); }
+  .rx-hero { margin: 0; }
+}
+@media (min-width: 768px) {
+  .store-btn { display: none; }
+  .desk-only { display: inline-flex !important; }
+  .rx-sort .desk-only.sort-seg { display: inline-flex !important; }
+  .crumb.desk-only { display: inline-flex !important; margin-top: 0; }
+  .rx-dtop { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+  .rx-hero { height: auto; aspect-ratio: 4 / 3; border-radius: var(--radius-lg); overflow: hidden; }
+  .rx-dinfo, .rx-dcols, .rx-cta, .rx-dtop ~ .rx-foot { padding-left: 0; padding-right: 0; }
+  .rx-dinfo .rx-title { margin-top: 0; }
+  .rx-cta { bottom: 0; border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+  .rx-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .rx-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5) var(--space-4); }
+  .rx-dcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
+  .rx-cats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .rx-scroller { scroll-snap-type: none; } }

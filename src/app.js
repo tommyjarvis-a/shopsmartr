@@ -13,9 +13,11 @@ import * as Prices from './prices.js';
 import * as C from './catalog.js';
 import { makeDecoder } from './pricefeed.js';
 import * as UI from './ui.js';
+import { initRecipes } from './rx.js';
 
 const el = (id) => document.getElementById(id);
-const SCREENS = ['list', 'shop', 'favorites', 'stores', 'ads'];
+const SCREENS = ['list', 'shop', 'recipes', 'favorites', 'stores', 'ads'];
+let rxApi = null;   // v0.2.0 Recipes tab (src/rx.js)
 const loaded = loadStateWithStatus();
 let state = loaded.state;
 const favLoaded = F.loadFavoritesWithStatus();
@@ -98,6 +100,12 @@ function renderAll() {
   renderListScreen();
   renderAds();
   renderFavs();
+  renderStoreBtn();
+}
+function renderStoreBtn() {
+  const n = state.selectedStoreIds.length;
+  el('store-btn-n').textContent = n ? String(n) : '';
+  el('store-btn').setAttribute('aria-label', `My stores: ${n}`);
 }
 
 // ---------- Favorites ----------
@@ -106,6 +114,7 @@ function commitFavs(next, focus) {
   if (!F.saveFavorites(favs)) warnCantSave();
   renderFavs();
   UI.syncStars(favKeys());   // stars on Shop results and list rows follow Favorites everywhere
+  rxApi?.syncStars();
   if (focus) document.querySelector(focus)?.focus({ preventScroll: true });
 }
 
@@ -118,13 +127,15 @@ function setFavTab(tab, focus = false) {
     if (on && focus) b.focus();
   }
   el('fav-items').hidden = tab !== 'items';
+  el('fav-recipes').hidden = tab !== 'recipes';
   el('fav-meals').hidden = tab !== 'meals';
 }
 
 function renderFavs() {
   const n = favs.items.length;
   const m = favs.meals.length;
-  el('favs-meta').textContent = `${n} staple${n === 1 ? '' : 's'} · ${m} meal${m === 1 ? '' : 's'}`;
+  const rc = (favs.recipes ?? []).length;
+  el('favs-meta').textContent = `${n} staple${n === 1 ? '' : 's'} · ${rc} recipe${rc === 1 ? '' : 's'} · ${m} meal${m === 1 ? '' : 's'}`;
   UI.renderFavItems(el('fav-list'), favs.items, data.byId, {
     onEdit: (id) => openFavSheet(null, id),
     onAdd: (id) => addFavsToList(favs.items.filter((i) => i.id === id), favs.items.find((i) => i.id === id)?.name),
@@ -215,7 +226,11 @@ function bindFavorites() {
   for (const b of document.querySelectorAll('[data-fav-tab]')) {
     b.addEventListener('click', () => setFavTab(b.dataset.favTab));
     b.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); setFavTab(favTab === 'items' ? 'meals' : 'items', true); }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const order = ['items', 'recipes', 'meals'];
+        setFavTab(order[(order.indexOf(favTab) + (e.key === 'ArrowRight' ? 1 : 2)) % 3], true);
+      }
     });
   }
   el('fav-add').addEventListener('submit', (e) => {
@@ -475,7 +490,7 @@ function renderStoreStatus() {
   const warn = saveWarned;
   el('store-status').classList.toggle('warn', warn);
   el('store-status-title').textContent = warn ? 'This browser isn\'t saving your list' : 'Kept in this browser only';
-  el('store-status-saved').textContent = warn ? 'Save list to keep a copy.' : Bk.savedLine(backupMeta, state.items.length);
+  el('store-status-saved').textContent = warn ? 'Save list to keep a copy.' : Bk.savedLine(backupMeta, state.items.length, Date.now(), (favs.recipes ?? []).length);
   el('storage-status').textContent = Bk.storageText(storagePersisted);
 }
 
@@ -879,7 +894,12 @@ function openMenu(btn) {
   m.hidden = false;
   const r = btn.getBoundingClientRect();
   const w = m.offsetWidth;
-  m.style.setProperty('top', `${Math.round(r.bottom + 6)}px`);
+  // v0.2.0: keep the whole menu on screen (it grew a row): shift it up, and scroll it only if it
+  // is taller than the window.
+  m.style.removeProperty('max-height');
+  const hgt = Math.min(m.offsetHeight, window.innerHeight - 16);
+  if (m.offsetHeight > hgt) m.style.setProperty('max-height', `${hgt}px`);
+  m.style.setProperty('top', `${Math.round(Math.max(8, Math.min(r.bottom + 6, window.innerHeight - hgt - 8)))}px`);
   m.style.setProperty('left', `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)))}px`);
   document.querySelectorAll('[data-menu-toggle]').forEach((b) => b.setAttribute('aria-expanded', String(b === btn)));
   m.querySelector('.mi:not([hidden])').focus();
@@ -910,14 +930,45 @@ async function menuAction(action) {
   } else if (action === 'checkall') setAllChecked(true);
   else if (action === 'uncheck') setAllChecked(false);
   else if (action === 'clear') clearCheckedFlow(opener);
+  else if (action === 'household') openHousehold(opener);
+}
+
+// ---------- Household size (v0.2.0) ----------
+let hhValue = 3;
+let hhOpener = null;
+function openHousehold(opener = null) {
+  hhOpener = opener;
+  hhValue = rxApi?.servings() ?? 3;
+  el('household-val').textContent = String(hhValue);
+  el('household-sheet').showModal();
+  el('household-form').querySelector('[type="submit"]').focus();
+}
+function bindHousehold() {
+  const form = el('household-form');
+  form.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hh]');
+    if (!b) return;
+    hhValue = Math.max(1, Math.min(24, hhValue + Number(b.dataset.hh)));
+    el('household-val').textContent = String(hhValue);
+    for (const x of form.querySelectorAll('[data-hh]')) x.setAttribute('aria-disabled', String((x.dataset.hh === '-1' && hhValue <= 1) || (x.dataset.hh === '1' && hhValue >= 24)));
+  });
+  form.addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'save') return;
+    rxApi?.setServings(hhValue);
+    UI.toast(`Recipes now open for ${hhValue} serving${hhValue === 1 ? '' : 's'}`);
+  });
+  el('household-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('household-sheet').addEventListener('close', () => { hhOpener?.focus?.(); hhOpener = null; });
 }
 
 // ---------- Routing ----------
 function route() {
-  const want = location.hash.slice(1);
+  const hash = location.hash.slice(1);
+  const want = hash.split('/')[0];
   let screen = SCREENS.includes(want) ? want : (state.selectedStoreIds.length || state.items.length ? 'list' : 'stores');
   if (screen === 'shop' && feedAvailable === false) screen = 'list';
   UI.setScreen(screen);
+  if (screen === 'recipes') rxApi?.show(hash.slice(want.length + 1));
   closeMenu();
   closeSuggest();
 }
@@ -1317,6 +1368,7 @@ async function initPrices() {
       UI.setStatus(el('unlock-status'), '');
       showShop(res);
       perf.usable = performance.now() - t0;
+      rxApi?.retryCache();   // same household passphrase: the recipes open too
       el('shop-q').focus({ preventScroll: true });
     } catch (err) {
       input.value = '';
@@ -1339,7 +1391,7 @@ async function initPrices() {
   const t0 = performance.now();
   try {
     const res = await Prices.unlockWithCache(priceEnv, undefined, undefined, timedDecode);
-    if (res) { showShop(res); perf.usable = performance.now() - t0; perf.cached = true; } else showShop(null);
+    if (res) { showShop(res); perf.usable = performance.now() - t0; perf.cached = true; rxApi?.render(); } else showShop(null);
   } catch (err) {
     console.warn(`price feed: ${feedProblem(err)}`);
     showShop(null);
@@ -1355,6 +1407,17 @@ async function init() {
   bindSaveLoad();
   bindSort();
   bindConfirm();
+  bindHousehold();
+  rxApi = initRecipes({
+    getState: () => state, commit, getFavs: () => favs, commitFavs: (next) => commitFavs(next),
+    getFeed: () => feed, getShopStore: () => shop.store, directory: () => data.byId,
+    toast: (t, undo, ms) => UI.toast(t, undo, ms), openHousehold: () => openHousehold(),
+    openFavRecipes: () => setFavTab('recipes'), onChange: () => {},
+    onRecipesUnlocked: async () => {
+      if (feed || !priceEnv) return;
+      try { const res = await Prices.unlockWithCache(priceEnv, undefined, undefined, timedDecode); if (res) { showShop(res); rxApi.render(); } } catch { /* prices keep their own lock */ }
+    },
+  });
   try {
     const [storesDoc, zipsDoc] = await Promise.all([
       fetch('data/stores.json').then((r) => r.json()),

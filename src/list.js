@@ -45,6 +45,10 @@ export function cleanItemInput(input = {}) {
   };
   const priced = cleanPriced(input.priced);
   if (priced) out.priced = priced;
+  // v0.2.0: back-link to the recipe a line was added from.
+  const rid = input.recipe && (typeof input.recipe.id === 'string' || typeof input.recipe.id === 'number') ? String(input.recipe.id).slice(0, 40) : '';
+  const rt = typeof input.recipe?.title === 'string' ? input.recipe.title.trim().slice(0, 160) : '';
+  if (rid && rt) out.recipe = { id: rid, title: rt };
   return out;
 }
 

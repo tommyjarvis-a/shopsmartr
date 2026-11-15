@@ -48,6 +48,11 @@
     <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-pot" viewBox="0 0 24 24"><path d="M4 10h16v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM2 10h2M20 10h2M9 6c0-1 1-1 1-2M14 6c0-1 1-1 1-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c.5-3.5 3.2-5.5 6.5-5.5s6 2 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18.5 14.8c1.7.8 2.8 2.6 3 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-json" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 11c-1 0-1 .8-1 1.5S8.5 14 8 14c.5 0 1 .8 1 1.5s0 1.5 1 1.5M14 11c1 0 1 .8 1 1.5s.5 1.5 1 1.5c-.5 0-1 .8-1 1.5s0 1.5-1 1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   </svg>
 
@@ -57,6 +62,7 @@
       <nav class="side-nav">
         <a class="nav" href="#list" data-nav="list"><svg class="icon"><use href="#i-list"/></svg>My list</a>
         <a class="nav" href="#shop" data-nav="shop" data-needs-feed hidden><svg class="icon"><use href="#i-bag"/></svg>Shop</a>
+        <a class="nav" href="#recipes" data-nav="recipes"><svg class="icon"><use href="#i-pot"/></svg>Recipes</a>
         <a class="nav" href="#favorites" data-nav="favorites"><svg class="icon"><use href="#i-star"/></svg>Favorites</a>
         <a class="nav" href="#stores" data-nav="stores"><svg class="icon"><use href="#i-store"/></svg>Stores</a>
         <a class="nav" href="#ads" data-nav="ads"><svg class="icon"><use href="#i-tag"/></svg>Weekly ads</a>
@@ -68,6 +74,7 @@
     <header class="appbar">
       <div class="brand"><span class="logo"><svg class="icon icon-logo"><use href="#i-cart"/></svg></span><span>ShopSmart<span class="r">R</span></span></div>
       <div class="spacer"></div>
+      <a class="store-btn" href="#stores" data-nav="stores" id="store-btn" aria-label="My stores"><svg class="icon icon-20" aria-hidden="true"><use href="#i-store"/></svg><span class="n" id="store-btn-n" aria-hidden="true"></span></a>
       <button type="button" class="icon-btn only-list" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu" aria-label="List options"><svg class="icon"><use href="#i-more"/></svg></button>
     </header>
 
@@ -188,6 +195,11 @@
         </div>
       </section>
 
+      <!-- RECIPES (v0.2.0): rendered by src/rx.js -->
+      <section class="screen screen-recipes" data-screen="recipes" aria-label="Recipes">
+        <div id="rx-root"></div>
+      </section>
+
       <!-- FAVORITES -->
       <section class="screen screen-favs" data-screen="favorites" aria-labelledby="favs-title">
         <div class="list-head">
@@ -199,6 +211,7 @@
         </div>
         <div class="seg fav-tabs" role="tablist" aria-label="Favorites">
           <button type="button" role="tab" id="tab-fav-items" aria-controls="fav-items" aria-selected="true" data-fav-tab="items"><span>Items</span></button>
+          <button type="button" role="tab" id="tab-fav-recipes" aria-controls="fav-recipes" aria-selected="false" data-fav-tab="recipes" tabindex="-1"><span>Recipes</span></button>
           <button type="button" role="tab" id="tab-fav-meals" aria-controls="fav-meals" aria-selected="false" data-fav-tab="meals" tabindex="-1"><span>Meals</span></button>
         </div>
 
@@ -214,6 +227,12 @@
           <ul class="card fav-list" id="fav-list" aria-label="Favorite items"></ul>
           <p class="empty" id="fav-empty">No Favorites yet. Add the things you buy every week.</p>
           <button type="button" class="btn btn-primary btn-block fav-all" id="fav-add-all"><svg class="icon icon-20"><use href="#i-plus"/></svg>Add all Favorites to this week's list</button>
+        </div>
+
+        <div class="fav-panel" id="fav-recipes" role="tabpanel" aria-labelledby="tab-fav-recipes" hidden>
+          <p class="muted lead">Recipes you starred, newest first.</p>
+          <ul class="rx-grid" id="fav-rx-grid" aria-label="Saved recipes"></ul>
+          <div class="empty" id="fav-rx-empty"><p>Star a recipe to keep it here.</p><a class="btn btn-secondary mt-2" href="#recipes/browse">Browse recipes</a></div>
         </div>
 
         <div class="fav-panel" id="fav-meals" role="tabpanel" aria-labelledby="tab-fav-meals" hidden>
@@ -309,10 +328,19 @@
     <nav class="tabbar" aria-label="Main">
       <a class="tab" href="#list" data-nav="list"><span class="pill"><svg class="icon"><use href="#i-list"/></svg></span>List</a>
       <a class="tab" href="#shop" data-nav="shop" data-needs-feed hidden><span class="pill"><svg class="icon"><use href="#i-bag"/></svg></span>Shop</a>
+      <a class="tab" href="#recipes" data-nav="recipes"><span class="pill"><svg class="icon"><use href="#i-pot"/></svg></span>Recipes</a>
       <a class="tab" href="#favorites" data-nav="favorites"><span class="pill"><svg class="icon"><use href="#i-star"/></svg></span>Favorites</a>
-      <a class="tab" href="#stores" data-nav="stores"><span class="pill"><svg class="icon"><use href="#i-store"/></svg></span>Stores</a>
       <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span><span aria-hidden="true">Ads</span><span class="sr-only">Weekly ads</span></a>
     </nav>
+  </div>
+
+  <div class="menu sort-menu" id="rx-sort-menu" role="menu" aria-labelledby="rx-sort-h" hidden>
+    <p class="mh" id="rx-sort-h">Sort recipes</p>
+    <button type="button" class="mi" role="menuitemradio" data-rx-sort="time" aria-checked="true">Time<span class="hint">quickest first</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <button type="button" class="mi" role="menuitemradio" data-rx-sort="price" aria-checked="false">Price<span class="hint">cost to buy</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <div class="sort-dir" id="rx-sort-dir" hidden><div class="seg" role="group" aria-label="Price order"><button type="button" data-rx-dir="asc" aria-pressed="true"><svg class="icon icon-16" aria-hidden="true"><use href="#i-up"/></svg>Low to high</button><button type="button" data-rx-dir="desc" aria-pressed="false"><svg class="icon icon-16" aria-hidden="true"><use href="#i-down"/></svg>High to low</button></div></div>
+    <button type="button" class="mi" role="menuitemradio" data-rx-sort="name" aria-checked="false">A–Z<span class="hint">by name</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <button type="button" class="mi" role="menuitemradio" data-rx-sort="rating" aria-checked="false">Rating<span class="hint">highest first</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
   </div>
 
   <div class="menu" id="export-menu" role="menu" aria-label="Save and export" hidden>
@@ -327,6 +355,7 @@
     <button type="button" class="mi" role="menuitem" data-action="txt"><svg class="icon icon-20"><use href="#i-file"/></svg>Download text<span class="sub">.txt</span></button>
     <button type="button" class="mi" role="menuitem" data-action="copy"><svg class="icon icon-20"><use href="#i-copy"/></svg>Copy as text</button>
     <button type="button" class="mi" role="menuitem" data-action="share" hidden><svg class="icon icon-20"><use href="#i-share"/></svg>Share…</button>
+    <button type="button" class="mi" role="menuitem" data-action="household"><svg class="icon icon-20"><use href="#i-users"/></svg>Household size<span class="sub" id="household-sub"></span></button>
     <button type="button" class="mi" role="menuitem" data-action="favcsv"><svg class="icon icon-20"><use href="#i-star"/></svg>Favorites CSV<span class="sub">.csv</span></button>
     <div class="sep" role="separator"></div>
     <button type="button" class="mi" role="menuitem" data-action="checkall" data-list-action><svg class="icon icon-20"><use href="#i-check-all"/></svg>Check all</button>
@@ -345,6 +374,21 @@
   </div>
 
   <input type="file" id="load-file" accept=".json,application/json" hidden>
+  <dialog class="sheet sheet-dialog" id="household-sheet" aria-labelledby="household-title">
+    <form method="dialog" id="household-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="household-title">Household size</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <p class="muted">Recipes open scaled to this many servings. You can still change it on each recipe.</p>
+      <div class="serv"><div class="l"><b>Servings</b><small>People you usually cook for</small></div>
+        <div class="stepper"><button type="button" data-hh="-1" aria-label="Fewer servings"><svg class="icon icon-20" aria-hidden="true"><use href="#i-minus"/></svg></button><output id="household-val" aria-live="polite">3</output><button type="button" data-hh="1" aria-label="More servings"><svg class="icon icon-20" aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" value="save">Save</button>
+    </form>
+  </dialog>
+
   <dialog class="sheet sheet-dialog" id="load-sheet" aria-labelledby="load-title">
     <form method="dialog" id="load-form" novalidate>
       <div class="grab" aria-hidden="true"></div>

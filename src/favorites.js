@@ -7,7 +7,7 @@ export const FAVORITES_KEY = 'shopsmartr:favorites:v1';
 export const FAVORITES_BACKUP_KEY = 'shopsmartr:favorites:v1.bak';
 
 export function emptyFavorites() {
-  return { version: 1, items: [], meals: [] };
+  return { version: 1, items: [], meals: [], recipes: [] };
 }
 
 /** A favorite item: name, qty/unit, optional store tag and note (same rules as list items). */
@@ -196,6 +196,36 @@ export function starRecipe(fav, recipe) {
   return mapMeal(fav, existing.id, (m) => ({ ...m, name: cleanMealName(recipe.title), items: items.map((it) => ({ id: newId(), ...cleanFav(it) })) }));
 }
 
+// ---------- saved recipes (v0.2.0, Favorites › Recipes) ----------
+/** A saved recipe: { id, source, title, image, savedAt }. title/image are a snapshot for the grid. */
+function cleanSavedRecipe(r) {
+  if (!r || typeof r !== 'object') return null;
+  const id = typeof r.id === 'string' || typeof r.id === 'number' ? String(r.id).trim().slice(0, 40) : '';
+  const title = String(r.title ?? '').trim().replace(/\s+/g, ' ').slice(0, 160);
+  if (!id || !title) return null;
+  const savedAt = Number.isFinite(Date.parse(r.savedAt)) ? new Date(Date.parse(r.savedAt)).toISOString() : new Date(0).toISOString();
+  const image = typeof r.image === 'string' && /^https:\/\/[^\s"'<>]+$/.test(r.image) ? r.image.slice(0, 600) : null;
+  return { id, source: r.source === 'import' ? 'import' : 'wegmans', title, image, savedAt };
+}
+function cleanSavedRecipes(rows) {
+  const out = []; const seen = new Set();
+  for (const r of Array.isArray(rows) ? rows : []) { const c = cleanSavedRecipe(r); if (c && !seen.has(c.id)) { seen.add(c.id); out.push(c); } }
+  return out.slice(0, 2000);
+}
+export const isRecipeSaved = (fav, id) => (fav.recipes ?? []).some((r) => r.id === String(id));
+/** Star a recipe (newest first in the grid); starring again changes nothing. */
+export function saveRecipe(fav, recipe, now = new Date()) {
+  if (isRecipeSaved(fav, recipe.id)) return fav;
+  const row = cleanSavedRecipe({ ...recipe, savedAt: new Date(now).toISOString() });
+  if (!row) throw new Error('Recipe needs an id and a title');
+  return { ...fav, recipes: [row, ...(fav.recipes ?? [])] };
+}
+export function unsaveRecipe(fav, id) {
+  return { ...fav, recipes: (fav.recipes ?? []).filter((r) => r.id !== String(id)) };
+}
+/** Saved recipes, newest saved first. */
+export const savedRecipes = (fav) => [...(fav.recipes ?? [])].sort((a, b) => (a.savedAt < b.savedAt ? 1 : a.savedAt > b.savedAt ? -1 : 0));
+
 // ---------- adding to the weekly list ----------
 /** Name key used for dedupe: case-, whitespace- and accent-insensitive. */
 export function nameKey(name) {
@@ -232,7 +262,7 @@ export function addedMessage({ added, skipped }, what = '') {
 
 // ---------- persistence ----------
 export function serializeFavorites(fav) {
-  return JSON.stringify({ version: 1, items: fav.items, meals: fav.meals });
+  return JSON.stringify({ version: 1, items: fav.items, meals: fav.meals, recipes: fav.recipes ?? [] });
 }
 
 function cleanRows(rows) {
@@ -259,7 +289,7 @@ export function deserializeFavorites(json) {
       meals.push(meal);
     } catch { /* drop invalid meals */ }
   }
-  return { version: 1, items: cleanRows(raw.items), meals };
+  return { version: 1, items: cleanRows(raw.items), meals, recipes: cleanSavedRecipes(raw.recipes) };
 }
 
 /** True when json parses as a v1 favorites document (rows may still be partly invalid). */

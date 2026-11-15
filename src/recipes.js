@@ -1,0 +1,594 @@
+// Pure Recipes model (v0.2.0): feed validation, the ingredient normalizer, pantry rule, scaling and
+// fractions, whole-pack buying, catalog matching with confidence, cost ranges, sorts, search, quick
+// picks, list coverage and step splitting. No DOM, no network; safe to run in a Worker.
+// Recipe data is never shipped in this repo: it arrives encrypted in data/recipes.enc.
+import { tokenize, getItem, estimate, unitOf, storeKey } from './catalog.js';
+import { convert, parsePackSize, linePrice, compareNames } from './list.js';
+
+export const RECIPES_SCHEMA = 'shopsmartr.recipes/1';
+export const RECIPE_FEED_SCHEMA = 'shopsmartr.recipefeed/1';
+
+// ---------- categories ----------
+const CAT_LABEL = {
+  'main-dishes': 'Main dishes', 'side-dishes': 'Sides', soups: 'Soups', salads: 'Salads', cocktails: 'Cocktails',
+  appetizers: 'Appetizers', desserts: 'Desserts', 'condiments-and-sauces': 'Sauces', 'breakfast-and-brunch': 'Breakfast',
+  breads: 'Breads', beverages: 'Drinks', drinks: 'Drinks', snacks: 'Snacks',
+};
+const CAT_ORDER = Object.keys(CAT_LABEL);
+/** "condiments-and-sauces" -> "Sauces"; unknown slugs read naturally ("party-food" -> "Party food"). */
+export function categoryLabel(slug) {
+  const s = String(slug ?? '');
+  if (CAT_LABEL[s]) return CAT_LABEL[s];
+  const t = s.replace(/-and-/g, ' & ').replace(/-/g, ' ').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Other';
+}
+/** { slug: count } -> [{ slug, label, count }] in the mock's order, unknown slugs after, A-Z. */
+export function categoryList(counts) {
+  const rank = (s) => { const i = CAT_ORDER.indexOf(s); return i < 0 ? CAT_ORDER.length : i; };
+  return Object.entries(counts ?? {}).filter(([s, n]) => /^[a-z0-9-]{1,60}$/.test(s) && Number.isFinite(n) && n > 0)
+    .map(([slug, count]) => ({ slug, label: categoryLabel(slug), count }))
+    .sort((a, b) => rank(a.slug) - rank(b.slug) || compareNames(a.label, b.label));
+}
+
+// ---------- normalizer ----------
+const STOP = new Set('a an and or of the to for with in into on at plus about each per if as your'.split(' '));
+/** Words that describe an ingredient without changing what you buy (and brand words). */
+const DESC = new Set(('fresh freshly chopped minced diced sliced thinly thick thin large medium small whole ground grated shredded '
+  + 'crumbled cubed peeled trimmed halved quartered divided optional cut piece finely roughly coarsely packed softened melted '
+  + 'room temperature cold warm boneless skinless bone skin loose baby petite wegman wegmans fyfga food feel good about '
+  + 'brand style premium select family value size pack lightly firmly rinsed drained patted dry juiced zested beaten '
+  + 'prepared cooked uncooked raw extra virgin').split(' '));
+const BONUS = new Set(['organic']);
+const NO_SINGULAR = new Set(['asparagus', 'hummus', 'couscous', 'molasses', 'swiss', 'grits', 'citrus', 'bass', 'brussels', 'species', 'series', 'chassis']);
+/** Plural to singular for matching ("tomatoes" -> "tomato", "berries" -> "berry", "thighs" -> "thigh"). */
+export function singular(t) {
+  if (t.length <= 3 || NO_SINGULAR.has(t)) return t;
+  if (t.endsWith('ies')) return `${t.slice(0, -3)}y`;
+  if (/(oes|ches|shes|sses|xes|zes)$/.test(t)) return t.slice(0, -2);
+  if (t.endsWith('ves') && t.length > 4) return `${t.slice(0, -3)}f`;   // leaves -> leaf, halves -> half
+  if (t.endsWith('s') && !/(ss|us|is)$/.test(t)) return t.slice(0, -1);
+  return t;
+}
+const memoNorm = new Map();
+/**
+ * Name -> { core, bonus }: lowercase accent-free word tokens, singular, without numbers, stop
+ * words, descriptors and brand words. core keeps the name's word order (the last word is the head
+ * noun, e.g. "beans" in "green beans"). Same normalizer for recipe lines, list names and products.
+ */
+export function normName(text) {
+  const key = String(text ?? '');
+  const hit = memoNorm.get(key);
+  if (hit) return hit;
+  const core = []; const bonus = [];
+  for (const raw of tokenize(key.replace(/\([^)]*\)/g, ' '))) {
+    if (/\d/.test(raw) || raw.length < 2) continue;
+    const t = singular(raw);
+    if (STOP.has(t) || STOP.has(raw)) continue;
+    if (BONUS.has(t)) { bonus.push(t); continue; }
+    if (DESC.has(t) || DESC.has(raw)) continue;
+    if (!core.includes(t)) core.push(t);
+  }
+  const out = { core, bonus };
+  if (memoNorm.size > 20000) memoNorm.clear();
+  memoNorm.set(key, out);
+  return out;
+}
+/** Stable ingredient key for caches and remembered swaps ("green bean"). */
+export const ingKey = (name) => normName(name).core.join(' ');
+
+// ---------- pantry ----------
+const PANTRY_WORDS = new Set(['salt', 'pepper', 'black', 'white', 'kosher', 'sea', 'table', 'peppercorn', 'water', 'tap', 'ice']);
+const PANTRY_NEED = new Set(['salt', 'pepper', 'peppercorn', 'water']);
+/**
+ * Pantry basics are never missing, never counted in coverage and never priced: salt, pepper,
+ * water, cooking spray, and any "to taste" line. Oils are tracked like any other ingredient.
+ */
+export function isPantry(ing) {
+  const text = String(ing?.text ?? '');
+  if (/\bto taste\b/i.test(text) || /\bcooking spray\b/i.test(`${text} ${ing?.base ?? ''}`)) return true;
+  const { core } = normName(ing?.base || text);
+  return core.length > 0 && core.every((t) => PANTRY_WORDS.has(t)) && core.some((t) => PANTRY_NEED.has(t)) && !core.includes('ice');
+}
+/** "salt & pepper", "Salt and freshly ground pepper" -> ["salt", "pepper"] for the pantry line. */
+export function pantryLabels(ings) {
+  const out = [];
+  for (const ing of ings) {
+    const t = String(ing.base || ing.text || '').toLowerCase().replace(/\bto taste\b/g, '').replace(/[,.]/g, ' ').trim();
+    for (const part of t.split(/\s*(?:&|\band\b)\s*/)) {
+      const words = part.replace(/\b(freshly|ground|wegmans|organic|kosher|coarse)\b/g, ' ').replace(/\s+/g, ' ').trim();
+      if (words && !out.includes(words)) out.push(words);
+    }
+  }
+  return out;
+}
+
+// ---------- feed validation ----------
+const str = (x, n = 200) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : null);
+const pos = (x) => (typeof x === 'number' && Number.isFinite(x) && x > 0 && x < 1e5 ? x : null);
+const mins = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x < 100000 ? Math.round(x) : null);
+const https = (x) => (typeof x === 'string' && /^https:\/\/[^\s"'<>]+$/.test(x) ? x.slice(0, 600) : null);
+
+function cleanIng(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const text = str(raw.text, 300);
+  const base = str(raw.base, 160) ?? text;
+  if (!text && !base) return null;
+  const ing = {
+    text: text ?? base, base, qty: pos(raw.qty), qtyText: str(raw.qtyText, 20), unit: str(raw.unit, 20)?.toLowerCase() ?? null,
+    unitType: str(raw.unitType, 20), optional: Boolean(raw.optional), prep: str(raw.prep, 160), alt: str(raw.alt, 60), section: str(raw.section, 80),
+  };
+  ing.pantry = isPantry(ing);
+  ing.k = ingKey(ing.base);
+  return ing;
+}
+
+/**
+ * Decrypted shopsmartr.recipes/1 document -> { recipes, categories, count, generatedAt }.
+ * Unknown fields are dropped; recipes without an id, title or any ingredient are skipped. Adds
+ * derived fields: time (sort/display minutes), s (search tokens), n (non-pantry count).
+ */
+export function prepareRecipes(doc) {
+  if (!doc || typeof doc !== 'object' || doc.schema !== RECIPES_SCHEMA || !Array.isArray(doc.recipes)) throw new Error('Not a recipe document');
+  const seen = new Set();
+  const recipes = [];
+  for (const r of doc.recipes) {
+    if (!r || typeof r !== 'object') continue;
+    const id = str(String(r.id ?? ''), 40);
+    const title = str(r.title, 160);
+    if (!id || !title || seen.has(id)) continue;
+    const ing = (Array.isArray(r.ing) ? r.ing : []).map(cleanIng).filter(Boolean).slice(0, 80);
+    if (!ing.length) continue;
+    seen.add(id);
+    const t = r.times && typeof r.times === 'object' ? r.times : {};
+    const rating = typeof r.rating === 'number' && r.rating > 0 && r.rating <= 5 ? Math.round(r.rating * 100) / 100 : null;
+    const rec = {
+      id, title, cat: str(r.cat, 60) ?? 'other', servings: pos(r.servings) ? Math.round(r.servings) : null,
+      times: { prep: mins(t.prep), cook: mins(t.cook), total: mins(t.total) },
+      image: https(r.image), url: https(r.url), rating, ratingCount: rating && Number.isInteger(r.ratingCount) && r.ratingCount > 0 ? r.ratingCount : 0,
+      ing, steps: (Array.isArray(r.steps) ? r.steps : []).map((s) => str(typeof s === 'string' ? s : s?.text, 4000)).filter(Boolean).slice(0, 60),
+    };
+    rec.time = recipeTime(rec);
+    rec.n = ing.filter((i) => !i.pantry).length;
+    const toks = new Set();
+    for (const w of tokenize(`${title} ${ing.map((i) => i.base).join(' ')}`)) if (w.length > 1) { toks.add(w); toks.add(singular(w)); }
+    rec.s = [...toks];
+    recipes.push(rec);
+  }
+  const categories = {};
+  for (const r of recipes) categories[r.cat] = (categories[r.cat] ?? 0) + 1;
+  return { recipes, categories, count: recipes.length, generatedAt: str(doc.generatedAt, 40) };
+}
+
+/** Manifest object -> { available, file, itemCount, categories, updated } or null (any problem). */
+export function cleanRecipeManifest(m) {
+  if (!m || typeof m !== 'object' || m.schema !== RECIPE_FEED_SCHEMA || typeof m.available !== 'boolean') return null;
+  if (m.dataSchema !== undefined && m.dataSchema !== RECIPES_SCHEMA) return null;
+  const file = typeof m.file === 'string' && /^[\w.-]+\.enc$/.test(m.file) ? m.file : 'recipes.enc';
+  const itemCount = Number.isInteger(m.itemCount) && m.itemCount >= 0 ? m.itemCount : null;
+  const categories = {};
+  if (m.categories && typeof m.categories === 'object') for (const [k, v] of Object.entries(m.categories)) if (/^[a-z0-9-]{1,60}$/.test(k) && Number.isInteger(v) && v > 0) categories[k] = v;
+  return { available: m.available, file, itemCount, categories, updated: str(m.updated ?? m.generatedAt, 40) };
+}
+
+// ---------- time, rating ----------
+/** Minutes shown and sorted on: prep + cook, otherwise total, otherwise prep; null when unknown. */
+export function recipeTime(r) {
+  const { prep = null, cook = null, total = null } = r?.times ?? {};
+  if (prep != null && cook != null) return prep + cook;
+  if (total != null) return total;
+  if (prep != null) return prep;
+  return null;
+}
+/** "45 min", "1 hr 20 min". */
+export function timeText(m) {
+  if (m == null) return '';
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60); const r = m % 60;
+  return r ? `${h} hr ${r} min` : `${h} hr`;
+}
+export const hasRating = (r) => r.rating != null && r.ratingCount > 0;
+export const ratingText = (r) => (Math.round(r.rating * 10) / 10).toFixed(1);
+export const ratingAria = (r) => `Rated ${ratingText(r)} out of 5 from ${r.ratingCount} review${r.ratingCount === 1 ? '' : 's'}`;
+
+// ---------- amounts ----------
+const FR = [[0, ''], [1 / 8, '⅛'], [1 / 4, '¼'], [1 / 3, '⅓'], [3 / 8, '⅜'], [1 / 2, '½'], [5 / 8, '⅝'], [2 / 3, '⅔'], [3 / 4, '¾'], [7 / 8, '⅞'], [1, '']];
+/** Cooking amounts as fractions: 0.75 -> "¾", 1.5 -> "1½", 2.333 -> "2⅓"; 20+ rounds to whole. */
+export function formatAmount(x) {
+  if (x == null || !Number.isFinite(x) || x <= 0) return '';
+  if (x >= 20) return String(Math.round(x));
+  let w = Math.floor(x);
+  const f = x - w;
+  let best = FR[0];
+  for (const c of FR) if (Math.abs(c[0] - f) < Math.abs(best[0] - f)) best = c;
+  if (best[0] === 1) { w += 1; best = FR[0]; }
+  if (w === 0 && !best[1]) return '⅛';
+  return `${w || ''}${best[1]}`;
+}
+const METRIC = new Set(['g', 'kg', 'ml', 'l']);
+const UNIT_PLURAL = { leaf: 'leaves', box: 'boxes', bunch: 'bunches', pinch: 'pinches', dash: 'dashes', splash: 'splashes', inch: 'inches', each: 'each', pkg: 'pkg' };
+const NO_PLURAL = new Set(['tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'cm', 'pkg', 'large', 'medium', 'small', 'each']);
+/** Unit as shown after an amount; '' for "whole". */
+export function unitLabel(unit, q = 1) {
+  if (!unit || unit === 'whole') return '';
+  if (unit === 'l') return 'L';
+  if (NO_PLURAL.has(unit) || q <= 1) return unit;
+  return UNIT_PLURAL[unit] ?? `${unit}s`;
+}
+/** Scaled amount text: "1½ lb", "3 sprigs", "250 g"; '' when the line has no amount. */
+export function amountText(ing, factor = 1) {
+  if (ing.qty == null) return '';
+  const q = ing.qty * factor;
+  const n = METRIC.has(ing.unit) ? String(q >= 10 ? Math.round(q) : Math.round(q * 10) / 10) : formatAmount(q);
+  const u = unitLabel(ing.unit, q);
+  return u ? `${n} ${u}` : n;
+}
+/** factor for a servings choice; 1 when the recipe doesn't say how many it makes. */
+export const scaleFactor = (recipe, servings) => (recipe.servings && servings > 0 ? servings / recipe.servings : 1);
+
+// ---------- buying: whole packs ----------
+const VOL_ML = { tsp: 4.92892, tbsp: 14.7868, cup: 236.588, pint: 473.176, quart: 946.353, gallon: 3785.41, ml: 1, l: 1000, floz: 29.5735 };
+const WT_G = { oz: 28.3495, lb: 453.592, g: 1, kg: 1000 };
+const PACKAGE = new Set(['pkg', 'container', 'can', 'jar', 'bottle', 'bag', 'box', 'bunch', 'head']);
+const COUNT = new Set(['whole', 'large', 'medium', 'small', 'each', 'ear', 'link', 'piece']);
+const isCountish = (u) => !u || COUNT.has(u) || PACKAGE.has(u);
+const PACK_ML = { floz: 29.5735, ml: 1, L: 1000, gal: 3785.41, qt: 946.353, cup: 236.588 };
+const PACK_G = { lb: 453.592, oz: 28.3495, g: 1, kg: 1000 };
+
+/** What a scaled line needs, as { g } or { ml }; package lines use "(16 oz each)" when given. */
+export function needOf(ing, q) {
+  if (q == null) return null;
+  const u = ing.unit;
+  if (u && WT_G[u]) return { g: q * WT_G[u] };
+  if (u && VOL_ML[u]) return { ml: q * VOL_ML[u] };
+  if (u && PACKAGE.has(u) && ing.alt) {
+    const m = /(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|oz|lb|g|kg|ml|l)\b/i.exec(ing.alt);
+    if (m) {
+      const per = Number(m[1]); const pu = m[2].toLowerCase().replace(/fl\.?\s*oz/, 'floz');
+      if (WT_G[pu]) return { g: q * per * WT_G[pu] };
+      if (VOL_ML[pu]) return { ml: q * per * VOL_ML[pu] };
+    }
+  }
+  return null;
+}
+
+/** Price snapshot fields for a catalog item, as list.js linePrice() reads them. */
+export function pricedOf(it) {
+  const est = estimate(it);
+  return { each: est.each, approx: est.approx, shelf: it.price, unitPrice: it.unitPrice, unitOf: unitOf(it), byWeight: it.soldByWeight, size: it.size, onSale: it.onSale, regular: it.regularPrice };
+}
+
+/**
+ * What to buy of one product for a scaled recipe line, priced with the existing linePrice():
+ * whole packs for packaged items (a 1 lb bag covers ¾ lb; 1½ lemons buys 2), the weight for
+ * by-weight items. Returns { packs, total, approx, listQty, listUnit, buys } where buys is the
+ * "Buys 2" subline (null when it would just repeat the amount). total is null when unpriceable.
+ */
+export function buyFor(ing, factor, it) {
+  const q = ing.qty == null ? null : ing.qty * factor;
+  const priced = pricedOf(it);
+  const need = needOf(ing, q);
+  if (it.soldByWeight && need && priced.unitPrice && convert('lb', priced.unitOf)) {
+    const lb = Math.max(0.05, Math.round(((need.g ?? need.ml) / 453.592) * 100) / 100);   // volume as water (≈1 g/ml)
+    const line = linePrice({ qty: lb, unit: 'lb', priced });
+    return { packs: null, total: line?.total ?? null, approx: true, listQty: lb, listUnit: 'lb', buys: null };
+  }
+  let packs = 1;
+  let approx = false;
+  const pack = parsePackSize(it.size);
+  if (need && pack) {
+    let amt;
+    if (need.g != null && PACK_G[pack.unit]) amt = need.g / PACK_G[pack.unit];
+    else if (need.ml != null && PACK_ML[pack.unit]) amt = need.ml / PACK_ML[pack.unit];
+    else { amt = (need.g ?? need.ml) / (PACK_G[pack.unit] ?? PACK_ML[pack.unit] ?? 1); approx = true; }   // weight vs volume: ≈1 g per ml
+    packs = Math.max(1, Math.ceil(Math.round((amt / pack.amount) * 1000) / 1000 - 1e-9));
+  } else if (need) {
+    approx = true;   // e.g. "2 cups" of a product sold as "12 ct": one pack
+  } else if (q != null && isCountish(ing.unit)) {
+    const ct = /(\d+)\s*(?:ct|count|pk)\b/i.exec(it.size ?? '');
+    packs = Math.max(1, Math.ceil(q / (ct && !PACKAGE.has(ing.unit) ? Number(ct[1]) : 1) - 1e-9));
+  }
+  const line = linePrice({ qty: packs, unit: '', priced });
+  const buys = packs > 1 && !(isCountish(ing.unit) && q === packs) ? `Buys ${packs}` : null;
+  return { packs, total: line?.total ?? null, approx: approx || Boolean(line?.approx), listQty: packs, listUnit: '', buys };
+}
+
+// ---------- matching against the catalog ----------
+/**
+ * Built once per catalog: normalized word -> rows whose product NAME has that word (from the
+ * Shop's token index, so no extra pass over all items), plus per-row normalized names on demand.
+ */
+export function buildMatchIndex(cat, index) {
+  const norm = new Map();
+  index.tokens.forEach((t, k) => {
+    if (/\d/.test(t)) return;
+    const n = singular(t);
+    const a = norm.get(n);
+    if (a) a.push(k); else norm.set(n, [k]);
+  });
+  return { cat, index, norm, rows: new Map(), core: new Map(), items: new Map() };
+}
+function rowsWith(mi, t) {
+  const hit = mi.rows.get(t);
+  if (hit) return hit;
+  const ks = mi.norm.get(t) ?? [];
+  const { offsets, flat } = mi.index;
+  const set = new Set();
+  for (const k of ks) for (let p = offsets[k], e = offsets[k + 1]; p < e; p += 1) if ((flat[p] & 3) === 3) set.add(flat[p] >> 2);
+  const rows = Int32Array.from(set).sort();
+  mi.rows.set(t, rows);
+  return rows;
+}
+function productCore(mi, row) {
+  let c = mi.core.get(row);
+  if (!c) { c = normName(mi.cat.cols.name[row]).core; mi.core.set(row, c); }
+  return c;
+}
+export function itemAt(mi, row) {
+  let it = mi.items.get(row);
+  if (!it) { it = getItem(mi.cat, row); mi.items.set(row, it); }
+  return it;
+}
+export const CONF = { EXACT: 4, STRONG: 3, GOOD: 2, WEAK: 1 };
+/**
+ * Products at one store for an ingredient, best first: [{ row, conf }].
+ * EXACT: same words; STRONG: all words + up to 2 others; GOOD: all words + more, or more than half
+ * of them with up to 2 others; WEAK (never offered): little more than the head noun. A product whose name ends in another noun ("green bean
+ * casserole") drops a level. At most `limit` are kept.
+ */
+export function matchRows(mi, name, storeIdx, limit = 8) {
+  const { core } = normName(name);
+  if (!core.length) return [];
+  const head = core[core.length - 1];
+  const want = new Set(core);
+  const storeCol = mi.cat.cols.store;
+  const out = [];
+  // Scan the head noun's rows; when that list is long ("cheese", "sauce") and the name has other
+  // words, scan the rarest of those instead (still requiring the head), which keeps it fast.
+  let scan = rowsWith(mi, head);
+  let needHead = null;
+  if (scan.length > 400 && core.length > 1) {
+    for (const t of core) { if (t === head) continue; const r = rowsWith(mi, t); if (r.length < scan.length) { scan = r; needHead = head; } }
+  }
+  for (const row of scan) {
+    if (storeIdx >= 0 && storeCol[row] !== storeIdx) continue;
+    if (needHead && !productCore(mi, row).includes(needHead)) continue;
+    const pc = productCore(mi, row);
+    let hits = 0;
+    for (const t of pc) if (want.has(t)) hits += 1;
+    const extra = pc.length - hits;
+    let conf;
+    if (hits === want.size) conf = extra === 0 ? 4 : extra <= 2 ? 3 : 2;
+    else if (hits * 2 > want.size && extra <= 2) conf = 2;
+    else conf = 1;
+    if (conf > 1 && pc[pc.length - 1] !== head) conf -= 1;
+    out.push({ row, conf, extra });
+  }
+  out.sort((a, b) => b.conf - a.conf || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
+  const best = out[0]?.conf ?? 0;
+  // The shortlist: the best level and the one below it. Head-noun-only (WEAK) hits are dropped:
+  // "heavy cream" must not price as ice cream; no match is better than a wrong one.
+  return out.filter((c) => c.conf >= Math.max(2, best - 1)).slice(0, limit).map(({ row, conf }) => ({ row, conf }));
+}
+
+/**
+ * Precompute: candidate lists for every distinct ingredient of every recipe at one store. Runs once
+ * after both feeds are unlocked (and again only for another store). Returns { cands, ms, keys }.
+ */
+export function precomputeCandidates(mi, recipes, storeIdx, now = () => Date.now()) {
+  const t0 = now();
+  const cands = new Map();
+  for (const r of recipes) for (const ing of r.ing) {
+    if (ing.pantry || !ing.k || cands.has(ing.k)) continue;
+    cands.set(ing.k, matchRows(mi, ing.base, storeIdx));
+  }
+  return { cands, ms: now() - t0, keys: cands.size };
+}
+
+/** Swap memory key: ingredient + store (device-only). */
+export const swapKey = (k, store) => `${k}|${store}`;
+
+/**
+ * Choices for one line at the current servings: [{ row, it, conf, buy }], the default pick first
+ * (best confidence; ties go to the cheapest pack covering the amount), then up to 4 alternatives
+ * (confidence, then price). A remembered swap is moved to the front. Unpriceable options go last.
+ */
+export function lineOptions(mi, cands, ing, factor, swapSku = null) {
+  const list = cands.get(ing.k) ?? [];
+  if (!list.length) return [];
+  const opts = list.map(({ row, conf }) => { const it = itemAt(mi, row); return { row, it, conf, buy: buyFor(ing, factor, it) }; });
+  const price = (o) => (o.buy.total == null ? Infinity : o.buy.total);
+  opts.sort((a, b) => b.conf - a.conf || price(a) - price(b) || a.row - b.row);
+  const best = opts[0].conf;
+  const tier = opts.filter((o) => o.conf === best).sort((a, b) => price(a) - price(b) || a.row - b.row);
+  const rest = opts.filter((o) => o.conf !== best);
+  let ordered = [...tier, ...rest].slice(0, 5);
+  if (swapSku) {
+    const i = opts.findIndex((o) => o.it.sku === swapSku);
+    if (i >= 0) ordered = [opts[i], ...ordered.filter((o) => o !== opts[i])].slice(0, 5);
+  }
+  return ordered;
+}
+
+/**
+ * Cost range for a recipe: LOW = cheapest match per line, HIGH = most expensive match, both whole
+ * packs at the servings, pantry excluded; a remembered swap fixes both ends to that product.
+ * Returns { low, high, unpriced, priced } with low floored and high ceiled to whole dollars, or
+ * null when no line could be priced.
+ */
+export function recipeCost(recipe, { mi, cands, factor = 1, swapOf = () => null }) {
+  let low = 0; let high = 0; let unpriced = 0; let priced = 0;
+  for (const ing of recipe.ing) {
+    if (ing.pantry) continue;
+    const opts = lineOptions(mi, cands, ing, factor, null).filter((o) => o.buy.total != null);
+    if (!opts.length) { unpriced += 1; continue; }
+    priced += 1;
+    const sw = swapOf(ing.k);
+    const fixed = sw ? opts.find((o) => o.it.sku === sw) ?? (() => { const all = lineOptions(mi, cands, ing, factor, sw); return all[0]?.it.sku === sw && all[0].buy.total != null ? all[0] : null; })() : null;
+    if (fixed) { low += fixed.buy.total; high += fixed.buy.total; continue; }
+    let lo = Infinity; let hi = 0;
+    for (const o of opts) { lo = Math.min(lo, o.buy.total); hi = Math.max(hi, o.buy.total); }
+    low += lo; high += hi;
+  }
+  if (!priced) return null;
+  return { low: Math.floor(low + 1e-9), high: Math.ceil(high - 1e-9), unpriced, priced };
+}
+/** "$12–$21" / "$12"; aria "12 to 21 dollars to buy". */
+export function costText(c, per = 1) {
+  if (!c) return { text: '', aria: '' };
+  const lo = per > 1 ? Math.floor(c.low / per) : c.low; const hi = per > 1 ? Math.ceil(c.high / per) : c.high;
+  const tail = per > 1 ? 'per serving' : 'to buy';
+  return lo === hi
+    ? { text: `$${lo}`, tail, aria: `${lo} dollar${lo === 1 ? '' : 's'} ${tail}` }
+    : { text: `$${lo}–$${hi}`, tail, aria: `${lo} to ${hi} dollars ${tail}` };
+}
+
+// ---------- list coverage ----------
+/** Normalized list names, once per render: [{ item, core, set, head }]. Checked items count too. */
+export function listIndex(items) {
+  return items.map((item) => { const { core } = normName(item.name); return { item, core, set: new Set(core), head: core[core.length - 1] }; }).filter((x) => x.core.length);
+}
+/**
+ * The list item an ingredient is already covered by, or null: the item's name has every word of
+ * the ingredient ("olive oil" in "Extra Virgin Olive Oil"), or the ingredient has every word of
+ * the item name and they end in the same noun ("chicken thighs" for "bone-in chicken thighs").
+ */
+export function onListItem(ing, lidx) {
+  const { core } = normName(ing.base);
+  if (!core.length) return null;
+  const head = core[core.length - 1];
+  const want = new Set(core);
+  for (const x of lidx) {
+    if (core.every((t) => x.set.has(t)) && x.core.includes(head)) return x.item;
+    if (x.head === head && x.core.every((t) => want.has(t))) return x.item;
+  }
+  return null;
+}
+/** { have, total } non-pantry lines on the list. */
+export function coverage(recipe, lidx) {
+  let have = 0; let total = 0;
+  for (const ing of recipe.ing) { if (ing.pantry) continue; total += 1; if (onListItem(ing, lidx)) have += 1; }
+  return { have, total };
+}
+/** Cook-from-my-list rule, used by the "Uses my list" quick pick: 3+ lines on the list, or half. */
+export const usesList = (cov) => cov.total > 0 && (cov.have >= 3 || cov.have * 2 >= cov.total) && cov.have > 0;
+
+// ---------- browse: search, quick picks, sorts ----------
+/** Every query word must start a word of the title or an ingredient name. */
+export function matchesQuery(recipe, query) {
+  const q = tokenize(query).filter((w) => w.length > 0);
+  if (!q.length) return true;
+  return q.every((w) => { const s = singular(w); return recipe.s.some((t) => t.startsWith(w) || t.startsWith(s)); });
+}
+export const QUICK = {
+  quick: { label: 'Under 30 min', test: (r) => r.time != null && r.time <= 30 },
+  cheap: { label: 'Under $15', test: (r, x) => { const c = x.costOf(r); return Boolean(c) && c.low < 15; }, needsPrices: true },
+  few: { label: '5 ingredients or fewer', test: (r) => r.n <= 5 },
+  mine: { label: 'Uses my list', test: (r, x) => usesList(x.coverageOf(r)) },
+};
+export const RX_SORTS = ['time', 'price', 'name', 'rating'];
+export const RX_SORT_LABEL = { time: 'Time', price: 'Price', name: 'A–Z', rating: 'Rating' };
+/** Saved sort -> { by, dir }; Price defaults to low to high (asc). */
+export function cleanRxSort(x, fallback = 'time') {
+  const by = RX_SORTS.includes(x?.by) ? x.by : fallback;
+  return { by, dir: x?.dir === 'desc' ? 'desc' : 'asc' };
+}
+/** Rating applies only when a recipe in the set has one; otherwise the default sort is used. */
+export function effectiveSort(sort, list, fallback = 'time') {
+  const s = cleanRxSort(sort, fallback);
+  return s.by === 'rating' && !list.some(hasRating) ? { ...s, by: fallback } : s;
+}
+/**
+ * Sorted copy. time: quickest first, unknown last; price: low end of the cost range (asc default,
+ * desc toggle), unpriced last; name: A-Z (locale, numeric); rating: average desc, then count,
+ * unrated last. Ties go A-Z.
+ */
+export function sortRecipes(list, sort, { costOf = () => null } = {}) {
+  const { by, dir } = cleanRxSort(sort);
+  const name = (a, b) => compareNames(a.title, b.title) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  // Nulls last, then cmp, then A-Z.
+  const by2 = (x, y, cmp, a, b) => {
+    if (x == null || y == null) return x == null && y == null ? name(a, b) : x == null ? 1 : -1;
+    return cmp || name(a, b);
+  };
+  if (by === 'name') return [...list].sort(name);
+  if (by === 'time') return [...list].sort((a, b) => by2(a.time, b.time, a.time - b.time, a, b));
+  if (by === 'rating') {
+    return [...list].sort((a, b) => {
+      const x = hasRating(a) ? a.rating : null; const y = hasRating(b) ? b.rating : null;
+      return by2(x, y, (y - x) || (b.ratingCount - a.ratingCount), a, b);
+    });
+  }
+  const low = new Map(list.map((r) => [r, costOf(r)?.low ?? null]));
+  const sign = dir === 'desc' ? -1 : 1;
+  return [...list].sort((a, b) => { const x = low.get(a); const y = low.get(b); return by2(x, y, sign * (x - y), a, b); });
+}
+
+// ---------- steps ----------
+const ABBR = new Set(['approx', 'min', 'mins', 'oz', 'lb', 'lbs', 'tsp', 'tbsp', 'pkg', 'no', 'dr', 'st', 'vs', 'etc', 'fl', 'qt', 'pt', 'hr', 'hrs', 'sec', 'deg', 'ea', 'e.g', 'i.e']);
+/** Sentences of a step, not breaking after "approx.", "1.5" or a single initial. */
+export function splitSentences(text) {
+  const out = [];
+  let start = 0;
+  const re = /[.!?](?=\s+["“(]?[A-Z0-9])/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const before = text.slice(start, m.index).split(/\s+/).pop()?.toLowerCase().replace(/^\(/, '') ?? '';
+    if (ABBR.has(before) || /^[a-z]$/.test(before)) continue;
+    out.push(text.slice(start, m.index + 1).trim());
+    start = m.index + 1;
+  }
+  const tail = text.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+/** Numbered steps; a dense step (over `max` chars) becomes several, a few sentences each. */
+export function splitSteps(steps, max = 300, target = 220) {
+  const out = [];
+  for (const s of steps) {
+    const text = String(s).replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    if (text.length <= max) { out.push(text); continue; }
+    let cur = '';
+    for (const sen of splitSentences(text)) {
+      if (cur && cur.length + 1 + sen.length > target) { out.push(cur); cur = sen; } else cur = cur ? `${cur} ${sen}` : sen;
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+/** Timer pill text for a step that names times: "25 + 10 min", "1 hr"; '' when none. */
+export function stepTimer(text) {
+  const parts = [];
+  for (const m of String(text).matchAll(/(\d+)(?:\s*(?:–|-|to)\s*(\d+))?\s*(minutes?|mins?|hours?|hrs?)\b/gi)) {
+    const unit = /^h/i.test(m[3]) ? 'hr' : 'min';
+    parts.push({ v: m[2] ? `${m[1]}–${m[2]}` : m[1], unit });
+  }
+  if (!parts.length) return '';
+  const sameUnit = parts.every((p) => p.unit === parts[0].unit);
+  return sameUnit ? `${parts.map((p) => p.v).join(' + ')} ${parts[0].unit}` : parts.map((p) => `${p.v} ${p.unit}`).join(' + ');
+}
+
+// ---------- detail model ----------
+/**
+ * Everything the Detail screen shows for a recipe at a servings choice:
+ * { factor, lines: [{ ing, amount, name, sub, onList, opts }], missing, have, pantry, cost, missingCost }.
+ * mi/cands may be null (no prices): lines then have no options and the cost is null.
+ */
+export function detailModel(recipe, { servings, listItems = [], mi = null, cands = null, swapOf = () => null }) {
+  const factor = scaleFactor(recipe, servings);
+  const lidx = listIndex(listItems);
+  const lines = []; const pantry = [];
+  for (const ing of recipe.ing) {
+    if (ing.pantry) { pantry.push(ing); continue; }
+    const onList = onListItem(ing, lidx);
+    const opts = mi && cands ? lineOptions(mi, cands, ing, factor, swapOf(ing.k)) : [];
+    lines.push({ ing, amount: amountText(ing, factor), name: ing.qty == null ? ing.text : ing.base, sub: [ing.prep, ing.optional ? 'optional' : ''].filter(Boolean).join(' · '), onList, opts });
+  }
+  const missing = lines.filter((l) => !l.onList);
+  const have = lines.filter((l) => l.onList);
+  let total = 0; let unpriced = 0; let approx = false;
+  for (const l of missing) { const o = l.opts[0]; if (o?.buy.total != null) { total += o.buy.total; approx = approx || o.buy.approx; } else unpriced += 1; }
+  const cost = mi && cands ? recipeCost(recipe, { mi, cands, factor, swapOf }) : null;
+  return { factor, lines, missing, have, pantry: pantryLabels(pantry), cost, missingCost: { total: Math.round(total * 100) / 100, unpriced, approx } };
+}
+export { storeKey };

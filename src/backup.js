@@ -158,7 +158,8 @@ export function summarize(b, dropped = 0) {
     items: b.state.items.length,
     listStores: new Set(b.state.items.map(storeKeyOf).filter(Boolean)).size,
     priced: b.state.items.filter((i) => i.priced).length,
-    favorites: b.favs.items.length,
+    // L34: count Favorites after the same-item combine that loading runs, so the pill matches what loads.
+    favorites: dedupeFavorites(b.favs).favorites.items.length,
     meals: b.favs.meals.length,
     stores: b.state.selectedStoreIds.length,
     dropped,
@@ -228,7 +229,8 @@ function mergeRows(current, incoming, keyOf, combine) {
  */
 export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
-    return { state: b.state, favs: dedupeFavorites(b.favs).favorites, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
+    // v0.2.0: saved recipes aren't in a backup/1 file yet (backup/2 is v0.2.1), so Replace keeps this device's.
+    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: cur.favs.recipes ?? [] }, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
@@ -290,9 +292,9 @@ export function nudgeText(meta, itemCount, now = Date.now()) {
 }
 
 /** "16 items · last saved to a file Nov 3 (12 days ago)" for the menu's storage line. */
-export function savedLine(meta, itemCount, now = Date.now()) {
+export function savedLine(meta, itemCount, now = Date.now(), recipeCount = 0) {
   const m = cleanMeta(meta);
-  const items = `${itemCount} item${itemCount === 1 ? '' : 's'}`;
+  const items = `${itemCount} item${itemCount === 1 ? '' : 's'}${recipeCount ? ` · ${recipeCount} saved recipe${recipeCount === 1 ? '' : 's'}` : ''}`;
   if (!m.lastSavedAt) return `${items} · never saved to a file`;
   const t = Date.parse(m.lastSavedAt);
   const days = Math.max(0, Math.floor((now - t) / DAY));
