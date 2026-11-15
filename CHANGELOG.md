@@ -2,6 +2,27 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.10-alpha] - 2026-11-15 (alpha)
+
+Fix release for the v0.1.9 gate (M6, L32, L33). Still alpha; prices are a saved household
+snapshot, not official checkout prices.
+
+### Fixed
+- **M6: no more duplicate favorites from the Favorites tab.** Every way of adding or editing a
+  staple now uses the same name + store identity as the stars: the Favorites-tab add, the edit
+  sheet (a rename or store change into another favorite), the Shop and list stars, and Load list
+  merge/replace. Adding one that exists says "Milk is already in your Favorites…" and changes
+  nothing.
+- **M6: the duplicate clean-up on load is one-time.** The "Combined N duplicate…" notice shows
+  once per device, and the copy it names (`shopsmartr:favorites:v1.predupe.bak`) is written once
+  and never overwritten. If old duplicates ever turn up again they are combined quietly into a
+  timestamped copy (`…predupe.<time>.bak`); only the newest 3 such copies are kept.
+- **L32: double-clicking "Save list first" on desktop no longer closes the reopened confirm.**
+  Backdrop clicks are ignored while the dialog is arming and for 300 ms after it opens.
+- **L33: Favorites wording.** The plural names the Favorites collection ("3 Favorites"); one item
+  is "1 favorite" (Load list pill and summary, duplicate notice).
+- Stale contrast comment on the filled star (3.8:1 on white; non-text, needs 3:1).
+
 ## [0.1.9-alpha] - 2026-11-15 (alpha)
 
 Tomato & Parmesan theme (light + dark), outlined destructive buttons, control outlines now 3:1.
