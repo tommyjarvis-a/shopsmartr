@@ -2,6 +2,52 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.3-alpha] - 2026-11-14 (alpha)
+
+Prices move into the shopping flow. Everything below is alpha; prices are a saved household
+snapshot, not official checkout prices.
+
+### Added
+- **Shop** tab (List · Shop · Favorites · Stores · Ads; shown only when a price feed is published).
+  Unlock once with the household passphrase, then:
+  - a **store dropdown** listing only stores that have price data (from the feed's `stores[]` and
+    the items' chain + store id). The choice is remembered on this device in
+    `shopsmartr:shopStore:v1`; if that store leaves the feed, the first available store is used.
+  - a **sticky search** under the dropdown that filters as you type (~150 ms debounce), scoped to the
+    selected store. Matches names, brands, categories and departments; every word must match as an
+    exact word, a prefix, a subsequence ("chkn brst" → chicken breast) or with one typo for words of
+    4+ letters ("bananna"). Ranked exact > prefix > subsequence > typo, name > brand > department.
+    The clear (×) button empties the box and keeps focus there.
+  - department chips and department cards with counts for the selected store, an **On sale this
+    week** list built from real sale items (no made-up popularity), 50 results per page with
+    "Show more", and a no-results state with "Add “…” without price".
+  - an **item sheet** (bottom sheet on phones, dialog on desktop): size, price, Sale badge with the
+    regular price struck through, unit price, aisle, store, a quantity stepper and Add to list.
+- **Priced list rows**: items added from Shop or a suggestion keep the price, unit price, aisle, SKU
+  and the source store (chain, store number) they were added from. Rows show that price and store
+  tag; changing the Shop store later never changes them. Adding the same product again bumps the qty.
+- **Running total**: sticky bar above the tabs on phones, in the list header on desktop. Est. total
+  (all priced items), In cart (checked), Left (unchecked), and how many items are priced/unpriced.
+  By-weight items use an estimate (unit price × typical weight) and show "~".
+- **Price suggestions** under the add bar (desktop) and in the add sheet (phones): up to 5 matches
+  from the selected store plus "Add “…” without price". Arrow keys + Enter pick one; plain Enter
+  still adds free text. Same matcher as Shop search.
+- CSV export gains Price each, Line total, Estimate, Unit price, Aisle, SKU, Price from and Prices as
+  of columns; the text export shows line prices and the totals.
+- Price feed envelope **v2** (gzip inside, `aad` binds `z=gzip`) alongside v1, and document schema
+  `shopsmartr.prices/2`. Decrypt, gunzip, parse, compact column store and token index run in a
+  module Worker (main-thread fallback). Only the key is cached (IndexedDB); the decrypted catalog
+  is never stored.
+
+### Changed
+- The old price snapshot section on Weekly ads is gone; prices live in Shop.
+
+### Fixed
+- L10: export file names use the local date, not the UTC date.
+- L11: a list row's quantity stays on the same line as the end of a long name, so a wrapped row
+  never starts with "· 1".
+- The Favorites Items/Meals tabs and the favorite/meal add inputs are 44 px tall.
+
 ## [0.1.2-alpha] - 2026-11-14 (alpha)
 
 Fixes for the v0.1.1 QA recheck (M1, L8, L9).
@@ -22,7 +68,7 @@ Fixes for the v0.1.1 QA recheck (M1, L8, L9).
   Still 321 notes, 102 (32%) with Lauren's name. New tests enforce a banned-word list and a
   word-similarity limit.
 
- - 2026-11-14 (alpha)
+## [0.1.1-alpha] - 2026-11-14 (alpha)
 
 Fixes for the v0.1.0 QA gate (low findings L1–L7) plus Favorites and love notes.
 

@@ -3,16 +3,18 @@ import { VERSION } from './version.js';
 import { lookupZip, storesNear, normalizeZip } from './geo.js';
 import { validateStoresDoc, indexById, CHAINS } from './stores.js';
 import * as L from './list.js';
-import { loadStateWithStatus, saveState } from './storage.js';
-import { toCSV, toText, favoritesToCSV } from './export.js';
+import { loadStateWithStatus, saveState, loadShopStore, saveShopStore } from './storage.js';
+import { toCSV, toText, favoritesToCSV, localDateStamp } from './export.js';
 import * as F from './favorites.js';
 import { NOTES } from './notes.js';
 import { nextNote } from './lovenotes.js';
 import * as Prices from './prices.js';
+import * as C from './catalog.js';
+import { makeDecoder } from './pricefeed.js';
 import * as UI from './ui.js';
 
 const el = (id) => document.getElementById(id);
-const SCREENS = ['list', 'favorites', 'stores', 'ads'];
+const SCREENS = ['list', 'shop', 'favorites', 'stores', 'ads'];
 const loaded = loadStateWithStatus();
 let state = loaded.state;
 const favLoaded = F.loadFavoritesWithStatus();
@@ -296,6 +298,7 @@ function renderListScreen() {
   const storeCount = new Set(state.items.map((i) => i.storeId).filter(Boolean)).size;
   el('list-meta').textContent = s.total ? `${s.total} item${s.total === 1 ? '' : 's'} · ${storeCount} store${storeCount === 1 ? '' : 's'}` : 'No items yet';
   UI.renderProgress(s.done, s.total);
+  UI.renderTotals(state.items);
   const mine = withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
   UI.renderStaticChips(el('panel-stores'), mine);
   el('panel-where').textContent = state.zip ? `${state.zip} · within ${state.radiusMi} mi` : 'No zip code yet';
@@ -404,7 +407,7 @@ function closeMenu(focusBack = false) {
   if (focusBack && opener) opener.focus();
 }
 
-const stamp = () => new Date().toISOString().slice(0, 10);
+const stamp = () => localDateStamp();
 const asText = () => toText(state.items, data.byId, { date: stamp(), favorites: favs });
 
 async function menuAction(action) {
@@ -429,9 +432,11 @@ async function menuAction(action) {
 // ---------- Routing ----------
 function route() {
   const want = location.hash.slice(1);
-  const screen = SCREENS.includes(want) ? want : (state.selectedStoreIds.length || state.items.length ? 'list' : 'stores');
+  let screen = SCREENS.includes(want) ? want : (state.selectedStoreIds.length || state.items.length ? 'list' : 'stores');
+  if (screen === 'shop' && feedAvailable === false) screen = 'list';
   UI.setScreen(screen);
   closeMenu();
+  closeSuggest();
 }
 
 function bind() {
@@ -511,45 +516,329 @@ function bind() {
   if (typeof navigator.share === 'function') menu().querySelector('[data-action="share"]').hidden = false;
 }
 
-// ---------- Optional encrypted price snapshot ----------
+// ---------- Encrypted price feed: Shop, item sheet, suggestions ----------
+const PAGE = 50;
+const DEBOUNCE_MS = 150;
 let priceEnv = null;
-function showPrices(doc) {
-  el('prices-locked').hidden = Boolean(doc);
-  el('prices-open').hidden = !doc;
-  el('prices-forget').hidden = !doc;
-  if (!doc) return;
-  const when = Date.parse(doc.asOf);
-  el('prices-asof').textContent = Number.isFinite(when) ? `As of ${new Date(when).toLocaleString()}` : '';
-  UI.renderPrices(el('prices-groups'), Prices.groupPrices(doc));
+let feedAvailable = null;   // null = still checking, then true/false
+let feed = null;            // { catalog, index } while unlocked; only the key is cached, never the catalog
+let decoder = null;
+const shop = { store: '', dept: '', q: '', offset: 0 };
+const deptMemo = new Map();
+const perf = {};
+globalThis.__shopsmartrPerf = perf;
+
+const debounce = (fn, ms) => { let t = 0; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+function timedDecode(env, key) {
+  const t0 = performance.now();
+  return decoder(env, key).then((res) => {
+    Object.assign(perf, { ...res.ms, decodeTotal: performance.now() - t0, where: res.where, items: res.catalog.n });
+    return res;
+  });
+}
+
+function storeOptionLabel(s) {
+  return s.name && s.name !== `${s.chain} #${s.storeId}` ? `${s.label} · ${s.name}` : s.label;
+}
+
+function showShop(result) {
+  feed = result;
+  deptMemo.clear();
+  el('shop-locked').hidden = Boolean(result);
+  el('shop-open').hidden = !result;
+  closeSuggest();
+  if (!result) return;
+  const t0 = performance.now();
+  const stores = C.priceStores(feed.catalog);
+  shop.store = C.pickStore(feed.catalog, loadShopStore()) ?? '';
+  el('shop-store').replaceChildren(...stores.map((st) => new Option(storeOptionLabel(st), st.key)));
+  el('shop-store').value = shop.store;
+  const when = Date.parse(feed.catalog.asOf);
+  el('shop-asof').textContent = Number.isFinite(when) ? `Prices as of ${new Date(when).toLocaleString()}.` : '';
+  renderShop();
+  perf.firstRender = performance.now() - t0;
+  perf.readyAt = performance.now();
+}
+
+function storeDepts() {
+  if (!deptMemo.has(shop.store)) deptMemo.set(shop.store, C.storeDepartments(feed.catalog, shop.store));
+  return deptMemo.get(shop.store);
+}
+
+function renderShop({ keepScroll = true } = {}) {
+  if (!feed) return;
+  const t0 = performance.now();
+  const { catalog: cat, index } = feed;
+  const cur = C.priceStores(cat).find((st) => st.key === shop.store);
+  const sub = el('shop-sub');
+  sub.dataset.chain = cur?.chain ?? '';
+  sub.lastElementChild.textContent = cur ? storeOptionLabel(cur) : 'No store prices';
+  const depts = storeDepts();
+  if (shop.dept && !depts.some((d) => d.name === shop.dept)) shop.dept = '';
+  UI.renderDeptChips(el('shop-depts'), depts, shop.dept, (d) => { shop.dept = d; shop.offset = 0; renderShop(); });
+  const q = shop.q.trim();
+  const idle = !q && !shop.dept;
+  el('shop-idle').hidden = !idle;
+  const open = (i, btn) => openShopSheet(i, btn);
+  if (idle) {
+    const n = cur?.count ?? 0;
+    el('shop-meta').textContent = `${n.toLocaleString('en-US')} items · ${depts.length} department${depts.length === 1 ? '' : 's'}`;
+    el('shop-dept-grid').replaceChildren(...depts.map((d) => UI.deptCard(d, (name) => { shop.dept = name; shop.offset = 0; renderShop(); })));
+    const sale = C.onSale(cat, index, shop.store, 6);
+    el('shop-sale').hidden = sale.length === 0;
+    el('shop-sale-list').replaceChildren(...sale.map((it) => UI.catRow(it, open)));
+    el('shop-results').hidden = true;
+    el('shop-more').hidden = true;
+    el('shop-empty').hidden = true;
+    perf.lastRender = performance.now() - t0;
+    return;
+  }
+  const r = C.search(cat, index, q, { store: shop.store, department: shop.dept, offset: shop.offset, limit: PAGE });
+  const tSearch = performance.now() - t0;
+  el('shop-results').hidden = r.total === 0;
+  el('shop-results').replaceChildren(...r.items.map((it) => UI.catRow(it, open)));
+  const end = r.offset + r.items.length;
+  const where = shop.dept ? ` in ${shop.dept}` : '';
+  el('shop-meta').textContent = r.total === 0 ? ''
+    : q && r.total <= PAGE ? `${r.total} result${r.total === 1 ? '' : 's'} for “${q}”${where}`
+      : `Showing ${r.offset + 1}–${end} of ${r.total.toLocaleString('en-US')}${q ? ` for “${q}”` : ''}${where}`;
+  const more = el('shop-more');
+  const left = r.total - end;
+  more.hidden = left <= 0 && r.offset === 0;
+  more.textContent = left > 0 ? `Show more (${left.toLocaleString('en-US')})` : 'Back to the first results';
+  more.dataset.next = left > 0 ? String(end) : '0';
+  el('shop-empty').hidden = r.total > 0;
+  if (r.total === 0) {
+    el('shop-empty-title').textContent = q ? `No items match “${q}”` : 'No items here';
+    el('shop-empty-add').textContent = `Add “${q}” without price`;
+    el('shop-empty-add').hidden = !q;
+    el('shop-empty-clear').hidden = !q;
+  }
+  if (!keepScroll) el('shop-open').scrollIntoView?.({ block: 'start' });
+  perf.lastSearch = tSearch;
+  perf.lastRender = performance.now() - t0;
+}
+
+let sheetItem = null;
+let sheetQty = 1;
+let sheetOpener = null;
+function openShopSheet(idx, opener) {
+  if (!feed) return;
+  const it = C.getItem(feed.catalog, idx);
+  sheetItem = it;
+  sheetQty = 1;
+  sheetOpener = opener ?? null;
+  el('ci-title').textContent = it.name;
+  el('ci-size').textContent = it.size ?? '';
+  const price = el('ci-price');
+  price.textContent = UI.itemPriceText(it);
+  price.classList.toggle('price-sale', it.onSale);
+  el('ci-sale').hidden = !it.onSale;
+  el('ci-was').textContent = it.onSale && it.regularPrice ? L.money(it.regularPrice) : '';
+  el('ci-unit').textContent = [it.soldByWeight ? `${it.unitPriceText ?? ''}, estimated for ${it.approxWeightLb ?? 1} lb` : it.unitPriceText].filter(Boolean).join('');
+  el('ci-aisle').textContent = [it.aisle, it.department].filter(Boolean).join(' · ');
+  el('ci-store').textContent = C.storeLabel(it);
+  el('ci-qty').textContent = '1';
+  el('shop-sheet').showModal();
+  el('ci-add').focus();
+}
+
+/** Adds a catalog item; merges into an unchecked line for the same product from the same store. */
+function addPriced(it, qty = 1, unit = '') {
+  const f = C.pricedFields(feed.catalog, it, data.byId);
+  const same = state.items.find((x) => !x.checked && x.priced && x.priced.sku === f.priced.sku && x.priced.chain === f.priced.chain && x.priced.storeNo === f.priced.storeNo);
+  if (same) {
+    const n = Math.round(((same.qty ?? 1) + qty) * 1000) / 1000;
+    commit(L.updateItem(state, same.id, { qty: n }));
+    return `${it.name}: now ${n} on your list`;
+  }
+  commit(L.addItem(state, { name: it.name, qty, unit, storeId: f.storeId, priced: f.priced }));
+  return `Added ${it.name} (${L.priceText(Math.round(f.priced.each * qty * 100) / 100, f.priced.approx)})`;
+}
+
+// ----- combobox suggestions (add bar + mobile add sheet), shared matcher -----
+const combos = [];
+function closeSuggest() { for (const c of combos) c.close(); }
+
+function bindSuggest(input, box, { onPick, onCustom }) {
+  let items = [];
+  let active = -1;
+  let text = '';
+  const opts = () => [...box.children];
+  function close() {
+    box.hidden = true;
+    box.replaceChildren();
+    items = [];
+    active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+  function setActive(i) {
+    const o = opts();
+    active = i;
+    o.forEach((n, k) => n.setAttribute('aria-selected', String(k === i)));
+    if (i >= 0) { input.setAttribute('aria-activedescendant', o[i].id); o[i].scrollIntoView?.({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
+  }
+  function update() {
+    text = L.parseQuick(input.value).name.trim();
+    if (!feed || document.activeElement !== input) { close(); return; }
+    const t0 = performance.now();
+    items = C.suggest(feed.catalog, feed.index, text, { limit: 5, store: shop.store });
+    perf.lastSuggest = performance.now() - t0;
+    if (!items.length) { close(); return; }
+    box.replaceChildren(...items.map((it, i) => UI.sugOption(it, `${box.id}-${i}`)), UI.customOption(text, `${box.id}-custom`));
+    box.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    setActive(-1);
+  }
+  function choose(i) {
+    const it = items[i];
+    const raw = input.value;
+    close();
+    if (it) onPick(it, raw); else onCustom(raw);
+  }
+  const later = debounce(update, DEBOUNCE_MS);
+  input.addEventListener('input', later);
+  input.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== input) close(); }, 0));
+  input.addEventListener('keydown', (e) => {
+    if (box.hidden) return;
+    const n = opts().length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((active + 1) % n); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active <= 0 ? n - 1 : active - 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
+  });
+  box.addEventListener('pointerdown', (e) => e.preventDefault());   // keep focus in the input
+  box.addEventListener('click', (e) => { const o = e.target.closest('[role="option"]'); if (o) choose(opts().indexOf(o)); });
+  const c = { close };
+  combos.push(c);
+  return c;
+}
+
+function bindShop() {
+  const search = el('shop-q');
+  const run = debounce(() => { shop.offset = 0; renderShop(); }, DEBOUNCE_MS);
+  search.addEventListener('input', () => {
+    shop.q = search.value;
+    el('shop-clear').hidden = !search.value;
+    run();
+  });
+  el('shop-search-form').addEventListener('submit', (e) => { e.preventDefault(); shop.q = search.value; shop.offset = 0; renderShop(); });
+  const clear = () => { search.value = ''; shop.q = ''; shop.offset = 0; el('shop-clear').hidden = true; renderShop(); search.focus(); };
+  el('shop-clear').addEventListener('click', clear);
+  el('shop-empty-clear').addEventListener('click', clear);
+  el('shop-empty-add').addEventListener('click', () => {
+    const q = L.parseQuick(shop.q);
+    try { commit(L.addItem(state, { name: q.name, qty: q.qty, unit: q.unit })); UI.toast(`Added ${q.name} without a price`); } catch (err) { UI.toast(err.message); }
+  });
+  el('shop-store').addEventListener('change', (e) => {
+    shop.store = e.currentTarget.value;
+    saveShopStore(shop.store);
+    shop.offset = 0;
+    renderShop();
+  });
+  el('shop-more').addEventListener('click', (e) => {
+    shop.offset = Number(e.currentTarget.dataset.next) || 0;
+    renderShop({ keepScroll: false });
+    el('shop-results').querySelector('.cat-row')?.focus({ preventScroll: true });
+  });
+  el('shop-depts').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const chips = [...el('shop-depts').children];
+    const i = chips.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const next = chips[(i + (e.key === 'ArrowRight' ? 1 : -1) + chips.length) % chips.length];
+    shop.dept = next.dataset.dept; shop.offset = 0; renderShop();
+    el('shop-depts').querySelector(`[data-dept="${CSS.escape(shop.dept)}"]`)?.focus();
+  });
+  el('shop-form').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ci-step]');
+    if (!b) return;
+    sheetQty = Math.min(99, Math.max(1, sheetQty + Number(b.dataset.ciStep)));
+    el('ci-qty').textContent = String(sheetQty);
+  });
+  el('shop-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!sheetItem || !feed) return;
+    const msg = addPriced(sheetItem, sheetQty);
+    el('shop-sheet').close();
+    UI.toast(msg);
+  });
+  el('shop-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('shop-sheet').addEventListener('close', () => { sheetItem = null; sheetOpener?.focus?.({ preventScroll: true }); sheetOpener = null; });
+
+  // Add bar (desktop) and the add sheet's Item field (mobile) share the matcher.
+  const addbar = el('addbar');
+  bindSuggest(el('quick-name'), el('quick-sug'), {
+    onPick: (it, raw) => {
+      const q = L.parseQuick(raw);
+      const typed = addbar.elements.qty.value;
+      const msg = addPriced(it, q.qty ?? (Number(typed) > 0 ? Number(typed) : 1), q.unit || '');
+      addbar.elements.text.value = ''; addbar.elements.qty.value = ''; addbar.elements.unit.value = '';
+      UI.setStatus(el('list-status'), '');
+      el('quick-name').focus();
+      UI.toast(msg);
+    },
+    onCustom: () => addbar.requestSubmit(),
+  });
+  const form = el('item-form');
+  bindSuggest(el('f-name'), el('sheet-sug'), {
+    onPick: (it, raw) => {
+      const q = L.parseQuick(raw);
+      const msg = addPriced(it, q.qty ?? (Number(form.elements.qty.value) > 0 ? Number(form.elements.qty.value) : 1), q.unit || '');
+      form.elements.name.value = ''; form.elements.qty.value = 1; form.elements.unit.value = ''; form.elements.notes.value = '';
+      UI.setStatus(el('sheet-status'), `${msg}. Add another or close.`);
+      el('f-name').focus();
+    },
+    onCustom: () => form.requestSubmit(el('sheet-submit')),
+  });
 }
 
 async function initPrices() {
-  priceEnv = await Prices.loadFeed();
-  if (!priceEnv) return;            // no data/prices.enc: price UI stays hidden
-  el('prices').hidden = false;
-  showPrices(await Prices.unlockWithCache(priceEnv));
+  bindShop();
   el('unlock-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = el('unlock-pass');
     const btn = el('unlock-btn');
     btn.disabled = true;
     UI.setStatus(el('unlock-status'), 'Unlocking…');
+    const t0 = performance.now();
     try {
-      const doc = await Prices.unlockWithPassphrase(priceEnv, input.value);
+      const res = await Prices.unlockWithPassphrase(priceEnv, input.value, undefined, undefined, timedDecode);
+      perf.unlockTotal = performance.now() - t0;
       input.value = '';
       UI.setStatus(el('unlock-status'), '');
-      showPrices(doc);
+      showShop(res);
+      perf.usable = performance.now() - t0;
+      el('shop-q').focus({ preventScroll: true });
     } catch (err) {
       input.value = '';
       input.focus();
       UI.setStatus(el('unlock-status'), err instanceof Prices.WrongPassphraseError ? 'Wrong passphrase. Please try again.' : 'Could not unlock the price snapshot.', 'error');
+      if (!(err instanceof Prices.WrongPassphraseError)) console.warn('price feed:', err?.message);
     } finally { btn.disabled = false; }
   });
   el('prices-forget').addEventListener('click', async () => {
     await Prices.forgetKeys();
-    showPrices(null);
+    showShop(null);
     UI.setStatus(el('unlock-status'), 'Passphrase forgotten on this device.');
   });
+  priceEnv = await Prices.loadFeed();
+  feedAvailable = Boolean(priceEnv);
+  document.querySelectorAll('[data-needs-feed]').forEach((n) => { n.hidden = !feedAvailable; });
+  if (!feedAvailable) { route(); return; }
+  decoder = makeDecoder();
+  route();
+  const t0 = performance.now();
+  try {
+    const res = await Prices.unlockWithCache(priceEnv, undefined, undefined, timedDecode);
+    if (res) { showShop(res); perf.usable = performance.now() - t0; perf.cached = true; } else showShop(null);
+  } catch (err) {
+    console.warn('price feed:', err?.message);
+    showShop(null);
+  }
 }
 
 async function init() {

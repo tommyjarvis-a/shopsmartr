@@ -1,6 +1,7 @@
 // DOM rendering only. Clones <template>s from index.html and fills them with textContent,
 // so a reskin changes markup/CSS and never the logic modules.
-import { groupByStore, formatQty, UNITS } from './list.js';
+import { groupByStore, formatQty, UNITS, lineTotal, priceText, money, totals as listTotals } from './list.js';
+import { estimate } from './catalog.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const fromTemplate = (id) => document.getElementById(id).content.firstElementChild.cloneNode(true);
@@ -128,6 +129,18 @@ function renderItem(it, { onToggle, onEdit, onRemove }) {
   const edit = $('[data-edit]', li);
   edit.setAttribute('aria-label', `Edit ${it.name}`);
   edit.addEventListener('click', () => onEdit(it.id));
+  const p = it.priced;
+  if (p) {
+    const qty = it.qty ?? 1;
+    $('[data-price-col]', li).hidden = false;
+    const price = $('[data-price]', li);
+    price.textContent = priceText(lineTotal(it), p.approx);
+    price.classList.toggle('price-sale', Boolean(p.onSale));
+    const was = $('[data-was]', li);
+    if (p.onSale && p.regular) { was.hidden = false; was.textContent = money(Math.round(p.regular * qty * 100) / 100); }
+    $('[data-price-store]', li).textContent = p.store ?? '';
+    edit.setAttribute('aria-label', `Edit ${it.name}, ${p.approx ? 'about ' : ''}${money(lineTotal(it))}${p.store ? ` at ${p.store}` : ''}`);
+  }
   const rm = $('[data-remove]', li);
   rm.setAttribute('aria-label', `Remove ${it.name}`);
   rm.addEventListener('click', () => onRemove(it.id));
@@ -186,25 +199,100 @@ export function download(filename, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const money = (n) => (Number.isFinite(n) ? `$${n.toFixed(2)}` : '');
+// ---------- Shop ----------
+/** Price shown for a catalog item: shelf price, or "~$x.xx" estimate for by-weight items. */
+export function itemPriceText(it) {
+  const est = estimate(it);
+  return priceText(est.each, est.approx);
+}
 
-/** groups: [{store, items}] from prices.groupPrices(). */
-export function renderPrices(container, groups) {
-  container.replaceChildren(...groups.map((g) => {
-    const sec = fromTemplate('tpl-price-group');
-    sec.dataset.chain = g.store.chain;
-    $('[data-title]', sec).textContent = g.store.name || `${g.store.chain} ${g.store.storeId}`;
-    $('[data-items]', sec).replaceChildren(...g.items.map((it) => {
-      const li = fromTemplate('tpl-price');
-      $('[data-name]', li).textContent = it.name || it.staple || '';
-      $('[data-meta]', li).textContent = [it.size, it.priceType === 'pickup_delivery' ? 'online price' : ''].filter(Boolean).join(' · ');
-      $('[data-price]', li).textContent = money(Number(it.price));
-      $('[data-unit]', li).textContent = it.unitPriceText || '';
-      $('[data-sale]', li).hidden = !it.onSale;
-      return li;
-    }));
-    return sec;
-  }));
+function fillPrice(root, it) {
+  const price = $('[data-price]', root);
+  price.textContent = itemPriceText(it);
+  price.classList.toggle('price-sale', it.onSale);
+  $('[data-sale]', root).hidden = !it.onSale;
+}
+
+export function catRow(it, onOpen) {
+  const li = fromTemplate('tpl-cat-row');
+  const btn = li.firstElementChild;
+  btn.dataset.idx = it.idx;
+  $('[data-name]', btn).textContent = it.name;
+  const sale = it.onSale && it.regularPrice;
+  $('[data-meta]', btn).textContent = [it.size, sale || it.soldByWeight ? it.unitPriceText : '', it.aisle].filter(Boolean).join(' · ');
+  fillPrice(btn, it);
+  const was = $('[data-was]', btn);
+  if (sale) { was.hidden = false; was.textContent = money(it.regularPrice); }
+  $('[data-unit]', btn).textContent = sale ? '' : (it.soldByWeight ? 'est. each' : (it.unitPriceText ?? ''));
+  btn.setAttribute('aria-label', `${it.name}, ${it.soldByWeight ? 'about ' : ''}${money(estimate(it).each)}${it.onSale ? ', on sale' : ''}`);
+  btn.addEventListener('click', () => onOpen(it.idx, btn));
+  return li;
+}
+
+const initials = (name) => name.replace(/&/g, ' ').split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase()).join('').slice(0, 2);
+
+export function deptCard(d, onPick) {
+  const b = fromTemplate('tpl-dept-card');
+  $('[data-ini]', b).textContent = initials(d.name);
+  $('[data-name]', b).textContent = d.name;
+  $('[data-count]', b).textContent = `${d.count.toLocaleString('en-US')} item${d.count === 1 ? '' : 's'}`;
+  b.addEventListener('click', () => onPick(d.name));
+  return b;
+}
+
+/** Department chips: "All" + departments; buttons with aria-checked (radiogroup). */
+export function renderDeptChips(container, depts, selected, onPick) {
+  const mk = (value, label) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `chip${value === selected ? ' on' : ''}`;
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(value === selected));
+    b.tabIndex = value === selected ? 0 : -1;
+    b.dataset.dept = value;
+    b.textContent = label;
+    b.addEventListener('click', () => onPick(value));
+    return b;
+  };
+  container.replaceChildren(mk('', 'All'), ...depts.map((d) => mk(d.name, d.name)));
+}
+
+export function sugOption(it, id) {
+  const o = fromTemplate('tpl-sug');
+  o.id = id;
+  $('[data-name]', o).textContent = it.name;
+  $('[data-meta]', o).textContent = [it.size, it.aisle].filter(Boolean).join(' · ');
+  fillPrice(o, it);
+  return o;
+}
+
+export function customOption(text, id) {
+  const o = document.createElement('div');
+  o.className = 'sug-opt custom';
+  o.id = id;
+  o.setAttribute('role', 'option');
+  o.setAttribute('aria-selected', 'false');
+  const b = document.createElement('span'); b.className = 'body';
+  const n = document.createElement('span'); n.className = 'name';
+  n.textContent = `Add “${text}” without price`;
+  b.append(n); o.append(b);
+  return o;
+}
+
+/** Running total in the mobile bar and the desktop header. Hidden when nothing is priced. */
+export function renderTotals(items) {
+  const t = listTotals(items);
+  const show = t.priced > 0;
+  document.body.classList.toggle('has-total', show);
+  for (const id of ['totalbar', 'list-total']) {
+    const box = document.getElementById(id);
+    box.hidden = !show;
+    if (!show) continue;
+    $('[data-total-est]', box).textContent = `Est. ${id === 'totalbar' ? 'total ' : ''}${priceText(t.all, t.approx)}`;
+    $('[data-total-split]', box).textContent = `In cart ${money(t.inCart)} · ${priceText(t.remaining, t.approxRemaining)} left`;
+    $('[data-total-count]', box).textContent = `${t.priced} priced${t.unpriced ? ` · ${t.unpriced} unpriced` : ''}`;
+  }
+  return t;
 }
 
 // ---------- Favorites ----------

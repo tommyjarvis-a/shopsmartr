@@ -34,6 +34,8 @@
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.6a4.3 4.3 0 017.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" fill="currentColor"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 12H5L6 8z M9 8V7a3 3 0 016 0v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 16l5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0012 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   </svg>
 
@@ -42,6 +44,7 @@
       <div class="brand"><span class="logo"><svg class="icon icon-logo"><use href="#i-cart"/></svg></span><span>ShopSmart<span class="r">R</span></span></div>
       <nav class="side-nav">
         <a class="nav" href="#list" data-nav="list"><svg class="icon"><use href="#i-list"/></svg>My list</a>
+        <a class="nav" href="#shop" data-nav="shop" data-needs-feed hidden><svg class="icon"><use href="#i-bag"/></svg>Shop</a>
         <a class="nav" href="#favorites" data-nav="favorites"><svg class="icon"><use href="#i-star"/></svg>Favorites</a>
         <a class="nav" href="#stores" data-nav="stores"><svg class="icon"><use href="#i-store"/></svg>Stores</a>
         <a class="nav" href="#ads" data-nav="ads"><svg class="icon"><use href="#i-tag"/></svg>Weekly ads</a>
@@ -68,13 +71,19 @@
             <h1 id="list-title" tabindex="-1">My list</h1>
             <p class="faint" id="list-meta"></p>
           </div>
+          <div class="list-total desk-only" id="list-total" aria-live="polite" hidden>
+            <div class="est" data-total-est></div>
+            <div class="total-split" data-total-split></div>
+            <div class="total-split" data-total-count></div>
+          </div>
           <button type="button" class="btn btn-secondary btn-sm desk-only" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu"><svg class="icon icon-20"><use href="#i-file"/></svg>Export</button>
         </div>
 
+        <div class="addbar-wrap">
         <form class="addbar" id="addbar" novalidate>
           <svg class="icon addbar-plus" aria-hidden="true"><use href="#i-plus"/></svg>
           <label class="sr-only" for="quick-name">Add an item</label>
-          <input class="addbar-input" id="quick-name" name="text" autocomplete="off" maxlength="200" placeholder='Add an item, e.g. "2 lb apples"'>
+          <input class="addbar-input" id="quick-name" name="text" autocomplete="off" maxlength="200" placeholder='Add an item, e.g. "2 lb apples"' role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="quick-sug">
           <label class="sr-only" for="quick-qty">Quantity</label>
           <input class="chip chip-input" id="quick-qty" name="qty" type="number" min="0" step="any" inputmode="decimal" placeholder="1">
           <label class="sr-only" for="quick-unit">Unit</label>
@@ -83,6 +92,8 @@
           <select class="chip chip-select" id="quick-store" name="storeId" data-store-select></select>
           <button type="submit" class="btn btn-primary btn-sm">Add</button>
         </form>
+        <div class="suggest" id="quick-sug" role="listbox" aria-label="Price suggestions" hidden></div>
+        </div>
 
         <div class="progress" id="progress" hidden>
           <span id="progress-text"></span>
@@ -92,6 +103,58 @@
         <div class="chips chips-scroll" id="list-filter" role="radiogroup" aria-label="Show stores"></div>
         <p class="status" id="list-status" role="status" aria-live="polite"></p>
         <div class="list-groups" id="list-groups"></div>
+      </section>
+
+      <!-- SHOP -->
+      <section class="screen screen-shop" data-screen="shop" aria-labelledby="shop-title">
+        <div class="shop-head">
+          <h1 id="shop-title" tabindex="-1">Shop</h1>
+          <p class="shop-store" id="shop-sub"><span class="dot" data-chain="wegmans" aria-hidden="true"></span><span>Store prices</span></p>
+        </div>
+        <div id="shop-locked" class="card prices-card">
+          <p class="muted">Your household price snapshot is locked.</p>
+          <form class="unlock-form" id="unlock-form" novalidate>
+            <input type="text" name="username" value="ShopSmartR household" autocomplete="username" hidden>
+            <div class="field">
+              <label class="label" for="unlock-pass">Household passphrase</label>
+              <input class="input" id="unlock-pass" name="passphrase" type="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="unlock-btn">Unlock</button>
+          </form>
+          <p class="status" id="unlock-status" role="status" aria-live="polite"></p>
+        </div>
+        <div id="shop-open" hidden>
+          <div class="shop-sticky">
+            <div class="field shop-store-field">
+              <label class="sr-only" for="shop-store">Store</label>
+              <select class="input" id="shop-store"></select>
+            </div>
+            <form class="search" id="shop-search-form" role="search" novalidate>
+              <svg class="icon icon-20" aria-hidden="true"><use href="#i-search"/></svg>
+              <input type="search" id="shop-q" placeholder="Search items" autocomplete="off" maxlength="80" aria-label="Search this store's prices" aria-controls="shop-results">
+              <button type="button" class="search-clear" id="shop-clear" aria-label="Clear search" hidden><svg class="icon icon-18"><use href="#i-x"/></svg></button>
+            </form>
+          </div>
+          <div class="dept-chips" id="shop-depts" role="radiogroup" aria-label="Departments"></div>
+          <div class="result-meta"><span id="shop-meta" role="status" aria-live="polite"></span></div>
+          <div class="shop-idle" id="shop-idle">
+            <div class="dept-grid" id="shop-dept-grid"></div>
+            <section class="popular" id="shop-sale" aria-labelledby="shop-sale-title" hidden>
+              <h3 id="shop-sale-title">On sale this week</h3>
+              <ul class="cat-list" id="shop-sale-list"></ul>
+            </section>
+          </div>
+          <ul class="cat-list" id="shop-results" aria-label="Results" hidden></ul>
+          <button type="button" class="btn btn-secondary btn-block show-more" id="shop-more" hidden></button>
+          <div class="shop-empty" id="shop-empty" hidden>
+            <div class="empty-icon" aria-hidden="true"><svg class="icon"><use href="#i-search"/></svg></div>
+            <h2 id="shop-empty-title"></h2>
+            <p>Try another name, or add it to your list without a price.</p>
+            <button type="button" class="btn btn-secondary" id="shop-empty-clear">Clear search</button>
+            <div class="mt-2"><button type="button" class="btn btn-ghost" id="shop-empty-add"></button></div>
+          </div>
+          <p class="faint shop-foot"><span id="shop-asof"></span> A saved snapshot, not official checkout prices. Shelf, sale and online prices can differ; confirm at the store. <button type="button" class="btn btn-ghost btn-sm" id="prices-forget">Forget passphrase</button></p>
+        </div>
       </section>
 
       <!-- FAVORITES -->
@@ -176,26 +239,6 @@
         <h1 id="ads-title">Weekly ads</h1>
         <p class="muted lead">Official ads for your stores. They open on each store's own website.</p>
         <ul class="card ad-list" data-ad-list></ul>
-        <section class="prices" id="prices" aria-labelledby="prices-title" hidden>
-          <div class="section-h"><h3 id="prices-title">Price snapshot</h3><button type="button" class="btn btn-ghost btn-sm" id="prices-forget" hidden>Forget passphrase</button></div>
-          <div id="prices-locked" class="card prices-card">
-            <p class="muted">Your household price snapshot is locked.</p>
-            <form class="unlock-form" id="unlock-form" novalidate>
-              <input type="text" name="username" value="ShopSmartR household" autocomplete="username" hidden>
-              <div class="field">
-                <label class="label" for="unlock-pass">Household passphrase</label>
-                <input class="input" id="unlock-pass" name="passphrase" type="password" autocomplete="current-password" required>
-              </div>
-              <button type="submit" class="btn btn-primary" id="unlock-btn">Unlock</button>
-            </form>
-            <p class="status" id="unlock-status" role="status" aria-live="polite"></p>
-          </div>
-          <div id="prices-open" hidden>
-            <p class="faint" id="prices-asof"></p>
-            <div id="prices-groups"></div>
-            <p class="faint mt-2">A saved snapshot, not official checkout prices. Shelf, sale and online prices can differ; confirm at the store.</p>
-          </div>
-        </section>
         <p class="tip"><svg class="icon icon-20" aria-hidden="true"><use href="#i-bulb"/></svg><span>Spot a deal? Add it to your list with the store tag so it's grouped for that trip.</span></p>
         <a class="btn btn-ghost" href="#stores">Change stores</a>
         <p class="footer">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. ShopSmartR doesn't show official checkout prices; confirm hours and prices with the store.</p>
@@ -217,11 +260,17 @@
 
     <button type="button" class="fab" id="fab"><svg class="icon"><use href="#i-plus"/></svg>Add item</button>
 
+    <div class="totalbar" id="totalbar" aria-live="polite" hidden>
+      <div><div class="est" data-total-est></div><div class="total-split" data-total-count></div></div>
+      <div class="total-split" data-total-split></div>
+    </div>
+
     <nav class="tabbar" aria-label="Main">
       <a class="tab" href="#list" data-nav="list"><span class="pill"><svg class="icon"><use href="#i-list"/></svg></span>List</a>
+      <a class="tab" href="#shop" data-nav="shop" data-needs-feed hidden><span class="pill"><svg class="icon"><use href="#i-bag"/></svg></span>Shop</a>
       <a class="tab" href="#favorites" data-nav="favorites"><span class="pill"><svg class="icon"><use href="#i-star"/></svg></span>Favorites</a>
       <a class="tab" href="#stores" data-nav="stores"><span class="pill"><svg class="icon"><use href="#i-store"/></svg></span>Stores</a>
-      <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span>Weekly ads</a>
+      <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span><span aria-hidden="true">Ads</span><span class="sr-only">Weekly ads</span></a>
     </nav>
   </div>
 
@@ -247,7 +296,8 @@
       </div>
       <div class="field">
         <label class="label" for="f-name">Item</label>
-        <input class="input" id="f-name" name="name" required maxlength="200" autocomplete="off">
+        <input class="input" id="f-name" name="name" required maxlength="200" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sheet-sug">
+        <div class="suggest" id="sheet-sug" role="listbox" aria-label="Price suggestions" hidden></div>
       </div>
       <div class="field-row">
         <div class="field">
@@ -327,6 +377,34 @@
     </form>
   </dialog>
 
+  <dialog class="sheet sheet-item" id="shop-sheet" aria-labelledby="ci-title">
+    <form method="dialog" id="shop-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div class="grow">
+          <h2 id="ci-title"></h2>
+          <div class="item-size" id="ci-size"></div>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div>
+        <div class="item-price-block"><span class="price" id="ci-price"></span><span class="badge-sale" id="ci-sale" hidden>Sale</span><span class="was" id="ci-was"></span></div>
+        <div class="item-unit" id="ci-unit"></div>
+        <div class="item-aisle" id="ci-aisle"></div>
+        <div class="item-aisle" id="ci-store"></div>
+      </div>
+      <div class="field">
+        <span class="label" id="ci-qty-label">Quantity</span>
+        <div class="stepper-shell" role="group" aria-labelledby="ci-qty-label">
+          <button type="button" class="step" data-ci-step="-1" aria-label="Decrease quantity"><svg class="icon icon-18"><use href="#i-minus"/></svg></button>
+          <span class="val" id="ci-qty" aria-live="polite">1</span>
+          <button type="button" class="step plus" data-ci-step="1" aria-label="Increase quantity"><svg class="icon icon-18"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+      <button type="submit" value="add" class="btn btn-primary btn-block" id="ci-add">Add to list</button>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden>
     <span id="toast-text"></span>
     <button type="button" class="btn btn-ghost btn-sm" id="toast-undo" hidden>Undo</button>
@@ -361,6 +439,7 @@
         <span class="title"><span data-name></span><span class="qty" data-qty></span></span>
         <span class="note" data-notes></span>
       </button>
+      <span class="side-price" data-price-col hidden><span class="price" data-price></span><span class="was" data-was hidden></span><span class="store-mini" data-price-store></span></span>
       <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
     </li>
   </template>
@@ -399,18 +478,25 @@
       <a class="go" data-link target="_blank" rel="noopener noreferrer">Open ad<svg class="icon icon-16" aria-hidden="true"><use href="#i-ext"/></svg></a>
     </li>
   </template>
-  <template id="tpl-price-group">
-    <section class="price-group">
-      <div class="group-h"><span class="dot" data-dot aria-hidden="true"></span><h3 data-title></h3></div>
-      <ul class="card price-list" data-items></ul>
-    </section>
+  <template id="tpl-cat-row">
+    <li><button type="button" class="cat-row">
+      <span class="body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
+      <span class="cat-side">
+        <span class="price-line"><span class="price" data-price></span><span class="badge-sale" data-sale hidden>Sale</span></span>
+        <span class="was" data-was hidden></span><span class="unit-price" data-unit></span>
+      </span>
+    </button></li>
   </template>
 
-  <template id="tpl-price">
-    <li class="price-row">
-      <span class="price-body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
-      <span class="price-side"><span class="badge" data-sale hidden>sale</span><span class="price" data-price></span><span class="meta" data-unit></span></span>
-    </li>
+  <template id="tpl-dept-card">
+    <button type="button" class="dept-card"><span class="ini" data-ini aria-hidden="true"></span><span class="name" data-name></span><span class="count" data-count></span></button>
+  </template>
+
+  <template id="tpl-sug">
+    <div class="sug-opt" role="option" aria-selected="false">
+      <span class="body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
+      <span class="cat-side"><span class="price-line"><span class="price" data-price></span><span class="badge-sale" data-sale hidden>Sale</span></span></span>
+    </div>
   </template>
 </body>
 </html>

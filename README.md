@@ -22,7 +22,7 @@ node tools/validate-data.mjs   # data check (same as CI)
 
 | File | Role |
 |---|---|
-| `index.html` | All markup: screens (list, stores, weekly ads), the add/edit sheet, the export menu, and `<template>`s for rows. |
+| `index.html` | All markup: screens (list, shop, favorites, stores, weekly ads), the item sheet, the add/edit sheet, the export menu, and `<template>`s for rows. |
 | `tokens.css` | Design tokens (colour, type, spacing, radii, shadows), light and dark. |
 | `style.css` | Components and responsive layout. No inline styles in the markup. |
 | `src/geo.js` | Zip lookup, haversine distance, radius filter (pure). |
@@ -32,9 +32,11 @@ node tools/validate-data.mjs   # data check (same as CI)
 | `src/export.js` | CSV (RFC 4180, formula-injection guard) and plain-text builders. |
 | `src/favorites.js` | Favorites model: staple items, meals, dedupe when adding to the list, persistence, `starRecipe()` hook for phase 2 (pure). |
 | `src/notes.js`, `src/lovenotes.js` | The love notes shown in the ⋮ menu, and the shuffled no-repeat cycle that picks them. |
-| `src/prices.js` | Optional encrypted price snapshot: decrypt, unlock and key cache (see below). |
+| `src/prices.js` | Optional encrypted price feed: envelope v1/v2 (gzip), decrypt, unlock and key cache (see below). |
+| `src/catalog.js` | Price catalog: compact columns, token index, store-scoped search/suggestions (exact, prefix, subsequence, one-typo), totals helpers (pure). |
+| `src/price-worker.js`, `src/pricefeed.js` | Module Worker that decrypts, inflates, parses and indexes the feed off the main thread, and its main-thread glue/fallback. |
 | `src/ui.js` | DOM rendering from the templates. |
-| `src/app.js` | Wiring: loads data, owns state, routes `#list` / `#favorites` / `#stores` / `#ads`. |
+| `src/app.js` | Wiring: loads data, owns state, routes `#list` / `#shop` / `#favorites` / `#stores` / `#ads`. |
 
 Reskinning touches `tokens.css`, `style.css` and the markup in `index.html`; the logic modules don't
 change. The renderer finds elements by `id` and `data-*` hooks, so keep those when restyling.
@@ -95,35 +97,40 @@ holidays or shared history that may not be true. `test/notes.test.mjs` checks un
 duplicates, a banned-word list for those topics, the count (at least 300), the length and the named
 share (25–40%).
 
-## Optional encrypted price snapshot
+## Optional encrypted price feed (Shop)
 
-The Weekly ads screen can show a household price snapshot from `data/prices.enc`. That file is
-produced and published outside this repo (by Steven, on his own machine). The app never fetches a
-retailer site. It first reads the small committed manifest `data/prices.json`:
+The Shop tab shows a household price snapshot from `data/prices.enc`. That file is produced and
+published outside this repo (by Steven, on his own machine). The app never fetches a retailer site.
+It first reads the small committed manifest `data/prices.json`:
 
 ```json
-{ "schema": "shopsmartr.pricefeed/1", "available": false, "file": "prices.enc", "updated": null }
+{ "schema": "shopsmartr.pricefeed/1", "available": true, "file": "prices.enc", "updated": "2026-11-15T02:12Z" }
 ```
 
-Only when `available` is `true` does it request `data/prices.enc`. With no feed, nothing is
-requested, so there is no 404 in the console, and the price UI stays hidden. The publisher
-(`publish.sh` in `shopsmartr-data`) writes `data/prices.json` with `"available": true` and the
-publish time in the same commit as `data/prices.enc`.
+Only when `available` is `true` does it request `data/prices.enc` (and show the Shop tab). With no
+feed nothing is requested, so there is no 404. The publisher (`publish.sh` in `shopsmartr-data`)
+writes the manifest in the same commit as `data/prices.enc`; it may add `dataSchema`, `envelope`,
+`itemCount` and `complete`, which the app ignores.
 
 `src/prices.js` matches `decryptJSON` in the private `shopsmartr-data` repo exactly:
 
-- Envelope `{ "v": 1, "kdf": "PBKDF2-SHA256", "iter": 600000, "alg": "AES-GCM-256", "aad": "shopsmartr.prices.enc/v1", "salt", "iv", "ct" }`;
-  `salt` (16 bytes), `iv` (12 bytes) and `ct` (ciphertext plus the 16-byte GCM tag) are standard base64.
-- Key: PBKDF2-SHA256 over the NFC-normalised passphrase, then AES-GCM-256. Decryption uses the
-  envelope's `aad` as additional data and a 128-bit tag. Envelopes under 600k iterations are refused.
+- Envelope v1 `{ "v": 1, "kdf": "PBKDF2-SHA256", "iter": 600000, "alg": "AES-GCM-256", "aad": "shopsmartr.prices.enc/v1", "salt", "iv", "ct" }`
+  (plain JSON inside), or v2 with `"z": "gzip"` and `"aad": "shopsmartr.prices.enc/v2;z=gzip"` (gzip inside,
+  inflated with `DecompressionStream('gzip')`). The aad binds the compression flag, so stripping
+  `z` fails authentication. `salt` (16 bytes), `iv` (12) and `ct` (ciphertext + 16-byte tag) are base64.
+- Key: PBKDF2-SHA256 over the NFC-normalised passphrase, then AES-GCM-256 with a 128-bit tag.
+  Envelopes under 600k iterations are refused.
+- The document is `shopsmartr.prices/2` (`{schema, asOf, stores, crawl, items}`; v1 still loads).
+  `src/catalog.js` slims items into compact columns and builds a token index once, in a Worker.
 - Unlock asks for the household passphrase once. The passphrase is never stored. The non-extractable
-  PBKDF2 key and the derived AES key are cached in this browser's IndexedDB, so the snapshot stays
-  unlocked after a refresh and after a new snapshot is published. "Forget passphrase" clears them.
-  A wrong passphrase shows "Wrong passphrase. Please try again."
+  PBKDF2 key and the derived AES key are cached in IndexedDB, so Shop stays unlocked after a refresh
+  and after a new snapshot is published. The decrypted catalog is only kept in memory.
+  "Forget passphrase" clears the keys. A wrong passphrase shows "Wrong passphrase. Please try again."
+- The Shop store choice is stored per device in `localStorage` (`shopsmartr:shopStore:v1`).
 
-`test/fixtures/prices-fake.enc.json` was made with the reference `encryptJSON`, a throwaway passphrase
-that appears in the test, and a **fake** payload. Never commit real price data or a real passphrase
-(`data/prices.enc` is git-ignored here; publishing it is a deliberate step outside this repo).
+`test/fixtures/prices-fake.enc.json` (v1) and `test/fixtures/prices-v2-fake.enc.json` (v2, two fake
+stores) were made with the reference `encryptJSON`, throwaway passphrases that appear in the tests,
+and **fake** payloads. Never commit real price data or a real passphrase here.
 
 ## CI
 
