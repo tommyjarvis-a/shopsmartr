@@ -1,6 +1,6 @@
 {
  "schema": "shopsmartr.pricefeed/1",
- "available": false,
+ "available": true,
  "file": "prices.enc",
- "updated": null
+ "updated": "2026-11-15T02:12Z"
 }
