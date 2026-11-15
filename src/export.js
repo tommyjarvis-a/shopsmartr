@@ -1,10 +1,15 @@
 // CSV and plain-text export. Pure string builders; the UI turns them into downloads.
-import { groupByStore, formatQty } from './list.js';
+import { groupByStore, formatQty, lineTotal, totals, priceText, money } from './list.js';
+
+/** Local calendar date for file names, e.g. 2026-11-14 (not the UTC date: L10). */
+export function localDateStamp(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /** UTF-8 byte-order mark so Excel opens accented text and emoji correctly. */
 export const CSV_BOM = '\uFEFF';
 
-export const CSV_HEADER = ['Done', 'Item', 'Qty', 'Unit', 'Store', 'Address', 'Notes'];
+export const CSV_HEADER = ['Done', 'Item', 'Qty', 'Unit', 'Store', 'Address', 'Notes', 'Price each', 'Line total', 'Estimate', 'Unit price', 'Aisle', 'SKU', 'Price from', 'Prices as of'];
 
 /** RFC 4180 cell escaping, plus a guard against spreadsheet formula injection. */
 export function csvCell(value) {
@@ -19,6 +24,13 @@ function storeLabel(storeId, storesById) {
   return s ? s.name : `Unknown store (${storeId})`;
 }
 
+const fixed = (n) => (Number.isFinite(n) ? n.toFixed(2) : '');
+function priceCells(it) {
+  const p = it.priced;
+  if (!p) return ['', '', '', '', '', '', '', ''];
+  return [fixed(p.each), fixed(lineTotal(it)), p.approx ? 'yes' : 'no', p.unitPriceText ?? '', p.aisle ?? '', p.sku ?? '', p.store ?? '', p.asOf ?? ''];
+}
+
 export function toCSV(items, storesById = {}, { bom = false } = {}) {
   const rows = [CSV_HEADER];
   for (const it of items) {
@@ -31,6 +43,7 @@ export function toCSV(items, storesById = {}, { bom = false } = {}) {
       storeLabel(it.storeId, storesById),
       s ? `${s.address}, ${s.city}, ${s.state} ${s.zip}` : '',
       it.notes,
+      ...priceCells(it),
     ]);
   }
   return (bom ? CSV_BOM : '') + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
@@ -81,10 +94,16 @@ export function toText(items, storesById = {}, { title = 'ShopSmartR shopping li
     for (const it of g.items) {
       const q = formatQty(it);
       const note = it.notes ? ` — ${it.notes.replace(/\s*\r?\n\s*/g, ' ')}` : '';
-      lines.push(`[${it.checked ? 'x' : ' '}] ${q ? `${q} ` : ''}${it.name.replace(/\s*\r?\n\s*/g, ' ')}${note}`);
+      const price = it.priced ? ` — ${priceText(lineTotal(it), it.priced.approx)}${it.priced.store ? ` (${it.priced.store}${it.priced.aisle ? `, ${it.priced.aisle}` : ''})` : ''}` : '';
+      lines.push(`[${it.checked ? 'x' : ' '}] ${q ? `${q} ` : ''}${it.name.replace(/\s*\r?\n\s*/g, ' ')}${price}${note}`);
     }
   }
   if (items.length === 0) lines.push('', '(empty list)');
+  const t = totals(items);
+  if (t.priced) {
+    lines.push('', `Estimated total: ${priceText(t.all, t.approx)} (${t.priced} priced item${t.priced === 1 ? '' : 's'}${t.unpriced ? `, ${t.unpriced} without a price` : ''})`);
+    if (t.inCart) lines.push(`In cart ${money(t.inCart)} · ${priceText(t.remaining, t.approxRemaining)} left`);
+  }
   const favText = favoritesToText(favorites, storesById);
   return lines.join('\n') + '\n' + (favText ? `\n${favText}` : '');
 }

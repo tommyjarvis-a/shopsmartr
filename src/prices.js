@@ -2,11 +2,14 @@
 // shopsmartr-data repo (src/crypto.mjs). Nothing here contains price data or a passphrase.
 //
 // data/prices.enc is a JSON envelope (all binary fields standard base64):
-//   { v: 1, kdf: "PBKDF2-SHA256", iter: 600000, alg: "AES-GCM-256",
-//     aad: "shopsmartr.prices.enc/v1", salt: <16 bytes>, iv: <12 bytes>, ct: <ciphertext + 16-byte tag> }
+//   v1: { v: 1, kdf: "PBKDF2-SHA256", iter: 600000, alg: "AES-GCM-256",
+//         aad: "shopsmartr.prices.enc/v1", salt: <16 bytes>, iv: <12 bytes>, ct: <ciphertext + 16-byte tag> }
+//   v2: { v: 2, ..., z: "gzip", aad: "shopsmartr.prices.enc/v2;z=gzip", ... }: the plaintext is
+//       gzip(UTF-8 JSON) and is inflated with DecompressionStream('gzip') after decryption.
+//       The aad binds the compression flag, so changing or stripping "z" fails authentication.
 // Key = PBKDF2-SHA256(passphrase.normalize('NFC'), salt, iter) -> AES-GCM 256.
 // Decrypt = AES-GCM(iv, additionalData = UTF-8(aad || default), tagLength 128).
-// The plaintext is UTF-8 JSON (schema "shopsmartr.prices/v1").
+// The plaintext is UTF-8 JSON (schema "shopsmartr.prices/v1" or the full-catalog "shopsmartr.prices/2").
 //
 // Device cache (IndexedDB, CryptoKey objects are stored non-extractable, never the passphrase):
 //   - "base": the PBKDF2 key imported from the passphrase, so a refreshed feed (new salt) can be
@@ -22,6 +25,7 @@
 export const PRICES_URL = 'data/prices.enc';
 export const MANIFEST_URL = 'data/prices.json';
 export const DEFAULT_AAD = 'shopsmartr.prices.enc/v1';
+export const AAD = { 1: 'shopsmartr.prices.enc/v1', 2: 'shopsmartr.prices.enc/v2;z=gzip' };
 export const MIN_ITER = 600000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -35,7 +39,9 @@ export class WrongPassphraseError extends Error {
 /** Returns '' when the envelope is usable, otherwise the reason. */
 export function checkEnvelope(env) {
   if (!env || typeof env !== 'object') return 'not an object';
-  if (env.v !== 1 || env.kdf !== 'PBKDF2-SHA256') return 'Unsupported envelope';
+  if (env.kdf !== 'PBKDF2-SHA256' || !(env.v === 1 || (env.v === 2 && env.z === 'gzip'))) return 'Unsupported envelope';
+  if (env.v === 1 && env.z !== undefined) return 'Unsupported envelope';
+  if (env.z === 'gzip' && typeof globalThis.DecompressionStream !== 'function') return 'gzip not supported in this browser';
   if (env.alg !== undefined && env.alg !== 'AES-GCM-256') return 'unsupported alg';
   if (!Number.isInteger(env.iter) || env.iter < MIN_ITER) return 'iteration count too low';
   if (env.aad !== undefined && typeof env.aad !== 'string') return 'bad aad';
@@ -63,16 +69,32 @@ export async function deriveKey(passphrase, env, subtle) {
   return deriveFromBase(await importPassphrase(passphrase, subtle), env, subtle);
 }
 
-/** Decrypts with an AES key. Throws WrongPassphraseError on an authentication failure. */
-export async function decryptWithKey(env, key, subtle) {
+/**
+ * Decrypts with an AES key. Throws WrongPassphraseError on an authentication failure.
+ * Pass an object as ms to receive step timings { decrypt, gunzip, parse } in milliseconds.
+ */
+export async function decryptWithKey(env, key, subtle, ms = null) {
+  const now = () => globalThis.performance?.now() ?? Date.now();
   let pt;
+  let t = now();
   try {
     pt = await subtleOf(subtle).decrypt(
-      { name: 'AES-GCM', iv: unb64(env.iv), additionalData: enc.encode(env.aad || DEFAULT_AAD), tagLength: 128 },
+      { name: 'AES-GCM', iv: unb64(env.iv), additionalData: enc.encode(env.aad || AAD[env.v] || DEFAULT_AAD), tagLength: 128 },
       key, unb64(env.ct),
     );
   } catch { throw new WrongPassphraseError(); }
-  return JSON.parse(dec.decode(pt));
+  if (ms) { ms.decrypt = now() - t; t = now(); }
+  const bytes = env.z === 'gzip' ? await gunzip(new Uint8Array(pt)) : new Uint8Array(pt);
+  if (ms) { ms.gunzip = now() - t; t = now(); }
+  const doc = JSON.parse(dec.decode(bytes));
+  if (ms) ms.parse = now() - t;
+  return doc;
+}
+
+/** Inflates gzip bytes with the Compression Streams API (browsers and Node 18+). */
+export async function gunzip(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 /** Same contract as the reference decryptJSON(env, passphrase). */
@@ -147,46 +169,40 @@ export function memoryKeyCache() {
 
 const sameParams = (a, env) => a && a.salt === env.salt && a.iter === env.iter;
 
-/** Tries cached keys only (no prompt). Returns the document, or null if a passphrase is needed. */
-export async function unlockWithCache(env, cache = idbKeyCache(), subtle) {
+/**
+ * Tries cached keys only (no prompt). Returns the decoded result, or null if a passphrase is needed.
+ * decode(env, key) defaults to decryptWithKey; the app passes one that decrypts, inflates, parses
+ * and indexes in a Worker. It must throw WrongPassphraseError when authentication fails.
+ */
+export async function unlockWithCache(env, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle)) {
   const aes = await cache.get('aes');
   if (sameParams(aes, env)) {
-    try { return await decryptWithKey(env, aes.key, subtle); } catch { /* stale; fall through */ }
+    try { return await decode(env, aes.key); } catch (err) { if (!(err instanceof WrongPassphraseError)) throw err; }
   }
   const base = await cache.get('base');
   if (base) {
     try {
       const key = await deriveFromBase(base, env, subtle);
-      const doc = await decryptWithKey(env, key, subtle);
+      const doc = await decode(env, key);
       await cache.set('aes', { key, salt: env.salt, iter: env.iter });
       return doc;
-    } catch { await cache.clear(); }
+    } catch (err) {
+      if (!(err instanceof WrongPassphraseError)) throw err;
+      await cache.clear();
+    }
   }
   return null;
 }
 
 /** Unlocks with a typed passphrase; caches keys on success. Throws WrongPassphraseError. */
-export async function unlockWithPassphrase(env, passphrase, cache = idbKeyCache(), subtle) {
+export async function unlockWithPassphrase(env, passphrase, cache = idbKeyCache(), subtle, decode = (e, k) => decryptWithKey(e, k, subtle)) {
   if (!passphrase) throw new WrongPassphraseError();
   const base = await importPassphrase(passphrase, subtle);
   const key = await deriveFromBase(base, env, subtle);
-  const doc = await decryptWithKey(env, key, subtle);
+  const doc = await decode(env, key);
   await cache.set('base', base);
   await cache.set('aes', { key, salt: env.salt, iter: env.iter });
   return doc;
 }
 
 export const forgetKeys = (cache = idbKeyCache()) => cache.clear();
-
-/** Pure helper for the UI: items grouped by store, cheapest first within a staple. */
-export function groupPrices(doc) {
-  const stores = new Map((doc?.stores ?? []).map((s) => [`${s.chain}:${s.storeId}`, s]));
-  const groups = new Map();
-  for (const it of Array.isArray(doc?.items) ? doc.items : []) {
-    const k = `${it.chain}:${it.storeId}`;
-    if (!groups.has(k)) groups.set(k, { store: stores.get(k) ?? { chain: it.chain, storeId: it.storeId, name: `${it.chain} ${it.storeId}` }, items: [] });
-    groups.get(k).items.push(it);
-  }
-  for (const g of groups.values()) g.items.sort((a, b) => String(a.staple ?? a.name).localeCompare(String(b.staple ?? b.name)));
-  return [...groups.values()];
-}

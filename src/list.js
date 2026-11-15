@@ -30,14 +30,70 @@ export function cleanItemInput(input = {}) {
     if (!Number.isFinite(qty) || qty <= 0) throw new Error('Quantity must be a positive number');
     qty = Math.round(qty * 1000) / 1000;
   }
-  return {
+  const out = {
     name: name.slice(0, 200),
     qty,
     unit: String(input.unit ?? '').trim().slice(0, 20),
     notes: String(input.notes ?? '').trim().slice(0, 500),
     storeId: input.storeId ? String(input.storeId) : '',
   };
+  const priced = cleanPriced(input.priced);
+  if (priced) out.priced = priced;
+  return out;
 }
+
+const pStr = (x, n = 80) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : (typeof x === 'number' && Number.isFinite(x) ? String(x) : null));
+const pNum = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x < 100000 ? Math.round(x * 100) / 100 : null);
+
+/** Price snapshot carried by items added from the catalog; null when absent or invalid. */
+export function cleanPriced(p) {
+  if (!p || typeof p !== 'object') return null;
+  const each = pNum(p.each);
+  if (each == null) return null;
+  const regular = pNum(p.regular);
+  return {
+    each,
+    approx: Boolean(p.approx),
+    regular: regular != null && regular > each ? regular : null,
+    onSale: Boolean(p.onSale),
+    unitPriceText: pStr(p.unitPriceText),
+    size: pStr(p.size),
+    aisle: pStr(p.aisle, 40),
+    sku: pStr(p.sku, 40),
+    store: pStr(p.store, 60),
+    chain: pStr(p.chain, 40),
+    storeNo: pStr(p.storeNo, 40),
+    asOf: pStr(p.asOf, 40),
+  };
+}
+
+/** Line total for one item (qty defaults to 1); null when the item has no price. */
+export function lineTotal(it) {
+  if (!it?.priced) return null;
+  return Math.round(it.priced.each * (it.qty ?? 1) * 100) / 100;
+}
+
+/**
+ * Running totals over priced items: remaining (unchecked), inCart (checked) and all.
+ * approx is true when any counted line is an estimate (by-weight items).
+ */
+export function totals(items) {
+  const t = { all: 0, remaining: 0, inCart: 0, priced: 0, unpriced: 0, approx: false, approxRemaining: false };
+  for (const it of items) {
+    const line = lineTotal(it);
+    if (line == null) { t.unpriced += 1; continue; }
+    t.priced += 1;
+    t.all += line;
+    if (it.checked) t.inCart += line; else { t.remaining += line; if (it.priced.approx) t.approxRemaining = true; }
+    if (it.priced.approx) t.approx = true;
+  }
+  for (const k of ['all', 'remaining', 'inCart']) t[k] = Math.round(t[k] * 100) / 100;
+  return t;
+}
+
+export const money = (n) => (Number.isFinite(n) ? `$${n.toFixed(2)}` : '');
+/** "$3.99", or "~$3.99" for an estimate. */
+export const priceText = (n, approx = false) => (Number.isFinite(n) ? `${approx ? '~' : ''}${money(n)}` : '');
 
 export function addItem(state, input, id = newId()) {
   const item = { id, ...cleanItemInput(input), checked: false };

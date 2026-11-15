@@ -45,7 +45,8 @@ test('NFC normalisation matches the reference', async () => {
 });
 
 test('envelope validation', () => {
-  assert.match(P.checkEnvelope({ ...FIXTURE, v: 2 }), /Unsupported/);
+  assert.match(P.checkEnvelope({ ...FIXTURE, v: 2 }), /Unsupported/, 'v2 needs z=gzip');
+  assert.match(P.checkEnvelope({ ...FIXTURE, v: 3 }), /Unsupported/);
   assert.match(P.checkEnvelope({ ...FIXTURE, iter: 1000 }), /iteration/);
   assert.match(P.checkEnvelope({ ...FIXTURE, alg: 'AES-CBC' }), /alg/);
   assert.match(P.checkEnvelope({ ...FIXTURE, iv: 'AAAA' }), /iv/);
@@ -76,28 +77,21 @@ test('absent or malformed file => null (price UI stays hidden)', async () => {
   assert.deepEqual(await P.loadEnvelope('x', async () => ({ ok: true, json: async () => FIXTURE })), FIXTURE);
 });
 
-test('groupPrices groups by store and sorts by staple', async () => {
-  const doc = await P.decryptJSON(FIXTURE, THROWAWAY);
-  const g = P.groupPrices(doc);
-  assert.equal(g.length, 1);
-  assert.equal(g[0].store.name, 'Example Store (fake)');
-  assert.deepEqual(g[0].items.map((i) => i.staple), ['eggs', 'milk']);
-  assert.deepEqual(P.groupPrices(null), []);
-});
-
 test('L1: manifest gates the envelope fetch, so no feed means no 404', async () => {
   const calls = [];
   const respond = (body, ok = true) => ({ ok, status: ok ? 200 : 404, json: async () => body });
   const fakeFetch = (files) => async (url) => { calls.push(url); return url in files ? respond(files[url]) : respond(null, false); };
   const committed = JSON.parse(readFileSync(new URL('../data/prices.json', import.meta.url)));
-  assert.deepEqual(committed, { schema: 'shopsmartr.pricefeed/1', available: false, file: 'prices.enc', updated: null });
+  assert.equal(committed.schema, 'shopsmartr.pricefeed/1');
+  assert.equal(typeof committed.available, 'boolean');
+  assert.equal(committed.file, 'prices.enc');
 
   calls.length = 0;
-  assert.equal(await P.loadFeed(fakeFetch({ 'data/prices.json': committed })), null);
+  assert.equal(await P.loadFeed(fakeFetch({ 'data/prices.json': { ...committed, available: false } })), null);
   assert.deepEqual(calls, ['data/prices.json']);           // prices.enc never requested
 
   calls.length = 0;
-  const live = { ...committed, available: true, updated: '2026-11-14T15:00Z' };
+  const live = { schema: 'shopsmartr.pricefeed/1', file: 'prices.enc', available: true, updated: '2026-11-14T15:00Z' };
   const env = await P.loadFeed(fakeFetch({ 'data/prices.json': live, 'data/prices.enc': FIXTURE }));
   assert.deepEqual(calls, ['data/prices.json', 'data/prices.enc']);
   assert.deepEqual(env, FIXTURE);
@@ -107,4 +101,48 @@ test('L1: manifest gates the envelope fetch, so no feed means no 404', async () 
   assert.equal(await P.loadFeed(fakeFetch({ 'data/prices.json': { available: 'yes' } })), null);
   assert.deepEqual(await P.loadManifest('data/prices.json', fakeFetch({ 'data/prices.json': { ...live, file: '../evil.js' } })),
     { available: true, file: 'prices.enc', updated: '2026-11-14T15:00Z' });
+});
+
+// v2: gzip inside, AAD binds the z flag. Fixture made with the reference encryptJSON (FAKE data).
+const V2 = JSON.parse(readFileSync(new URL('./fixtures/prices-v2-fake.enc.json', import.meta.url)));
+const V2_PASS = 'throwaway-fake-v2-fixture-passphrase';
+
+test('v2 envelope: shape, decrypt + gunzip', async () => {
+  assert.equal(V2.v, 2);
+  assert.equal(V2.z, 'gzip');
+  assert.equal(V2.aad, 'shopsmartr.prices.enc/v2;z=gzip');
+  assert.equal(P.checkEnvelope(V2), '');
+  const doc = await P.decryptJSON(V2, V2_PASS);
+  assert.equal(doc.schema, 'shopsmartr.prices/2');
+  assert.match(doc.note, /FAKE/);
+  assert.equal(doc.items.length, 9);
+});
+
+test('v2: stripping or changing z, or the wrong passphrase, fails', async () => {
+  await assert.rejects(P.decryptJSON(V2, V2_PASS + 'x'), P.WrongPassphraseError);
+  const { z, ...noZ } = V2;
+  assert.match(P.checkEnvelope(noZ), /Unsupported/);
+  await assert.rejects(P.decryptJSON({ ...V2, v: 1, z: undefined, aad: undefined }, V2_PASS), P.WrongPassphraseError);
+  assert.match(P.checkEnvelope({ ...V2, z: 'br' }), /Unsupported/);
+});
+
+test('gunzip round-trips CompressionStream output', async () => {
+  const raw = new TextEncoder().encode('{"hello":"wörld"}'.repeat(50));
+  const gz = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  assert.deepEqual(new Uint8Array(await P.gunzip(gz)), raw);
+});
+
+test('unlock with a custom decode: key is cached only after decode succeeds', async () => {
+  const cache = P.memoryKeyCache();
+  let calls = 0;
+  const decode = async (env, key) => { calls += 1; const doc = await P.decryptWithKey(env, key); return { n: doc.items.length }; };
+  await assert.rejects(P.unlockWithPassphrase(V2, 'definitely-wrong-pass', cache, undefined, decode), P.WrongPassphraseError);
+  assert.equal(await cache.get('base'), null);
+  assert.deepEqual(await P.unlockWithPassphrase(V2, V2_PASS, cache, undefined, decode), { n: 9 });
+  assert.deepEqual(await P.unlockWithCache(V2, cache, undefined, decode), { n: 9 });
+  // A non-auth error (e.g. a bad document) propagates and does not wipe the cached keys.
+  const boom = async () => { throw new Error('bad doc'); };
+  await assert.rejects(P.unlockWithCache(V2, cache, undefined, boom), /bad doc/);
+  assert.ok(await cache.get('base'));
+  assert.ok(calls >= 3);
 });

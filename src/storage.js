@@ -85,3 +85,12 @@ export function memoryStorage() {
     clear: () => m.clear(),
   };
 }
+
+/** Device-local choice of store in the Shop view (a catalog store key such as "wegmans:90"). */
+export const SHOP_STORE_KEY = 'shopsmartr:shopStore:v1';
+export function loadShopStore(storage = globalThis.localStorage) {
+  try { const v = storage?.getItem(SHOP_STORE_KEY); return typeof v === 'string' && /^[\w-]{1,40}:[\w-]{1,40}$/.test(v) ? v : ''; } catch { return ''; }
+}
+export function saveShopStore(key, storage = globalThis.localStorage) {
+  try { storage.setItem(SHOP_STORE_KEY, String(key)); return true; } catch { return false; }
+}
