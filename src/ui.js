@@ -38,7 +38,11 @@ function chip({ label, chain, name, value, checked, type = 'radio' }) {
   input.checked = checked;
   el.append(input);
   if (chain) { const d = document.createElement('span'); d.className = 'dot'; d.setAttribute('aria-hidden', 'true'); el.append(d); }
-  el.append(document.createTextNode(label));
+  const text = document.createElement('span');
+  text.className = 'chip-label';
+  text.textContent = label;
+  el.title = label;
+  el.append(text);
   return el;
 }
 
@@ -58,7 +62,11 @@ export function renderStaticChips(container, stores) {
     el.dataset.chain = s.chain;
     const d = document.createElement('span');
     d.className = 'dot';
-    el.append(d, document.createTextNode(s.name));
+    const t = document.createElement('span');
+    t.className = 'chip-label';
+    t.textContent = s.name;
+    el.title = s.name;
+    el.append(d, t);
     return el;
   }));
 }
@@ -98,6 +106,7 @@ export function renderList(container, items, storesById, handlers) {
     sec.dataset.storeId = g.storeId;
     if (store) sec.dataset.chain = store.chain;
     $('[data-title]', sec).textContent = g.storeId ? (store?.name ?? 'Store no longer listed') : 'Any store';
+    $('[data-title]', sec).title = $('[data-title]', sec).textContent;
     const left = g.items.filter((i) => !i.checked).length;
     $('[data-count]', sec).textContent = left ? `${left} left` : 'done';
     $('[data-items]', sec).replaceChildren(...g.items.map((it) => renderItem(it, handlers)));
@@ -236,6 +245,7 @@ export function renderMeals(container, meals, storesById, h) {
     const sec = fromTemplate('tpl-meal');
     sec.dataset.mealId = m.id;
     $('[data-name]', sec).textContent = m.name;
+    $('[data-meal-rename]', sec).title = m.name;
     $('[data-count]', sec).textContent = `${m.items.length} item${m.items.length === 1 ? '' : 's'}`;
     const ren = $('[data-meal-rename]', sec);
     ren.setAttribute('aria-label', `Rename or delete ${m.name}`);

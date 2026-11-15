@@ -72,7 +72,8 @@ The Favorites screen has two tabs:
 Adding never duplicates: a favorite is skipped when an item with the same name (ignoring case,
 spacing and accents) is already on the list and **not checked**. A checked item counts as bought, so
 the favorite is added again. A toast reports how many were added and skipped. Favorites are saved in
-`localStorage` under `shopsmartr:favorites:v1`.
+`localStorage` under `shopsmartr:favorites:v1`. If that value can't be read, it is copied to
+`shopsmartr:favorites:v1.bak` and a notice says so, the same as the list (`shopsmartr:v1.bak`).
 
 Export: "Download text" and "Copy as text" end with a `== Favorites ==` section (staples, then each
 meal). "Favorites CSV" in the ⋮ menu (or Export on the Favorites screen) downloads a separate
@@ -89,8 +90,10 @@ The ⋮ menu (Export on desktop) opens with a short note from Steven to Lauren i
 There are 321 hand-written one-liners in `src/notes.js`; about a third use her name. They are shown in
 a shuffled order saved in `localStorage` (`shopsmartr:notes:v1`), so none repeats until every note has
 been shown, and a new shuffle never starts with the note you just saw. The repo is public, so keep
-any additions sweet and family-friendly; `test/notes.test.mjs` checks uniqueness, the count, the
-length and the named share.
+any additions sweet and family-friendly, and fact-free: nothing about kids, pets, a house, places,
+holidays or shared history that may not be true. `test/notes.test.mjs` checks uniqueness, near-
+duplicates, a banned-word list for those topics, the count (at least 300), the length and the named
+share (25–40%).
 
 ## Optional encrypted price snapshot
 

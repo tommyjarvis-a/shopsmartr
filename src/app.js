@@ -15,9 +15,10 @@ const el = (id) => document.getElementById(id);
 const SCREENS = ['list', 'favorites', 'stores', 'ads'];
 const loaded = loadStateWithStatus();
 let state = loaded.state;
-let favs = F.loadFavorites();
+const favLoaded = F.loadFavoritesWithStatus();
+let favs = favLoaded.favorites;
 let favTab = 'items';
-let saveWarned = loaded.problem === 'unavailable';
+let saveWarned = loaded.problem === 'unavailable' || favLoaded.problem === 'unavailable';
 let data = { stores: [], chains: {}, byId: {}, zips: {}, asOf: '' };
 let nearby = [];
 let listFilter = '';   // '' = all stores
@@ -25,17 +26,25 @@ let chainFilter = '';  // '' = all chains (stores screen)
 
 function commit(next) {
   state = next;
-  if (!saveState(state) && !saveWarned) {
-    saveWarned = true;
-    showNotice('This browser isn\'t letting ShopSmartR save, so your list will be lost when you close this page. Export it to keep a copy.');
-  }
+  if (!saveState(state)) warnCantSave();
   const focus = focusKey();
   renderAll();
   restoreFocus(focus);
 }
 
+const CANT_SAVE = 'This browser isn\'t letting ShopSmartR save, so your list will be lost when you close this page. Export it to keep a copy.';
+function warnCantSave() {
+  if (saveWarned) return;
+  saveWarned = true;
+  showNotice(CANT_SAVE);
+}
+
 function showNotice(text) {
-  el('notice-text').textContent = text;
+  const box = el('notice-text');
+  if ([...box.children].some((p) => p.textContent === text)) return;
+  const p = document.createElement('p');
+  p.textContent = text;
+  box.append(p);
   el('notice').hidden = false;
 }
 
@@ -88,7 +97,7 @@ function renderAll() {
 // ---------- Favorites ----------
 function commitFavs(next, focus) {
   favs = next;
-  F.saveFavorites(favs);
+  if (!F.saveFavorites(favs)) warnCantSave();
   renderFavs();
   if (focus) document.querySelector(focus)?.focus({ preventScroll: true });
 }
@@ -454,7 +463,7 @@ function bind() {
   el('fab').addEventListener('click', () => openSheet());
   // Close buttons are type=button so Enter in a field submits (saves) instead of closing.
   document.querySelectorAll('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
-  el('notice-close').addEventListener('click', () => { el('notice').hidden = true; });
+  el('notice-close').addEventListener('click', () => { el('notice').hidden = true; el('notice-text').replaceChildren(); });
   el('item-form').addEventListener('submit', (e) => {
     if (e.submitter?.value === 'cancel') return;
     e.preventDefault();
@@ -569,9 +578,11 @@ async function init() {
   initPrices();
   if (loaded.problem === 'unreadable') {
     showNotice(`Your saved list couldn't be read, so ShopSmartR started a new one.${loaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:v1.bak).' : ''}`);
-  } else if (loaded.problem === 'unavailable') {
-    showNotice('This browser isn\'t letting ShopSmartR save, so your list will be lost when you close this page. Export it to keep a copy.');
   }
+  if (favLoaded.problem === 'unreadable') {
+    showNotice(`Your saved favorites couldn't be read, so ShopSmartR started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);
+  }
+  if (loaded.problem === 'unavailable' || favLoaded.problem === 'unavailable') showNotice(CANT_SAVE);
 }
 
 init();

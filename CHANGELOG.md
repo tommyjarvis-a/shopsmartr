@@ -2,7 +2,27 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
-## [0.1.1-alpha] - 2026-11-14 (alpha)
+## [0.1.2-alpha] - 2026-11-14 (alpha)
+
+Fixes for the v0.1.1 QA recheck (M1, L8, L9).
+
+### Fixed
+- M1: long meal names no longer push the page wider than the phone. The meal header is a
+  `minmax(0, 1fr) auto` grid, so the name wraps (the full name is also in the button's title) and
+  "Add meal" always stays on screen. The `.meals` grid uses `minmax(0, 1fr)`.
+- Overflow sweep for similar rows: list and favorite rows wrap long unbroken names; store rows wrap
+  long names and addresses; list group headers ellipsize long store names (full name in the
+  title); chips ellipsize instead of overflowing; desktop grid columns use `minmax(0, 1fr)`; the
+  toast is centred without `translateX`, so a long message wraps and its Undo button stays on screen.
+- L8: unreadable favorites are copied to `shopsmartr:favorites:v1.bak` and a notice says so, the same as
+  the list. Notices now stack when more than one applies, and favorites saves also warn when the
+  browser blocks storage.
+- L9: love notes rewritten to be fact-free. 67 notes that assumed kids, pets, a house, places,
+  holidays or shared history were replaced, along with the near-duplicates and odd wording from QA.
+  Still 321 notes, 102 (32%) with Lauren's name. New tests enforce a banned-word list and a
+  word-similarity limit.
+
+ - 2026-11-14 (alpha)
 
 Fixes for the v0.1.0 QA gate (low findings L1–L7) plus Favorites and love notes.
 
