@@ -2,6 +2,46 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.2.0-alpha] - 2026-11-15 (alpha)
+
+First Recipes slice. Still alpha; recipes and prices are saved household snapshots (encrypted,
+opened with the household passphrase), not official checkout prices. Match review, Swap,
+"Already on your list", Add missing and backup/2 follow in v0.2.1; Cook from my list and Import
+in v0.2.2.
+
+### Added
+- **Recipes tab** in the middle of the tab bar: List · Shop · Recipes · Favorites · Ads. Stores
+  moves to a store button in the app bar (with your store count); the desktop sidebar keeps
+  Stores and adds Recipes between Shop and Favorites.
+- **Recipe snapshot loader** (`data/recipes.json` + `recipes.enc`, decrypted in the Worker). The
+  household passphrase that opens prices opens recipes too; the recipe key is cached separately
+  (`aes-recipes`), only the key, never the recipes. With no snapshot the tab says so.
+- **Browse**: search (titles and ingredients), 12 category tiles, quick picks (Under 30 min,
+  Under $15, 5 ingredients or fewer, Uses my list), 24 cards a page with Show more, and sorts
+  Time · Price (low/high) · A–Z · Rating. Rating only appears when a recipe in the results has
+  one; Price only once prices are open. The sort is remembered on this device.
+- **Recipe cards**: photo (linked from the source, never stored here), time, rating only when
+  rated, and the cost range "$12–$21 to buy" (whole packs at your Shop store, pantry basics left
+  out), with a star.
+- **Recipe detail**: servings stepper starting at your household size, every amount rescaled
+  (¼ ½ ¾ ⅓ ⅔), "Buys 2" when you have to buy more than the recipe uses, ≈ price per line,
+  "N not priced", the pantry line ("Pantry basics, not added: salt, black pepper"), numbered
+  steps with time pills, and a desktop layout with ingredients and steps side by side.
+- **Add all to list**: puts the best match for every non-pantry ingredient on your list (the
+  ingredient's name when nothing matched), each line showing "for <recipe>"; Undo for 6 s.
+- **Favorites › Recipes**: star a recipe to save it; a grid, newest first, unstar with Undo.
+  Favorites reads "N staples · N recipes · N meals"; the storage line counts saved recipes.
+- **Household size** (⋮ menu, or Change on the Recipes tab), default 3.
+
+### Fixed
+- **L34: the Load list pill counted Favorites before the duplicate combine** ("12 Favorites"
+  for a file that loads 9). It now counts after the combine.
+- The ⋮ menu stays on screen on short desktop windows (it scrolls when taller than the window).
+
+### Notes
+- Saved recipes aren't in Save list files until backup/2 (v0.2.1); Load list › Replace keeps
+  the saved recipes on this device.
+
 ## [0.1.10-alpha] - 2026-11-15 (alpha)
 
 Fix release for the v0.1.9 gate (M6, L32, L33). Still alpha; prices are a saved household
