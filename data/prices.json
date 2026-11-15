@@ -2,5 +2,9 @@
  "schema": "shopsmartr.pricefeed/1",
  "available": true,
  "file": "prices.enc",
- "updated": "2026-11-15T02:12Z"
+ "updated": "2026-11-15T02:57Z",
+ "dataSchema": "shopsmartr.prices/2",
+ "envelope": 2,
+ "itemCount": 33319,
+ "complete": true
 }
