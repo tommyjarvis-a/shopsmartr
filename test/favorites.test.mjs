@@ -137,3 +137,30 @@ test('text export gains a Favorites section only when there are favorites', () =
   assert.equal(toText([], {}, { date: '2026-11-14', favorites: F.emptyFavorites() }), list);
   assert.equal(toText([], stores, { date: '2026-11-14', favorites: f }), `${list}\n${txt}`);
 });
+
+test('L8: unreadable favorites are backed up and reported, not silently overwritten', () => {
+  for (const raw of ['{broken', JSON.stringify({ version: 2, items: [] }), '"just a string"', 'null']) {
+    const store = memoryStorage();
+    store.setItem(F.FAVORITES_KEY, raw);
+    const r = F.loadFavoritesWithStatus(store);
+    assert.equal(r.problem, 'unreadable', raw);
+    assert.equal(r.backedUp, true);
+    assert.equal(store.getItem(F.FAVORITES_BACKUP_KEY), raw);
+    assert.deepEqual(r.favorites, F.emptyFavorites());
+    // Saving new favorites afterwards leaves the backup intact.
+    F.saveFavorites(F.addFavorite(r.favorites, { name: 'Milk' }), store);
+    assert.equal(store.getItem(F.FAVORITES_BACKUP_KEY), raw);
+  }
+  const fresh = memoryStorage();
+  assert.deepEqual(F.loadFavoritesWithStatus(fresh), { favorites: F.emptyFavorites(), problem: null, backedUp: false });
+  const saved = sample();
+  F.saveFavorites(saved, fresh);
+  const ok = F.loadFavoritesWithStatus(fresh);
+  assert.equal(ok.problem, null);
+  assert.deepEqual(ok.favorites, saved);
+  assert.equal(fresh.getItem(F.FAVORITES_BACKUP_KEY), null);
+  const blocked = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('x'); } };
+  assert.equal(F.loadFavoritesWithStatus(blocked).problem, 'unavailable');
+  const noBackup = { getItem: () => '{broken', setItem() { throw new Error('QuotaExceeded'); } };
+  assert.deepEqual(F.loadFavoritesWithStatus(noBackup), { favorites: F.emptyFavorites(), problem: 'unreadable', backedUp: false });
+});

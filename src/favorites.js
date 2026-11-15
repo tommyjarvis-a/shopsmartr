@@ -4,6 +4,7 @@
 import { cleanItemInput, addItem, newId } from './list.js';
 
 export const FAVORITES_KEY = 'shopsmartr:favorites:v1';
+export const FAVORITES_BACKUP_KEY = 'shopsmartr:favorites:v1.bak';
 
 export function emptyFavorites() {
   return { version: 1, items: [], meals: [] };
@@ -147,11 +148,27 @@ export function deserializeFavorites(json) {
   return { version: 1, items: cleanRows(raw.items), meals };
 }
 
+/** True when json parses as a v1 favorites document (rows may still be partly invalid). */
+export function isReadableFavorites(json) {
+  try { const raw = JSON.parse(json); return Boolean(raw) && typeof raw === 'object' && raw.version === 1; } catch { return false; }
+}
+
 export function loadFavorites(storage = globalThis.localStorage) {
-  try {
-    const json = storage.getItem(FAVORITES_KEY);
-    return json ? deserializeFavorites(json) : emptyFavorites();
-  } catch { return emptyFavorites(); }
+  return loadFavoritesWithStatus(storage).favorites;
+}
+
+/**
+ * Like the list (storage.js loadStateWithStatus): an unreadable value is copied to
+ * FAVORITES_BACKUP_KEY before anything can overwrite it, and reported as problem 'unreadable'.
+ */
+export function loadFavoritesWithStatus(storage = globalThis.localStorage) {
+  let json;
+  try { json = storage.getItem(FAVORITES_KEY); } catch { return { favorites: emptyFavorites(), problem: 'unavailable', backedUp: false }; }
+  if (!json) return { favorites: emptyFavorites(), problem: null, backedUp: false };
+  if (isReadableFavorites(json)) return { favorites: deserializeFavorites(json), problem: null, backedUp: false };
+  let backedUp = false;
+  try { storage.setItem(FAVORITES_BACKUP_KEY, json); backedUp = true; } catch { /* ignore */ }
+  return { favorites: emptyFavorites(), problem: 'unreadable', backedUp };
 }
 
 export function saveFavorites(fav, storage = globalThis.localStorage) {
