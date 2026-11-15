@@ -2,6 +2,35 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.6-alpha] - 2026-11-15 (alpha)
+
+Fixes from the QA gate on 0.1.5-alpha (aca2720). Still alpha; prices are a saved household
+snapshot, not official checkout prices.
+
+**Note:** the `v0.1.5-alpha` tag points at 582300d and does **not** include aca2720 (Load list
+merge keeps a line done if either copy is done), which was pushed to main after the tag. This
+release and its tag include it.
+
+### Fixed
+- **M4 – store headers stick again.** The sticky box is now the section's `h2` (it was the button
+  inside it, which can't leave its own h2). Headers pin under the mobile app bar (60px) or at the
+  top on wide screens while that store's rows scroll, then leave with their section.
+- **M5 – no raw error for an amount that can't be priced.** Adding e.g. "5 kg" of a $3.49 each
+  item now says "Added Brown Rice Bag (no price for 5 kg)" instead of "Cannot read properties of
+  null (reading 'total')". Every `linePrice` consumer handles "no price".
+- **L21** – Aisle sort puts Produce first, then natural order (text, then number), no aisle last.
+- **L22** – the sort choice is device-only: it isn't written to saved files, and a sort in an
+  older (0.1.5) file is ignored on load.
+- **L23** – each saved file has a random `saveId`. Merging a file this device already merged, or a
+  file saved from this list, warns ("This file was already merged on Nov 15, 2026") and skips;
+  Replace is still allowed. Undo of a merge forgets it again.
+- **L24** – Load list refuses files over 5 MB (checked before reading) or over 5,000 items, with a
+  message that says so.
+- **L25** – duplicate ids in a loaded file: exact copies are dropped (and counted in the summary),
+  different rows that share an id get new ids, so removing one row never removes another.
+- **L26** – desktop sort buttons, the direction toggle and Collapse all are 44px tall.
+- Picking the same file twice in Load list works (the file input is reset after each pick).
+
 ## [0.1.5-alpha] - 2026-11-15 (alpha)
 
 Store-by-store list, sorting, and saving the list to a file. Fixes the Lows from the 0.1.4-alpha
