@@ -2,12 +2,35 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.2.1-alpha] - 2026-11-15 (alpha)
+
+Hotfix for the v0.2.0 Recipes slice (Tester gate on ce512d3). Match review, Swap, "Already on
+your list", Add missing and backup/2 move to v0.2.2; Cook from my list and Import to v0.2.3.
+
+### Fixed
+- **Add all merges into your list (M7).** An ingredient whose product is already an open line
+  with the same name, store and unit adds to that line's quantity instead of a second line, so
+  two recipes with limes give one Limes line. The line keeps its first recipe link. The toast
+  says "Added N, updated M"; Undo removes what was added and puts merged lines back exactly.
+  Bought (checked) lines are left alone.
+- **A double tap on Add all adds once (M8).** Undo appears where the button was, so taps on it
+  are ignored for half a second after the add.
+- **Recipe search allows one typo (L35)** in words of 5+ letters, like Shop search: "spagetti",
+  "marinera".
+- **No stray "null" under the steps (L36)** when a recipe has no source link.
+- **Recipes with nothing priced say so (L37):** "2 ingredients not priced at Wegmans #80".
+- **"fl oz" (L38)** instead of "floz"/"flozs".
+- **Fewer wrong matches (L39).** A one-word ingredient that only describes the product is no
+  longer matched: "ice" is not Ice Cream and "garlic" is not Garlic Ham. Pack words at the end
+  of a name still count ("Garlic Bulb" is garlic).
+- **Warm CTA shadow (L40)** instead of the old green one.
+
 ## [0.2.0-alpha] - 2026-11-15 (alpha)
 
 First Recipes slice. Still alpha; recipes and prices are saved household snapshots (encrypted,
 opened with the household passphrase), not official checkout prices. Match review, Swap,
-"Already on your list", Add missing and backup/2 follow in v0.2.1; Cook from my list and Import
-in v0.2.2.
+"Already on your list", Add missing and backup/2 follow in v0.2.2 (moved from v0.2.1); Cook
+from my list and Import in v0.2.3.
 
 ### Added
 - **Recipes tab** in the middle of the tab bar: List · Shop · Recipes · Favorites · Ads. Stores

@@ -193,6 +193,28 @@ export function addItem(state, input, id = newId()) {
   return { ...state, items: [...state.items, item] };
 }
 
+const sameName = (a, b) => String(a).trim().replace(/\s+/g, ' ').toLowerCase() === String(b).trim().replace(/\s+/g, ' ').toLowerCase();
+/**
+ * M7: add a line, or merge it into an open (unchecked) line with the same name, store and unit,
+ * summing the quantities ("Limes" 1 + 2 -> 3). A count line without a quantity counts as 1; a
+ * quantity can't be summed into a measured line without one, so that adds a new line. The merged
+ * line keeps its own recipe back-link (the first recipe) and price snapshot; notes are joined.
+ * Returns { state, id, prev }: prev is the line before the merge (for an exact Undo), null when added.
+ */
+export function addOrMergeItem(state, input, id = newId()) {
+  const add = cleanItemInput(input);
+  const u = normUnit(add.unit);
+  const hit = state.items.find((it) => !it.checked && sameName(it.name, add.name) && (it.storeId || '') === add.storeId && normUnit(it.unit) === u
+    && ((it.qty == null) === (add.qty == null) || !u));
+  if (!hit) { const s = addItem(state, input, id); return { state: s, id, prev: null }; }
+  const qty = hit.qty == null && add.qty == null ? null : Math.min(MAX_QTY, Math.round(((hit.qty ?? 1) + (add.qty ?? 1)) * 1000) / 1000);
+  const notes = [hit.notes, add.notes].filter(Boolean).filter((n, i, a) => a.indexOf(n) === i).join('; ').slice(0, 500);
+  const merged = { ...hit, qty, notes };
+  if (!merged.recipe && add.recipe) merged.recipe = add.recipe;
+  if (!merged.priced && add.priced) merged.priced = add.priced;
+  return { state: { ...state, items: state.items.map((it) => (it === hit ? merged : it)) }, id: hit.id, prev: hit };
+}
+
 export function updateItem(state, id, patch) {
   return {
     ...state,

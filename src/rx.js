@@ -61,6 +61,9 @@ function costSlot(c) {
   return h('span', { class: 'rx-cost', role: 'img', 'aria-label': t.aria }, h('b', { text: t.text }), ' ', h('span', { class: 'k', text: t.tail }));
 }
 
+/** M8: taps on the CTA slot are ignored this long after an add (double tap / double click). */
+export const TAP_GUARD_MS = 500;
+
 export function initRecipes(ctx) {
   const root = document.getElementById('rx-root');
   const rx = {
@@ -435,7 +438,7 @@ export function initRecipes(ctx) {
     const info = h('div', { class: 'rx-dinfo' },
       h('h1', { class: 'rx-title', tabindex: '-1', text: r.title }),
       h('div', { class: 'rx-detail-meta' }, t ? h('span', { class: 'm' }, icon('i-clock', 'icon icon-16'), t) : null, ratingSlot(r, true), costSlot(m.cost)),
-      m.cost?.unpriced ? h('p', { class: 'faint rx-unpriced', text: `${m.cost.unpriced} ingredient${m.cost.unpriced === 1 ? '' : 's'} not priced` }) : null,
+      unpricedNote(m, pc),
       h('div', { class: 'serv' }, h('div', { class: 'l' }, h('b', { text: 'Servings' }), h('small', { text: r.servings ? `Recipe makes ${r.servings}${serv !== r.servings ? ` · scaled to ${serv}` : ''}` : 'Amounts as written (servings not given)' })), stepper));
     const ings = h('ul', { class: 'rx-ings' }, ...m.lines.map((l) => {
       const o = l.opts[0];
@@ -453,7 +456,16 @@ export function initRecipes(ctx) {
       h('div', { class: 'rx-dcols' },
         h('section', { 'aria-labelledby': 'rx-ing-h' }, h('div', { class: 'ing-h' }, h('h2', { class: 'rx-h2', id: 'rx-ing-h', text: 'Ingredients' }), h('span', { class: 'count', text: String(m.lines.length) })), ings, pantry),
         h('section', { 'aria-labelledby': 'rx-steps-h' }, h('div', { class: 'ing-h' }, h('h2', { class: 'rx-h2', id: 'rx-steps-h', text: 'Steps' })), stepsEl)),
-      source, cta(r, m, pc)];
+      source, cta(r, m, pc)].filter(Boolean);   // L36: no "null" when there's no source link
+  }
+  /** "N ingredients not priced"; L37: also when nothing could be priced ("N ingredients not priced at <store>"). */
+  function unpricedNote(m, pc) {
+    if (m.cost?.unpriced) return h('p', { class: 'faint rx-unpriced', text: `${m.cost.unpriced} ingredient${m.cost.unpriced === 1 ? '' : 's'} not priced` });
+    if (!m.cost && pc?.cands && m.lines.length) {
+      const n = m.lines.length;
+      return h('p', { class: 'faint rx-unpriced', text: `${n} ingredient${n === 1 ? '' : 's'} not priced at ${pc.st?.label ?? 'this store'}` });
+    }
+    return null;
   }
   function cta(r, m, pc) {
     const n = m.lines.length;
@@ -465,7 +477,8 @@ export function initRecipes(ctx) {
       h('small', { text: pc?.cands ? `${n} to buy · ${where}` : (ctx.getFeed() ? 'Pricing…' : 'Unlock prices in Shop for costs') }));
     let btn;
     if (last && Date.now() - last.at < 6000) {
-      btn = h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => undoAdd() }, icon('i-check', 'icon icon-20'), `Added ${last.ids.length} · Undo`);
+      // M8: Undo takes the Add button's place, so taps right after the add are ignored.
+      btn = h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { if (Date.now() - last.at >= TAP_GUARD_MS) undoAdd(); } }, icon('i-check', 'icon icon-20'), `Added ${last.n} · Undo`);
     } else if (last) {
       btn = h('a', { class: 'btn btn-secondary', href: '#list', text: 'View list' });
     } else {
@@ -473,37 +486,45 @@ export function initRecipes(ctx) {
     }
     return h('div', { class: `rx-cta${last ? ' done' : ''}` }, left, btn);
   }
-  /** Adds the best match for every non-pantry line (or the name as text when nothing matched). */
+  /** Adds the best match for every non-pantry line (or the name as text when nothing matched),
+   * merging into matching open lines (M7). Undo removes what was added and restores merged lines. */
   function addAll(r, m, pc) {
+    if (Date.now() - (rx.lastAdd?.at ?? 0) < TAP_GUARD_MS) return;   // M8: a double tap adds once
     let s = ctx.getState();
-    const ids = [];
+    const ids = []; const prev = new Map();
     const feed = ctx.getFeed();
     const link = { id: r.id, title: r.title };
     for (const l of m.lines) {
       const o = pc?.cands ? l.opts[0] : null;
       try {
+        let res;
         if (o && feed) {
           const f = C.pricedFields(feed.catalog, o.it, ctx.directory());
-          s = L.addItem(s, { name: o.it.name, qty: o.buy.listQty ?? 1, unit: o.buy.listUnit || '', storeId: f.storeId, priced: f.priced, notes: l.amount ? `${l.amount} ${l.name}`.slice(0, 200) : '', recipe: link });
+          res = L.addOrMergeItem(s, { name: o.it.name, qty: o.buy.listQty ?? 1, unit: o.buy.listUnit || '', storeId: f.storeId, priced: f.priced, notes: l.amount ? `${l.amount} ${l.name}`.slice(0, 200) : '', recipe: link });
         } else {
-          s = L.addItem(s, { name: l.name, qty: null, unit: '', notes: l.amount ? `${l.amount}` : '', recipe: link });
+          res = L.addOrMergeItem(s, { name: l.name, qty: null, unit: '', notes: l.amount ? `${l.amount}` : '', recipe: link });
         }
-        ids.push(s.items[s.items.length - 1].id);
+        s = res.state;
+        if (!res.prev) ids.push(res.id);
+        else if (!ids.includes(res.id) && !prev.has(res.id)) prev.set(res.id, res.prev);
       } catch { /* a line the list can't take is skipped */ }
     }
-    if (!ids.length) return;
+    const n = ids.length + prev.size;
+    if (!n) return;
     ctx.commit(s);
-    rx.lastAdd = { id: r.id, ids, at: Date.now() };
-    ctx.toast(`Added ${ids.length} item${ids.length === 1 ? '' : 's'} from ${r.title}`, undoAdd, 6000);
+    rx.lastAdd = { id: r.id, ids, prev, n, at: Date.now() };
+    const what = prev.size ? `Added ${ids.length}, updated ${prev.size}` : `Added ${ids.length} item${ids.length === 1 ? '' : 's'}`;
+    ctx.toast(`${what} from ${r.title}`, undoAdd, 6000);
     renderKeep('.rx-cta .btn');
-    setTimeout(() => { if (rx.lastAdd?.ids === ids && rx.view === 'detail') renderKeep(null); }, 6100);
+    const mine = rx.lastAdd;
+    setTimeout(() => { if (rx.lastAdd === mine && rx.view === 'detail') renderKeep(null); }, 6100);
   }
   function undoAdd() {
     const last = rx.lastAdd;
     if (!last) return;
     const drop = new Set(last.ids);
     const s = ctx.getState();
-    ctx.commit({ ...s, items: s.items.filter((i) => !drop.has(i.id)) });
+    ctx.commit({ ...s, items: s.items.filter((i) => !drop.has(i.id)).map((i) => last.prev.get(i.id) ?? i) });
     rx.lastAdd = null;
     ctx.toast('Removed them from your list');
     if (rx.view === 'detail') renderKeep('.rx-cta .btn');

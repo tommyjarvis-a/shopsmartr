@@ -2,7 +2,7 @@
 // fractions, whole-pack buying, catalog matching with confidence, cost ranges, sorts, search, quick
 // picks, list coverage and step splitting. No DOM, no network; safe to run in a Worker.
 // Recipe data is never shipped in this repo: it arrives encrypted in data/recipes.enc.
-import { tokenize, getItem, estimate, unitOf, storeKey } from './catalog.js';
+import { tokenize, getItem, estimate, unitOf, storeKey, editDistance1 } from './catalog.js';
 import { convert, parsePackSize, linePrice, compareNames } from './list.js';
 
 export const RECIPES_SCHEMA = 'shopsmartr.recipes/1';
@@ -211,6 +211,7 @@ const NO_PLURAL = new Set(['tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'cm'
 export function unitLabel(unit, q = 1) {
   if (!unit || unit === 'whole') return '';
   if (unit === 'l') return 'L';
+  if (unit === 'floz') return 'fl oz';   // L38
   if (NO_PLURAL.has(unit) || q <= 1) return unit;
   return UNIT_PLURAL[unit] ?? `${unit}s`;
 }
@@ -328,6 +329,13 @@ export function itemAt(mi, row) {
   if (!it) { it = getItem(mi.cat, row); mi.items.set(row, it); }
   return it;
 }
+/** Pack and form words that can end a product name without being what it is ("Garlic Bulb", "Limes Bag"). */
+const FORM = new Set('bulb head bunch clove stalk sprig ear bag box carton jar can bottle tub container tray pkg package ct count multipack variety pound lb oz each'.split(' '));
+/** A product's head noun: its last word that isn't a pack or form word. */
+export function headOf(pc) {
+  for (let i = pc.length - 1; i >= 0; i -= 1) if (!FORM.has(pc[i])) return pc[i];
+  return pc[pc.length - 1];
+}
 export const CONF = { EXACT: 4, STRONG: 3, GOOD: 2, WEAK: 1 };
 /**
  * Products at one store for an ingredient, best first: [{ row, conf }].
@@ -360,7 +368,10 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
     if (hits === want.size) conf = extra === 0 ? 4 : extra <= 2 ? 3 : 2;
     else if (hits * 2 > want.size && extra <= 2) conf = 2;
     else conf = 1;
-    if (conf > 1 && pc[pc.length - 1] !== head) conf -= 1;
+    // L39: the product's own head noun decides what it is. A name that ends in another noun drops
+    // a level ("green bean casserole"); for a one-word ingredient that only appears as a modifier
+    // ("ice" in Ice Cream, "garlic" in Garlic Ham) it drops two, so it is never offered.
+    if (conf > 1 && headOf(pc) !== head) conf -= core.length === 1 ? 2 : 1;
     out.push({ row, conf, extra });
   }
   out.sort((a, b) => b.conf - a.conf || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
@@ -473,11 +484,16 @@ export function coverage(recipe, lidx) {
 export const usesList = (cov) => cov.total > 0 && (cov.have >= 3 || cov.have * 2 >= cov.total) && cov.have > 0;
 
 // ---------- browse: search, quick picks, sorts ----------
-/** Every query word must start a word of the title or an ingredient name. */
+/** One typo against a word or a word start, for 5+ letter query words (L35, like Shop search): spagetti, marinera. */
+function typo1(w, t) {
+  if (t.length < 4) return false;
+  return editDistance1(w, t) || (t.length > w.length && (editDistance1(w, t.slice(0, w.length)) || editDistance1(w, t.slice(0, w.length + 1))));
+}
+/** Every query word must start a word of the title or an ingredient name, or match one with one typo. */
 export function matchesQuery(recipe, query) {
   const q = tokenize(query).filter((w) => w.length > 0);
   if (!q.length) return true;
-  return q.every((w) => { const s = singular(w); return recipe.s.some((t) => t.startsWith(w) || t.startsWith(s)); });
+  return q.every((w) => { const s = singular(w); return recipe.s.some((t) => t.startsWith(w) || t.startsWith(s)) || (w.length >= 5 && recipe.s.some((t) => typo1(w, t))); });
 }
 export const QUICK = {
   quick: { label: 'Under 30 min', test: (r) => r.time != null && r.time <= 30 },
