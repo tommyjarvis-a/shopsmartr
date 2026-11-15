@@ -2,6 +2,52 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.5-alpha] - 2026-11-15 (alpha)
+
+Store-by-store list, sorting, and saving the list to a file. Fixes the Lows from the 0.1.4-alpha
+recheck (4afb575). Still alpha; prices are a saved household snapshot, not official checkout prices.
+
+### Added
+- **List grouped by store.** Items are grouped under sticky store headers (keyed by chain + store
+  number, so Tops, ALDI and Trader Joe's slot in the same way). Each header shows the store name,
+  its address from `stores.json`, the subtotal (or "No prices") and "N left · x/y priced". Headers
+  collapse, and each store's collapsed state is remembered on this device. Stores follow the
+  Stores-tab order. Unpriced and manual items go under their chosen store, otherwise "Any store",
+  which is always last. A list with one store shows no headers, just a faint store line.
+  A row shows "● Wegmans price" only when its price comes from a different store than its section.
+- **Totals by store.** The grand total stays in the mobile total bar, and a chevron opens the
+  per-store breakdown. On wide screens a "Trip by store" card has jump links and the grand total.
+  The text export has per-store headers with addresses and subtotals.
+- **Aisle on every row** (a pill on the second line), in the text export ("store, aisle") and in
+  the CSV Aisle column.
+- **Sort** A–Z (case-insensitive), Price (line total, high/low; lines without a price always last),
+  or Aisle (natural order: Aisle 2 before Aisle 10; lines without an aisle last), with the name as
+  the tiebreaker, applied within each store. On phones it's a 44px chip that opens a menu; on wide
+  screens it's a toolbar with a direction toggle and Collapse all. Checking an item never moves
+  it. The choice is saved in `shopsmartr:listSort:v1`.
+- **Save list / Load list** in the ⋮ menu. Save list writes `shopsmartr-list-YYYY-MM-DD.json`
+  (schema `shopsmartr.backup/1`: app version, time, the list, favorites and meals, store picks,
+  settings and sort). It never contains the passphrase or any key. It uses the share sheet when
+  the browser can share files, otherwise a download. Load list checks the file, shows what's in it,
+  and offers Merge (the default; matching name + unit + store lines are combined, quantities add,
+  newer price kept) or Replace (red confirm "Replace my list", a 10-second Undo, and a copy of the
+  current list in `shopsmartr:beforeLoad:v1.bak`).
+- **Save reminder.** "Last saved N days ago — Save list" after 7 days, or "Not saved to a file yet"
+  3 days after a list first has items. × hides it for 7 days.
+- **Storage status** in the menu ("Kept in this browser only", last saved, and the result of
+  `navigator.storage.persist()`).
+- New design token `--color-danger-soft` (light and dark).
+
+### Fixed
+- **L18** – subsequence and typo matches only come from names and brands. Departments and
+  categories match exactly or by prefix only, so "frzn" no longer lists the whole Frozen
+  department. A subsequence must also cover at least half the word ("mlk" doesn't match "multipack").
+- **L19** – a weight or volume quantity on a package item with no convertible unit price counts
+  whole packages from the size (5 kg of a "2 lb bag" = 6 bags, marked ~). If the size can't be read,
+  the line shows "No price for 3 lb" and isn't counted in the total.
+- **L20** – pressing Enter in the mobile add sheet without picking a suggestion parses the quantity
+  and unit like the desktop add bar ("2 lb apples" → apples, 2 lb).
+
 ## [0.1.4-alpha] - 2026-11-14 (alpha)
 
 Fixes from the QA gate on 0.1.3-alpha (7c1a626). Still alpha; prices are a saved household
