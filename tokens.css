@@ -29,6 +29,7 @@
   --color-heart: #E11D48;            /* small love-note heart */
   --color-heart-soft: #FFF1F3;
   --color-danger: #B91C1C;           /* 6.5:1 on white */
+  --color-danger-soft: #FEF2F2;      /* v0.1.5 Replace card; danger text on it 5.9:1 */
   --color-focus: #2563EB;
   --color-scrim: rgba(16, 32, 22, .42);
   /* Store tag dots (neutral, not brand colours) */
@@ -74,7 +75,7 @@
     --color-primary-soft: #193D27; --color-on-primary: #052E16;
     --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
   --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
-    --color-danger: #FCA5A5; --color-scrim: rgba(0,0,0,.6);
+    --color-danger: #FCA5A5; --color-danger-soft: #3A1414; --color-scrim: rgba(0,0,0,.6);
     --color-heart: #FB7185; --color-heart-soft: #2A1A1F;
     --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
     --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);
@@ -90,7 +91,7 @@
   --color-primary-soft: #193D27; --color-on-primary: #052E16;
   --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
   --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
-  --color-danger: #FCA5A5; --color-scrim: rgba(0,0,0,.6);
+  --color-danger: #FCA5A5; --color-danger-soft: #3A1414; --color-scrim: rgba(0,0,0,.6);
   --color-heart: #FB7185; --color-heart-soft: #2A1A1F;
   --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
   --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);

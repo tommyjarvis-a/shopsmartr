@@ -194,9 +194,13 @@ export function editDistance1(q, t) {
   return edits + (lq - i) + (lt - j) <= 1;
 }
 
-/** "chkn" in "chicken": same first letter, the rest in order (a consonant-skeleton style abbreviation). */
+/**
+ * "chkn" in "chicken": same first letter, the rest in order (a consonant-skeleton style
+ * abbreviation). The abbreviation must keep at least half the word's letters (L18), so "mlk"
+ * is milk but not multipack.
+ */
 export function isSubsequence(q, t) {
-  if (q.length < 2 || q.length >= t.length || q.charCodeAt(0) !== t.charCodeAt(0)) return false;
+  if (q.length < 2 || q.length >= t.length || q.length * 2 < t.length || q.charCodeAt(0) !== t.charCodeAt(0)) return false;
   let i = 1;
   for (let j = 1; j < t.length && i < q.length; j += 1) if (t.charCodeAt(j) === q.charCodeAt(i)) i += 1;
   return i === q.length;
@@ -268,8 +272,9 @@ function scratch(index, n) {
 }
 
 /**
- * Search; every query token must match a word of the row's name, brand, category or department as
- * an exact word, a prefix, a subsequence ("chkn" -> chicken) or with one typo (4+ letters).
+ * Search; every query token must match a word of the row's name or brand as an exact word, a
+ * prefix, a subsequence ("chkn" -> chicken) or with one typo (5+ letters), or a category or
+ * department word exactly or by prefix (L18).
  * Ranked exact > prefix > subsequence > fuzzy, name > brand > department; then shorter names, then
  * A-Z. Optional store and department filters; paged. Returns { total, offset, rows }.
  * An empty query lists the store/department alphabetically.
@@ -293,9 +298,12 @@ export function searchRows(cat, index, query, { department = '', store = '', off
     const touched = [];
     for (const [k, cls] of matchToken(index, qt[qi])) {
       const base = cls * 4;
+      // L18: in-order letters and typos match name and brand words only; department and
+      // category words need an exact or prefix match ("beer" must not pull in all Beverages).
+      const loose = cls <= SUBSEQ;
       for (let p = offsets[k], e = offsets[k + 1]; p < e; p += 1) {
         const v = flat[p]; const row = v >> 2;
-        if (hits[row] !== qi) continue;
+        if (hits[row] !== qi || (loose && (v & 3) === 1)) continue;
         const w = base + (v & 3);
         if (best[row] === 0) touched.push(row);
         if (w > best[row]) best[row] = w;

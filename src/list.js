@@ -107,12 +107,27 @@ export const isMeasure = (u) => u in TO_LB || u in TO_ML;
 const r2 = (x) => Math.round(x * 100) / 100;
 
 /**
+ * Package size from a catalog size text: "5 lb bag" -> { amount: 5, unit: 'lb' }, "32 oz",
+ * "2 kg", "1.5 L", "12 fl oz", "64 fl. oz". Multi-packs ("6 x 12 oz") count the whole pack.
+ * Null when there's no weight or volume in the text (e.g. "12 ct", "each").
+ */
+export function parsePackSize(size) {
+  const t = String(size ?? '').toLowerCase();
+  const m = /(?:(\d+(?:\.\d+)?)\s*(?:x|×)\s*)?(\d+(?:\.\d+)?|\.\d+)\s*-?\s*(fl\.?\s*oz|lbs?|pounds?|ounces?|oz|kgs?|kilograms?|grams?|g|gallons?|gal|quarts?|qt|liters?|litres?|l|ml)\b/.exec(t);
+  if (!m) return null;
+  const unit = normUnit(m[3].replace(/fl\.?\s*oz/, 'floz'));
+  const amount = Number(m[2]) * (m[1] ? Number(m[1]) : 1);
+  return unit && amount > 0 ? { amount, unit } : null;
+}
+
+/**
  * Price of one list line, from the snapshot carried on the item. Returns { total, approx, regular }
- * or null when the item has no price. Rules (M2):
+ * or null when the line has no price. Rules (M2, L19):
  * - qty in a weight/volume unit and a unit price in a compatible unit: qty converted x unit price.
  *   Exact for items sold by weight; "~" for package items (you buy whole packages).
- * - qty in a weight/volume unit without a usable unit price: one line at the package price, marked
- *   "~" (we don't invent a conversion).
+ * - qty in a weight/volume unit without a usable unit price: whole packages from the item's size
+ *   ("5 kg" of a "2 lb" bag = ceil(11.02 / 2) = 6 packages), marked "~", with packs set. When the
+ *   size can't be read either, null: no price beats a misleading one, and the line isn't counted.
  * - otherwise qty counts packages (or estimated pieces for by-weight items): qty x each.
  * regular is the same line at the regular price when the item was on sale.
  */
@@ -126,7 +141,14 @@ export function linePrice(it) {
   let approx = p.approx;
   if (isMeasure(u)) {
     const f = p.unitPrice && p.unitOf ? convert(u, p.unitOf) : null;
-    if (f) { total = qty * f * p.unitPrice; approx = !p.byWeight; } else { total = p.each; approx = true; }
+    if (f) { total = qty * f * p.unitPrice; approx = !p.byWeight; } else {
+      const pack = parsePackSize(p.size);
+      const g = pack ? convert(u, pack.unit) : null;
+      if (!g) return null;
+      const packs = Math.max(1, Math.ceil(r2((qty * g) / pack.amount * 1000) / 1000 - 1e-9));
+      total = r2(packs * p.each);
+      return { total, approx: true, regular: ratio && ratio > 1 ? r2(total * ratio) : null, packs };
+    }
   } else total = qty * p.each;
   total = r2(total);
   return { total, approx: Boolean(approx), regular: ratio && ratio > 1 ? r2(total * ratio) : null };
@@ -224,6 +246,104 @@ export function clearChecked(state) {
 
 export function setSelectedStores(state, ids) {
   return { ...state, selectedStoreIds: [...new Set(ids)] };
+}
+
+/**
+ * L20 / quick add: one parse for the desktop add bar and the mobile add sheet. A leading amount
+ * typed in the name ("2 lb apples", "10000 paper towels") wins over the separate Qty/Unit fields.
+ */
+export function quickInput(text, qty = '', unit = '') {
+  const q = parseQuick(text);
+  return { name: q.name, qty: q.qty ?? (qty === '' || qty === null || qty === undefined ? null : qty), unit: q.unit || unit || '' };
+}
+
+// ---------- per-store sections (v0.1.5) ----------
+/**
+ * Section key for a list line: the store the user tagged (a stores.json id, "chain-storeId"),
+ * else the store a price came from ("wegmans-90" from chain + store number), else '' (Any store).
+ * The same chain-storeId shape covers Tops, ALDI and Trader Joe's when their prices arrive.
+ */
+export function storeKeyOf(it) {
+  if (it.storeId) return it.storeId;
+  const p = it.priced;
+  return p && p.chain && p.storeNo ? `${p.chain}-${p.storeNo}` : '';
+}
+
+/**
+ * List sections by store, in first-appearance order, with "Any store" last:
+ * [{ key, name, address, chain, items, total }] where total is totals() over the section.
+ * storesById is the stores.json directory; a price-only store falls back to the price's label.
+ */
+export function storeSections(items, storesById = {}, sort = null, order = []) {
+  const map = new Map();
+  for (const it of items) {
+    const k = storeKeyOf(it);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(it);
+  }
+  // The user's store order from the Stores tab first, then other stores as they appear; Any last.
+  const rank = new Map(order.map((k, i) => [k, i]));
+  const keys = [...map.keys()].filter((k) => k !== '').map((k, i) => [k, rank.has(k) ? rank.get(k) : order.length + i])
+    .sort((a, b) => a[1] - b[1]).map(([k]) => k);
+  if (map.has('')) keys.push('');
+  return keys.map((key) => {
+    const s = storesById[key];
+    const its = map.get(key);
+    const fromPrice = its.find((i) => i.priced?.store)?.priced;
+    return {
+      key,
+      name: key ? (s?.name ?? fromPrice?.store ?? 'Store no longer listed') : 'Any store',
+      address: s ? [s.address, s.city].filter(Boolean).join(', ') : '',
+      street: s?.address ?? '',
+      chain: s?.chain ?? fromPrice?.chain ?? '',
+      items: sort ? sortItems(its, sort) : its,
+      total: totals(its),
+    };
+  });
+}
+
+// ---------- list sort (v0.1.5) ----------
+export const SORTS = ['name', 'price', 'aisle'];
+/** Normalises a saved sort choice: { by: 'name'|'price'|'aisle', dir: 'asc'|'desc' }; default A-Z. */
+export function cleanSort(x) {
+  const by = SORTS.includes(x?.by) ? x.by : 'name';
+  return { by, dir: x?.dir === 'asc' ? 'asc' : 'desc' };
+}
+const COLL = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
+export const compareNames = (a, b) => COLL.compare(String(a ?? ''), String(b ?? ''));
+
+/** "Aisle 10" -> ['aisle', 10, '']; "Dairy 2B" -> ['dairy', 2, 'b']; "Produce" -> ['produce', -1, '']. */
+export function aisleKey(aisle) {
+  const t = String(aisle ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  const m = /^(.*?)\s*#?\s*(\d+(?:\.\d+)?)\s*(.*)$/.exec(t);
+  return m ? [m[1], Number(m[2]), m[3]] : [t, -1, ''];
+}
+/** Natural aisle order: text prefix, then number (2 before 10), then any suffix. Missing last. */
+export function compareAisles(a, b) {
+  const x = aisleKey(a); const y = aisleKey(b);
+  if (!x || !y) return x ? -1 : y ? 1 : 0;
+  return COLL.compare(x[0], y[0]) || x[1] - y[1] || COLL.compare(x[2], y[2]);
+}
+
+/**
+ * Sorted copy of list lines (checked lines keep their place in the order; the done styling is
+ * unchanged). Name is the tie-break. Price: by line total, high-low or low-high; lines without a
+ * price (manual items, or an amount that can't be priced) always go last.
+ */
+export function sortItems(items, sort) {
+  const { by, dir } = cleanSort(sort);
+  const idx = new Map(items.map((it, i) => [it, i]));
+  const name = (a, b) => compareNames(a.name, b.name) || idx.get(a) - idx.get(b);
+  if (by === 'name') return [...items].sort(name);
+  if (by === 'aisle') return [...items].sort((a, b) => compareAisles(a.priced?.aisle, b.priced?.aisle) || name(a, b));
+  const price = new Map(items.map((it) => [it, linePrice(it)?.total ?? null]));
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const x = price.get(a); const y = price.get(b);
+    if (x === null || y === null) return x === null && y === null ? name(a, b) : x === null ? 1 : -1;
+    return sign * (x - y) || name(a, b);
+  });
 }
 
 /** Groups items by storeId, keeping list order; '' (any store) group comes last. */

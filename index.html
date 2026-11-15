@@ -37,6 +37,15 @@
     <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 12H5L6 8z M9 8V7a3 3 0 016 0v1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 16l5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.4 1 1.2 1 2.1h5c0-.9.4-1.7 1-2.1A6 6 0 0012 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-json" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 11c-1 0-1 .8-1 1.5S8.5 14 8 14c.5 0 1 .8 1 1.5s0 1.5 1 1.5M14 11c1 0 1 .8 1 1.5s.5 1.5 1 1.5c-.5 0-1 .8-1 1.5s0 1.5-1 1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   </svg>
 
   <div class="app">
@@ -70,13 +79,17 @@
           <div class="grow">
             <h1 id="list-title" tabindex="-1">My list</h1>
             <p class="faint" id="list-meta"></p>
+            <p class="faint list-store" id="list-store" hidden><span class="dot" aria-hidden="true"></span><span class="t"><span data-store-name></span><span data-store-addr></span></span></p>
           </div>
+          <button type="button" class="sort-btn mob-only" id="sort-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu" hidden>
+            <svg class="icon icon-18 ico" aria-hidden="true"><use href="#i-sort"/></svg><span><span class="k">Sort:</span> <span id="sort-btn-label">A–Z</span></span><svg class="icon icon-18" aria-hidden="true"><use href="#i-chev"/></svg>
+          </button>
           <div class="list-total desk-only" id="list-total" aria-live="polite" hidden>
             <div class="est" data-total-est></div>
             <div class="total-split" data-total-split></div>
             <div class="total-split" data-total-count></div>
           </div>
-          <button type="button" class="btn btn-secondary btn-sm desk-only" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu"><svg class="icon icon-20"><use href="#i-file"/></svg>Export</button>
+          <button type="button" class="btn btn-secondary btn-sm desk-only" data-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu"><svg class="icon icon-20"><use href="#i-more"/></svg>Save &amp; export</button>
         </div>
 
         <div class="addbar-wrap">
@@ -95,16 +108,31 @@
         <div class="suggest" id="quick-sug" role="listbox" aria-label="Price suggestions" hidden></div>
         </div>
 
+        <div class="save-nudge" id="save-nudge" role="region" aria-label="Save reminder" hidden>
+          <svg class="icon icon-20 ico" aria-hidden="true"><use href="#i-download"/></svg>
+          <span class="txt" id="save-nudge-text"></span>
+          <button type="button" class="btn btn-ghost" id="save-nudge-save">Save list</button>
+          <button type="button" class="x" id="save-nudge-hide" aria-label="Dismiss save reminder for 7 days"><svg class="icon icon-18"><use href="#i-x"/></svg></button>
+        </div>
+
         <div class="progress" id="progress" hidden>
           <span id="progress-text"></span>
           <span class="bar" aria-hidden="true"><i id="progress-fill"></i></span>
         </div>
 
-        <div class="chips chips-scroll" id="list-filter" role="radiogroup" aria-label="Show stores"></div>
+        <div class="list-toolbar desk-only" id="list-toolbar" hidden>
+          <span class="lbl" id="sort-lbl">Sort</span>
+          <div class="sort-seg" id="sort-seg" role="radiogroup" aria-labelledby="sort-lbl">
+            <button type="button" role="radio" data-sort="name" aria-checked="true">A–Z</button><button type="button" role="radio" data-sort="price" aria-checked="false">Price</button><button type="button" role="radio" data-sort="aisle" aria-checked="false">Aisle</button>
+          </div>
+          <button type="button" class="dir-btn" id="sort-dir" hidden><svg class="icon icon-16" aria-hidden="true"><use href="#i-down"/></svg><span>High to low</span></button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="collapse-all" hidden>Collapse all</button>
+        </div>
         <p class="status" id="list-status" role="status" aria-live="polite"></p>
+        <p class="sr-only" id="sort-live" role="status" aria-live="polite"></p>
         <div class="list-groups" id="list-groups"></div>
       </section>
-
       <!-- SHOP -->
       <section class="screen screen-shop" data-screen="shop" aria-labelledby="shop-title">
         <div class="shop-head">
@@ -246,6 +274,12 @@
     </main>
 
     <aside class="panel" aria-label="My stores and weekly ads">
+      <section class="card trip-card" id="trip-card" aria-labelledby="trip-h" hidden>
+        <h3 id="trip-h">Trip by store</h3>
+        <div id="trip-rows"></div>
+        <div class="tot"><span class="tl">Est. total</span><span class="est" id="trip-total"></span></div>
+        <div class="tot-sub" id="trip-sub"></div>
+      </section>
       <section>
         <div class="section-h"><h3>My stores</h3><a class="btn btn-ghost btn-sm" href="#stores">Edit</a></div>
         <p class="faint with-icon"><svg class="icon icon-20" aria-hidden="true"><use href="#i-pin"/></svg><span id="panel-where"></span></p>
@@ -260,9 +294,13 @@
 
     <button type="button" class="fab" id="fab"><svg class="icon"><use href="#i-plus"/></svg>Add item</button>
 
-    <div class="totalbar" id="totalbar" aria-live="polite" hidden>
-      <div><div class="est" data-total-est></div><div class="total-split" data-total-count></div></div>
-      <div class="total-split" data-total-split></div>
+    <div class="tb-break" id="tb-break" hidden><h3 class="sr-only">Store totals</h3><div id="tb-break-rows"></div></div>
+    <div class="totalbar" id="totalbar" hidden>
+      <div aria-live="polite"><div class="est" data-total-est></div><div class="total-split" data-total-count></div></div>
+      <div class="tb-right">
+        <div class="total-split" data-total-split aria-live="polite"></div>
+        <button type="button" class="tb-toggle" id="tb-toggle" aria-expanded="false" aria-controls="tb-break" aria-label="Store totals" hidden><svg class="icon icon-20" aria-hidden="true"><use href="#i-chev-up"/></svg></button>
+      </div>
     </div>
 
     <nav class="tabbar" aria-label="Main">
@@ -274,9 +312,14 @@
     </nav>
   </div>
 
-  <div class="menu" id="export-menu" role="menu" aria-label="Export list" hidden>
+  <div class="menu" id="export-menu" role="menu" aria-label="Save and export" hidden>
     <div class="love" aria-live="polite"><svg class="icon icon-16" aria-hidden="true"><use href="#i-heart"/></svg><p id="love-text"></p></div>
-    <p class="mh">Export list</p>
+    <p class="mh">Your list</p>
+    <button type="button" class="mi" role="menuitem" data-action="save"><svg class="icon icon-20"><use href="#i-download"/></svg>Save list<span class="sub">.json</span></button>
+    <button type="button" class="mi" role="menuitem" data-action="load"><svg class="icon icon-20"><use href="#i-upload"/></svg>Load list…</button>
+    <div class="store-status" id="store-status" role="note"><svg class="icon icon-16 ico" aria-hidden="true"><use href="#i-device"/></svg><div><b id="store-status-title">Kept in this browser only</b><span id="store-status-saved"></span><span class="block" id="storage-status">Storage: checking…</span></div></div>
+    <div class="sep" role="separator"></div>
+    <p class="mh">Export</p>
     <button type="button" class="mi" role="menuitem" data-action="csv"><svg class="icon icon-20"><use href="#i-file"/></svg>Download CSV<span class="sub">.csv</span></button>
     <button type="button" class="mi" role="menuitem" data-action="txt"><svg class="icon icon-20"><use href="#i-file"/></svg>Download text<span class="sub">.txt</span></button>
     <button type="button" class="mi" role="menuitem" data-action="copy"><svg class="icon icon-20"><use href="#i-copy"/></svg>Copy as text</button>
@@ -286,6 +329,41 @@
     <button type="button" class="mi" role="menuitem" data-action="uncheck"><svg class="icon icon-20"><use href="#i-check"/></svg>Uncheck all</button>
     <button type="button" class="mi danger" role="menuitem" data-action="clear"><svg class="icon icon-20"><use href="#i-trash"/></svg>Clear checked items</button>
   </div>
+
+  <div class="menu sort-menu" id="sort-menu" role="menu" aria-labelledby="sort-menu-h" hidden>
+    <p class="mh" id="sort-menu-h">Sort items in each store</p>
+    <button type="button" class="mi" role="menuitemradio" data-sort="name" aria-checked="true">A–Z<span class="hint">by name</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <button type="button" class="mi" role="menuitemradio" data-sort="price" aria-checked="false">Price<svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <div class="sort-dir" id="sort-menu-dir" hidden><div class="seg" role="group" aria-label="Price order"><button type="button" data-dir="desc" aria-pressed="true"><svg class="icon icon-16" aria-hidden="true"><use href="#i-down"/></svg>High to low</button><button type="button" data-dir="asc" aria-pressed="false"><svg class="icon icon-16" aria-hidden="true"><use href="#i-up"/></svg>Low to high</button></div></div>
+    <button type="button" class="mi" role="menuitemradio" data-sort="aisle" aria-checked="false">Aisle<span class="hint">store walk order</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
+    <div class="sep" role="separator"></div>
+    <p class="menu-foot">Unpriced and no-aisle items go last. Checked items keep their place.</p>
+  </div>
+
+  <input type="file" id="load-file" accept=".json,application/json" hidden>
+  <dialog class="sheet sheet-dialog" id="load-sheet" aria-labelledby="load-title">
+    <form method="dialog" id="load-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="load-title">Load list</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="file-card">
+        <span class="ico" aria-hidden="true"><svg class="icon icon-20"><use href="#i-json"/></svg></span>
+        <div class="grow"><p class="fname" id="load-fname"></p><p class="fmeta" id="load-fmeta"></p><p class="file-stats" id="load-stats"></p></div>
+      </div>
+      <fieldset class="load-fs" id="load-fs">
+        <legend id="load-legend"></legend>
+        <label class="opt-card on" data-opt="merge"><input class="sr-only" type="radio" name="mode" value="merge" checked><span class="radio" aria-hidden="true"></span><span><span class="t">Merge</span><span class="d block" id="load-merge-d"></span></span></label>
+        <label class="opt-card danger-opt" data-opt="replace"><input class="sr-only" type="radio" name="mode" value="replace"><span class="radio" aria-hidden="true"></span><span><span class="t">Replace</span><span class="d block" id="load-replace-d"></span></span></label>
+      </fieldset>
+      <p class="status" id="load-status" role="status" aria-live="polite"></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-secondary" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="load-confirm" value="ok"></button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog class="sheet" id="item-sheet" aria-labelledby="sheet-title">
     <form method="dialog" id="item-form" novalidate>
@@ -426,8 +504,15 @@
   </template>
 
   <template id="tpl-group">
-    <section class="group">
-      <div class="group-h"><span class="dot" data-dot aria-hidden="true"></span><h3 data-title></h3><span class="count" data-count></span></div>
+    <section class="store-sec">
+      <h2><button type="button" class="store-h" aria-expanded="true">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="sh-name" data-title></span>
+        <span class="sh-sum" data-subtotal></span>
+        <span class="sh-addr"><span data-street></span><span class="sh-city" data-city></span></span>
+        <span class="sh-cnt" data-count></span>
+        <span class="chev" aria-hidden="true"><svg class="icon icon-18"><use href="#i-chev"/></svg></span>
+      </button></h2>
       <ul class="rows" data-items></ul>
     </section>
   </template>
@@ -437,9 +522,9 @@
       <label class="cbx-wrap"><input class="cbx" type="checkbox" data-check><span class="sr-only" data-check-label></span></label>
       <button type="button" class="body" data-edit>
         <span class="title"><span data-name></span><span class="qty" data-qty></span></span>
-        <span class="note" data-notes></span>
+        <span class="meta-line" data-meta-line><span class="aisle" data-aisle hidden></span><span class="note" data-notes></span></span>
       </button>
-      <span class="side-price" data-price-col hidden><span class="price" data-price></span><span class="was" data-was hidden></span><span class="store-mini" data-price-store></span></span>
+      <span class="side-price" data-price-col hidden><span class="price" data-price></span><span class="was" data-was hidden></span><span class="src-tag" data-src hidden><span class="dot" aria-hidden="true"></span><span data-src-name></span></span></span>
       <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
     </li>
   </template>

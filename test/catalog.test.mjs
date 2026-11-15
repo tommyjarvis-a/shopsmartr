@@ -233,3 +233,35 @@ test('L12: regular price on the estimate basis for by-weight sale items', () => 
   assert.equal(C.unitOf({ unitPriceText: '$0.08/ounce' }), 'oz');
   assert.equal(C.unitOf({ unit: 'Each' }), 'ea');
 });
+
+// ---------- v0.1.5: L18 loose rules match name and brand only ----------
+const Q = mk([
+  { name: 'Craft Beer 6 Pack', department: 'Beverages', category: 'Beer' },
+  { name: 'Light Beer', department: 'Beverages', category: 'Beer' },
+  { name: 'Orange Juice', department: 'Beverages', category: 'Juice' },
+  { name: 'Cola 12 Pack', department: 'Beverages', category: 'Soda' },
+  { name: 'Frosted Flakes', department: 'Breakfast', category: 'Cereal' },
+  { name: 'Pancake Mix', department: 'Breakfast', category: 'Baking Mixes' },
+  { name: 'Brest Cheese', department: 'Dairy', category: 'Cheese' },
+  { name: 'Boneless Chicken Breast', department: 'Meat', category: 'Chicken' },
+  { name: 'Sparkling Water Multipack', department: 'Beverages', category: 'Water' },
+  { name: 'Whole Milk', department: 'Dairy', category: 'Milk' },
+  { name: 'Tortilla Chips', department: 'Snacks', category: 'Chips', brand: 'Brestco Foods' },
+]);
+const q18 = (text) => C.search(Q.catalog, Q.index, text).items.map((i) => i.name);
+
+test('L18: in-order letters and typos skip department and category words', () => {
+  assert.deepEqual(q18('beer').sort(), ['Craft Beer 6 Pack', 'Light Beer'], 'no Beverages via b-e-e-r in "beverages"');
+  assert.deepEqual(q18('brest'), ['Brest Cheese', 'Tortilla Chips', 'Boneless Chicken Breast'], 'name, then brand prefix, then name subsequence; no Breakfast items');
+  assert.deepEqual(q18('mlk'), ['Whole Milk'], 'not "…Multipack" via the Milk category on another row');
+  assert.deepEqual(q18('bevrages'), [], 'no typo match on a department word');
+});
+
+test('L18: department and category words still match exactly or by prefix', () => {
+  assert.equal(q18('beverages').length, 5);
+  assert.equal(q18('bev').length, 5);
+  assert.deepEqual(q18('breakfast').sort(), ['Frosted Flakes', 'Pancake Mix']);
+  assert.deepEqual(q18('cereal'), ['Frosted Flakes']);
+  assert.deepEqual(q18('soda'), ['Cola 12 Pack']);
+  assert.deepEqual(n('chkn brst'), ['Boneless Skinless Chicken Breast'], 'name subsequence still works');
+});

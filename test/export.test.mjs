@@ -35,10 +35,10 @@ test('toText groups by store, marks checked, flattens newlines', () => {
   const lines = txt.trimEnd().split('\n');
   assert.equal(lines[0], 'ShopSmartR shopping list');
   assert.equal(lines[1], '2026-11-14');
-  assert.ok(lines.includes('== Wegmans Sheridan Dr. =='));
+  assert.ok(lines.includes('== Wegmans Sheridan Dr. — 5275 Sheridan Drive, Williamsville =='), 'v0.1.5: section header carries the address');
   assert.ok(lines.includes('[ ] 1 gal Milk, 2% — the "good" one'));
   assert.ok(lines.includes('[x] =HYPERLINK("x") — line1 line2'));
-  assert.ok(lines.indexOf('== Any store ==') > lines.indexOf('== Unknown store (gone-1) =='));
+  assert.ok(lines.indexOf('== Any store ==') > lines.indexOf('== Store no longer listed =='));
   assert.match(toText([]), /\(empty list\)/);
 });
 

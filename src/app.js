@@ -3,7 +3,8 @@ import { VERSION } from './version.js';
 import { lookupZip, storesNear, normalizeZip } from './geo.js';
 import { validateStoresDoc, indexById, CHAINS } from './stores.js';
 import * as L from './list.js';
-import { loadStateWithStatus, saveState, loadShopStore, saveShopStore } from './storage.js';
+import { loadStateWithStatus, saveState, loadShopStore, saveShopStore, loadListSort, saveListSort, loadCollapsed, saveCollapsed, STORAGE_KEY } from './storage.js';
+import * as Bk from './backup.js';
 import { toCSV, toText, favoritesToCSV, localDateStamp } from './export.js';
 import * as F from './favorites.js';
 import { NOTES } from './notes.js';
@@ -23,7 +24,10 @@ let favTab = 'items';
 let saveWarned = loaded.problem === 'unavailable' || favLoaded.problem === 'unavailable';
 let data = { stores: [], chains: {}, byId: {}, zips: {}, asOf: '' };
 let nearby = [];
-let listFilter = '';   // '' = all stores
+let listSort = loadListSort();        // device-only preference (also written into Save list files)
+const collapsed = loadCollapsed();     // section keys collapsed on this device
+let backupMeta = Bk.loadMeta();
+let storagePersisted = null;
 let chainFilter = '';  // '' = all chains (stores screen)
 
 function commit(next) {
@@ -280,28 +284,319 @@ function renderStoresScreen() {
 function renderListScreen() {
   const stores = listStores();
   UI.fillStoreSelects(stores);
-  if (listFilter && !stores.some((s) => s.id === listFilter)) listFilter = '';
-  const used = new Set(state.items.map((i) => i.storeId));
-  const filterOpts = [{ value: '', label: 'All stores' }, ...stores.filter((s) => used.has(s.id)).map((s) => ({ value: s.id, label: s.name, chain: s.chain }))];
-  if (used.has('') && filterOpts.length > 1) filterOpts.push({ value: '-', label: 'Any store' });
-  el('list-filter').hidden = filterOpts.length <= 2;
-  UI.renderRadioChips(el('list-filter'), 'list-filter', filterOpts, listFilter, (v) => { listFilter = v; renderListScreen(); });
-  const items = listFilter === '-' ? state.items.filter((i) => !i.storeId)
-    : listFilter ? state.items.filter((i) => i.storeId === listFilter) : state.items;
-  UI.renderList(el('list-groups'), items, data.byId, {
+  // v0.1.5: one section per store (chain-storeId) in the Stores-tab order, Any store last,
+  // each sorted by the device's sort choice. Checking an item never moves it.
+  const sections = L.storeSections(state.items, data.byId, listSort, state.selectedStoreIds);
+  const t = L.totals(state.items);
+  UI.renderList(el('list-groups'), sections, {
     onToggle: (id, checked) => commit(L.toggleItem(state, id, checked)),
     onEdit: (id) => openSheet(id),
     onRemove: removeWithUndo,
-    emptyText: state.items.length ? 'Nothing for this store.' : 'Your list is empty. Add your first item.',
+    collapsed,
+    onCollapse: toggleCollapsed,
+    chainName: (c) => data.chains[c]?.shortName || data.chains[c]?.name || c,
+    emptyText: 'Your list is empty. Add your first item.',
   });
+  renderSortControl(state.items.length > 1, sections.length > 1);
   const s = L.summary(state);
-  const storeCount = new Set(state.items.map((i) => i.storeId).filter(Boolean)).size;
+  const storeCount = sections.filter((g) => g.key).length;
   el('list-meta').textContent = s.total ? `${s.total} item${s.total === 1 ? '' : 's'} · ${storeCount} store${storeCount === 1 ? '' : 's'}` : 'No items yet';
+  // One store: no headers, just a faint store line under the title.
+  const one = sections.length === 1 && sections[0].key ? sections[0] : null;
+  el('list-store').hidden = !one;
+  if (one) {
+    el('list-store').dataset.chain = one.chain;
+    el('list-store').querySelector('[data-store-name]').textContent = one.name;
+    const addr = el('list-store').querySelector('[data-store-addr]');
+    addr.replaceChildren();
+    if (one.street) {
+      const city = one.address.length > one.street.length ? one.address.slice(one.street.length) : '';
+      const c = document.createElement('span'); c.className = 'city'; c.textContent = city;
+      addr.append(` · ${one.street}`, c);
+    }
+    el('list-store').title = [one.name, one.address].filter(Boolean).join(' · ');
+  }
   UI.renderProgress(s.done, s.total);
   UI.renderTotals(state.items);
+  UI.renderTrip(sections, t, jumpToSection);
+  renderNudge();
   const mine = withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
   UI.renderStaticChips(el('panel-stores'), mine);
   el('panel-where').textContent = state.zip ? `${state.zip} · within ${state.radiusMi} mi` : 'No zip code yet';
+}
+
+// ---------- Store sections: collapse, jump (v0.1.5) ----------
+function toggleCollapsed(key) {
+  if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+  saveCollapsed(collapsed);
+  renderListScreen();
+  document.getElementById(`${UI.secId(key === 'any' ? '' : key)}-h`)?.focus({ preventScroll: true });
+}
+function setAllCollapsed(on) {
+  const keys = L.storeSections(state.items, data.byId).map((g) => g.key || 'any');
+  for (const k of keys) { if (on) collapsed.add(k); else collapsed.delete(k); }
+  saveCollapsed(collapsed);
+  renderListScreen();
+}
+/** Adding an item to a collapsed store expands that store. */
+function expandFor(item) {
+  const k = item ? (L.storeKeyOf(item) || 'any') : null;
+  if (k && collapsed.delete(k)) saveCollapsed(collapsed);
+}
+function jumpToSection(key) {
+  const h = document.getElementById(`${UI.secId(key)}-h`);
+  if (!h) return;
+  h.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  h.focus({ preventScroll: true });
+}
+
+// ---------- List sort (v0.1.5) ----------
+const SORT_LABEL = { name: 'A–Z', price: 'Price', aisle: 'Aisle' };
+function sortSpoken() {
+  if (listSort.by === 'price') return `price, ${listSort.dir === 'desc' ? 'high to low' : 'low to high'}`;
+  return listSort.by === 'aisle' ? 'aisle' : 'name, A to Z';
+}
+function renderSortControl(show, multi) {
+  const high = listSort.dir === 'desc';
+  // Mobile chip + menu
+  el('sort-btn').hidden = !show;
+  el('sort-btn-label').textContent = `${SORT_LABEL[listSort.by]}${listSort.by === 'price' ? (high ? ' ↓' : ' ↑') : ''}`;
+  el('sort-btn').setAttribute('aria-label', `Sort items: ${sortSpoken()}`);
+  for (const b of el('sort-menu').querySelectorAll('[data-sort]')) b.setAttribute('aria-checked', String(b.dataset.sort === listSort.by));
+  el('sort-menu-dir').hidden = listSort.by !== 'price';
+  for (const b of el('sort-menu-dir').querySelectorAll('[data-dir]')) b.setAttribute('aria-pressed', String(b.dataset.dir === listSort.dir));
+  // Desktop toolbar
+  el('list-toolbar').hidden = !show;
+  for (const b of el('sort-seg').querySelectorAll('[data-sort]')) {
+    const on = b.dataset.sort === listSort.by;
+    b.setAttribute('aria-checked', String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
+  const dir = el('sort-dir');
+  dir.hidden = listSort.by !== 'price';
+  dir.querySelector('use').setAttribute('href', high ? '#i-down' : '#i-up');
+  dir.querySelector('span').textContent = high ? 'High to low' : 'Low to high';
+  dir.setAttribute('aria-label', `Price order: ${high ? 'high to low' : 'low to high'}. Activate to reverse.`);
+  const ca = el('collapse-all');
+  ca.hidden = !multi;
+  const keys = L.storeSections(state.items, data.byId).map((g) => g.key || 'any');
+  const allShut = keys.length > 0 && keys.every((k) => collapsed.has(k));
+  ca.textContent = allShut ? 'Expand all' : 'Collapse all';
+  ca.dataset.all = allShut ? 'collapsed' : 'open';
+}
+function setSort(next, { announce = true } = {}) {
+  listSort = L.cleanSort(next);
+  saveListSort(listSort);
+  renderListScreen();
+  if (announce) el('sort-live').textContent = `Sorted by ${sortSpoken()}`;
+}
+const sortMenu = () => el('sort-menu');
+function openSortMenu() {
+  const m = sortMenu();
+  const btn = el('sort-btn');
+  m.hidden = false;
+  const r = btn.getBoundingClientRect();
+  const w = m.offsetWidth;
+  m.style.setProperty('top', `${Math.round(r.bottom + 6)}px`);
+  m.style.setProperty('left', `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)))}px`);
+  btn.setAttribute('aria-expanded', 'true');
+  (m.querySelector('[aria-checked="true"]') ?? m.querySelector('.mi')).focus();
+}
+function closeSortMenu(focusBack = false) {
+  if (sortMenu().hidden) return;
+  sortMenu().hidden = true;
+  el('sort-btn').setAttribute('aria-expanded', 'false');
+  if (focusBack) el('sort-btn').focus();
+}
+function bindSort() {
+  el('sort-btn').addEventListener('click', (e) => { e.stopPropagation(); if (sortMenu().hidden) openSortMenu(); else closeSortMenu(true); });
+  sortMenu().addEventListener('click', (e) => {
+    e.stopPropagation();
+    const d = e.target.closest('[data-dir]');
+    if (d) { setSort({ by: 'price', dir: d.dataset.dir }); d.focus(); return; }   // direction applies without closing
+    const mi = e.target.closest('[data-sort]');
+    if (!mi) return;
+    setSort({ by: mi.dataset.sort, dir: listSort.dir });
+    if (mi.dataset.sort === 'price') { sortMenu().querySelector(`[data-dir="${listSort.dir}"]`)?.focus(); return; }
+    closeSortMenu(true);
+  });
+  sortMenu().addEventListener('keydown', (e) => {
+    const items = [...sortMenu().querySelectorAll('.mi, [data-dir]')].filter((x) => x.offsetParent);
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSortMenu(true); }
+    if (e.key === 'Tab') closeSortMenu();
+  });
+  document.addEventListener('click', (e) => { if (!sortMenu().contains(e.target)) closeSortMenu(); });
+  // Desktop segmented radiogroup: click, roving tabindex, arrow keys; clicking the active Price reverses.
+  const seg = el('sort-seg');
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sort]');
+    if (!b) return;
+    if (b.dataset.sort === 'price' && listSort.by === 'price') setSort({ by: 'price', dir: listSort.dir === 'desc' ? 'asc' : 'desc' });
+    else setSort({ by: b.dataset.sort, dir: listSort.dir });
+    seg.querySelector(`[data-sort="${listSort.by}"]`).focus();
+  });
+  seg.addEventListener('keydown', (e) => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+    e.preventDefault();
+    const order = L.SORTS;
+    const i = order.indexOf(listSort.by);
+    const next = order[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + order.length) % order.length];
+    setSort({ by: next, dir: listSort.dir });
+    seg.querySelector(`[data-sort="${next}"]`).focus();
+  });
+  el('sort-dir').addEventListener('click', () => { setSort({ by: 'price', dir: listSort.dir === 'desc' ? 'asc' : 'desc' }); el('sort-dir').focus(); });
+  el('collapse-all').addEventListener('click', () => { setAllCollapsed(el('collapse-all').dataset.all !== 'collapsed'); el('collapse-all').focus(); });
+  el('tb-toggle').addEventListener('click', (e) => { e.stopPropagation(); UI.toggleBreakdown(); });
+  document.addEventListener('click', (e) => { if (!el('tb-break').contains(e.target)) UI.closeBreakdown(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el('tb-break').hidden) { UI.closeBreakdown(); el('tb-toggle').focus(); } });
+}
+
+// ---------- Save list / Load list (v0.1.5) ----------
+function renderNudge() {
+  if (state.items.length && !backupMeta.firstSeenAt) setMetaQuiet({ ...backupMeta, firstSeenAt: new Date().toISOString() });
+  const text = Bk.nudgeText(backupMeta, state.items.length);
+  el('save-nudge').hidden = !text;
+  if (text) el('save-nudge-text').textContent = text;
+}
+function setMetaQuiet(next) { backupMeta = next; Bk.saveMeta(backupMeta); }
+function setMeta(next) { setMetaQuiet(next); renderNudge(); }
+
+function renderStoreStatus() {
+  const warn = saveWarned;
+  el('store-status').classList.toggle('warn', warn);
+  el('store-status-title').textContent = warn ? 'This browser isn\'t saving your list' : 'Kept in this browser only';
+  el('store-status-saved').textContent = warn ? 'Save list to keep a copy.' : Bk.savedLine(backupMeta, state.items.length);
+  el('storage-status').textContent = Bk.storageText(storagePersisted);
+}
+
+async function askPersist() {
+  try {
+    const sm = navigator.storage;
+    if (!sm?.persisted) storagePersisted = null;
+    else {
+      storagePersisted = await sm.persisted();
+      if (!storagePersisted && sm.persist && state.items.length) storagePersisted = await sm.persist();
+    }
+  } catch { storagePersisted = null; }
+  renderStoreStatus();
+}
+
+async function saveList() {
+  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), listSort, appVersion: VERSION });
+  const name = Bk.backupFilename(stamp());
+  const json = Bk.backupJSON(doc);
+  let shared = false;
+  try {
+    const file = new File([json], name, { type: 'application/json' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'ShopSmartR list' });
+      shared = true;
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') { UI.toast('Save list cancelled'); return; }
+  }
+  if (!shared) UI.download(name, json, 'application/json');
+  setMeta(Bk.markSaved(backupMeta));
+  if (!storagePersisted) askPersist();
+  UI.toast(`List saved · ${name}`);
+}
+
+let pendingLoad = null;
+function openLoadPicker() {
+  const input = el('load-file');
+  input.value = '';
+  input.click();
+}
+async function onLoadFile(file) {
+  if (!file) return;
+  let text = '';
+  try { text = await file.text(); } catch { UI.toast(Bk.NOT_A_LIST); return; }
+  const r = Bk.parseBackup(text);
+  if (!r.ok) { UI.toast(r.error); return; }
+  pendingLoad = { backup: r.backup, summary: r.summary };
+  const sm = r.summary;
+  const when = new Date(sm.createdAt);
+  el('load-fname').textContent = file.name;
+  el('load-fmeta').textContent = `Saved ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · ${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · v${sm.appVersion}`;
+  const pill = (t) => { const x = document.createElement('span'); x.textContent = t; return x; };
+  const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
+  el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
+    sm.favorites ? n('favorites', 'favorite') : '', sm.meals ? n('meals', 'meal') : '',
+    sm.dropped ? `${sm.dropped} unreadable skipped` : ''].filter(Boolean).map(pill));
+  const cur = state.items.length;
+  const fi = n('items', 'item');
+  el('load-fs').hidden = cur === 0;
+  el('load-legend').textContent = `What should happen to your current ${cur} item${cur === 1 ? '' : 's'}?`;
+  el('load-merge-d').textContent = `Keep my items and add the file's ${sm.items}. Matching items are combined.`;
+  const d = el('load-replace-d');
+  const b = document.createElement('b'); b.textContent = `Removes your ${cur} current item${cur === 1 ? '' : 's'}`;
+  d.replaceChildren(b, `, then loads the file's ${sm.items}. Favorites and store picks are replaced too.`);
+  el('load-form').elements.mode.value = 'merge';
+  pendingLoad.empty = cur === 0;
+  pendingLoad.fileItems = fi;
+  syncLoadChoice();
+  UI.setStatus(el('load-status'), '');
+  el('load-sheet').showModal();
+  el('load-confirm').focus();
+}
+function syncLoadChoice() {
+  const mode = el('load-form').elements.mode.value;
+  for (const c of el('load-form').querySelectorAll('.opt-card')) c.classList.toggle('on', c.dataset.opt === mode);
+  const sheet = el('load-sheet');
+  sheet.classList.toggle('replace', mode === 'replace');
+  const btn = el('load-confirm');
+  btn.textContent = pendingLoad?.empty ? `Load ${pendingLoad.fileItems}` : mode === 'replace' ? 'Replace my list' : `Merge ${pendingLoad?.fileItems ?? ''}`;
+  btn.classList.toggle('btn-danger', mode === 'replace' && !pendingLoad?.empty);
+  btn.classList.toggle('btn-primary', !(mode === 'replace' && !pendingLoad?.empty));
+}
+function applyLoad(mode) {
+  if (!pendingLoad) return;
+  if (pendingLoad.empty) mode = 'merge';
+  const before = { state, favs, shopStore: loadShopStore(), listSort };
+  if (mode === 'replace') {
+    try {
+      localStorage.setItem(Bk.PRE_LOAD_BAK_KEY, JSON.stringify({ savedAt: new Date().toISOString(), list: localStorage.getItem(STORAGE_KEY), favorites: localStorage.getItem(F.FAVORITES_KEY) }));
+    } catch {
+      UI.setStatus(el('load-status'), 'Couldn\'t keep a copy of your current list on this device, so nothing was replaced. Try Merge, or Save list first.', 'error');
+      return;
+    }
+  }
+  const res = Bk.applyBackup(before, pendingLoad.backup, mode);
+  pendingLoad = null;
+  el('load-sheet').close();
+  const restore = (x) => {
+    commitFavs(x.favs);
+    if (x.shopStore) {
+      saveShopStore(x.shopStore);
+      if (feed) { shop.store = C.pickStore(feed.catalog, x.shopStore) ?? shop.store; el('shop-store').value = shop.store; renderShop(); }
+    }
+    listSort = L.cleanSort(x.listSort); saveListSort(listSort);
+    commit(x.state);
+  };
+  restore(res);
+  if (mode === 'replace') UI.toast('List replaced', () => restore(before), 10000);
+  else {
+    const n = res.added; const c = res.combined;
+    UI.toast(`List merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}`, () => restore(before));
+  }
+}
+
+function bindSaveLoad() {
+  el('save-nudge-save').addEventListener('click', saveList);
+  el('save-nudge-hide').addEventListener('click', () => { setMeta(Bk.hideNudge(backupMeta)); el('list-title').focus(); });
+  el('load-file').addEventListener('change', (e) => onLoadFile(e.currentTarget.files?.[0]));
+  el('load-form').addEventListener('change', syncLoadChoice);
+  el('load-form').addEventListener('submit', (e) => {
+    e.preventDefault();   // Enter on a radio doesn't confirm; only the button does
+    if (e.submitter?.value !== 'ok') return;
+    applyLoad(e.currentTarget.elements.mode.value);
+  });
+  el('load-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('load-sheet').addEventListener('close', () => { pendingLoad = null; });
+  askPersist();
 }
 
 function renderAds() {
@@ -361,7 +656,7 @@ function openSheet(id = null) {
   form.elements.unit.value = it && L.UNITS.includes(it.unit) ? it.unit : '';
   form.elements.notes.value = it?.notes ?? '';
   const storeOpts = [{ value: '', label: 'Any' }, ...listStores().map((s) => ({ value: s.id, label: s.name, chain: s.chain }))];
-  const current = it ? it.storeId : (listFilter && listFilter !== '-' ? listFilter : '');
+  const current = it ? it.storeId : '';
   UI.renderRadioChips(el('f-stores'), 'storeId', storeOpts, current, () => {});
   UI.setStatus(el('sheet-status'), '');
   el('item-sheet').showModal();
@@ -391,6 +686,7 @@ const menu = () => el('export-menu');
 function openMenu(btn) {
   const m = menu();
   el('love-text').textContent = nextNote(NOTES);
+  renderStoreStatus();
   m.hidden = false;
   const r = btn.getBoundingClientRect();
   const w = m.offsetWidth;
@@ -408,13 +704,15 @@ function closeMenu(focusBack = false) {
 }
 
 const stamp = () => localDateStamp();
-const asText = () => toText(state.items, data.byId, { date: stamp(), favorites: favs });
+const asText = () => toText(state.items, data.byId, { date: stamp(), favorites: favs, sort: listSort, order: state.selectedStoreIds });
 
 async function menuAction(action) {
   closeMenu();
   if (action === 'csv') UI.download(`shopsmartr-list-${stamp()}.csv`, toCSV(state.items, data.byId, { bom: true }), 'text/csv;charset=utf-8');
   else if (action === 'favcsv') downloadFavs();
   else if (action === 'txt') UI.download(`shopsmartr-list-${stamp()}.txt`, asText(), 'text/plain;charset=utf-8');
+  else if (action === 'save') saveList();
+  else if (action === 'load') openLoadPicker();
   else if (action === 'copy') {
     try { await navigator.clipboard.writeText(asText()); UI.toast('Copied the list as text'); } catch { UI.toast('Copy failed. Try Download text.'); }
   } else if (action === 'share') {
@@ -448,15 +746,10 @@ function bind() {
   el('addbar').addEventListener('submit', (e) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const parsed = L.parseQuick(form.elements.text.value);
-    const typedQty = form.elements.qty.value;
     try {
-      commit(L.addItem(state, {
-        name: parsed.name,
-        qty: parsed.qty ?? (typedQty === '' ? null : typedQty),
-        unit: parsed.unit || form.elements.unit.value,
-        storeId: form.elements.storeId.value,
-      }));
+      const next = L.addItem(state, { ...L.quickInput(form.elements.text.value, form.elements.qty.value, form.elements.unit.value), storeId: form.elements.storeId.value });
+      expandFor(next.items[next.items.length - 1]);
+      commit(next);
       form.elements.text.value = '';
       form.elements.qty.value = '';
       form.elements.unit.value = '';
@@ -478,7 +771,11 @@ function bind() {
         commit(L.updateItem(state, editingId, sheetValues(form)));
         el('item-sheet').close();
       } else {
-        commit(L.addItem(state, sheetValues(form)));
+        // L20: same quick-add parse as the desktop bar ("2 lb apples" + Enter -> 2 lb of apples).
+        const v = sheetValues(form);
+        const next = L.addItem(state, { ...v, ...L.quickInput(v.name, v.qty, v.unit) });
+        expandFor(next.items[next.items.length - 1]);
+        commit(next);
         // Keep the sheet open for the next item (store choice is kept).
         form.elements.name.value = '';
         form.elements.qty.value = 1;
@@ -659,6 +956,7 @@ function addPricedOrThrow(it, qty, unit) {
     return `${it.name}: now ${L.formatQty({ qty: n, unit: same.unit })} on your list`;
   }
   const next = L.addItem(state, { name: it.name, qty, unit, storeId: f.storeId, priced: f.priced });
+  expandFor(next.items[next.items.length - 1]);
   commit(next);
   const line = L.linePrice(next.items[next.items.length - 1]);
   return `Added ${it.name} (${L.priceText(line.total, line.approx)})`;
@@ -865,6 +1163,8 @@ async function init() {
   UI.fillUnitSelects();
   bind();
   bindFavorites();
+  bindSaveLoad();
+  bindSort();
   try {
     const [storesDoc, zipsDoc] = await Promise.all([
       fetch('data/stores.json').then((r) => r.json()),

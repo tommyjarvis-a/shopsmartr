@@ -118,8 +118,9 @@ test('M2: package item with a lb qty uses the per-lb price, marked as an estimat
 test('M2: oz qty converts against a per-oz unit price; no usable unit price means "~" one package', () => {
   assert.deepEqual(line(OZ, 32, 'oz'), { total: 2.56, approx: true, regular: null });
   assert.deepEqual(line(OZ, 1, 'lb'), { total: 1.28, approx: true, regular: null });
-  assert.deepEqual(line({ each: 4.29, unitPrice: 0.07, unitOf: 'ea' }, 2, 'lb'), { total: 4.29, approx: true, regular: null });
-  assert.deepEqual(line({ each: 4.29 }, 2, 'lb'), { total: 4.29, approx: true, regular: null }, 'v0.1.3 rows without a unit price');
+  // L19: no compatible unit price and no readable size -> no price rather than one package
+  assert.equal(line({ each: 4.29, unitPrice: 0.07, unitOf: 'ea' }, 2, 'lb'), null);
+  assert.equal(line({ each: 4.29 }, 2, 'lb'), null, 'v0.1.3 rows without a unit price');
   assert.deepEqual(line({ each: 3.79, unitPrice: 3.79, unitOf: 'gal' }, 2, 'qt'), { total: 1.9, approx: true, regular: null });
 });
 

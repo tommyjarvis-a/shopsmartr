@@ -1,5 +1,5 @@
 // localStorage persistence with a versioned key. The storage object is injectable for tests.
-import { emptyState, cleanItemInput } from './list.js';
+import { emptyState, cleanItemInput, cleanSort } from './list.js';
 
 export const STORAGE_KEY = 'shopsmartr:v1';
 export const BACKUP_KEY = 'shopsmartr:v1.bak';
@@ -93,4 +93,25 @@ export function loadShopStore(storage = globalThis.localStorage) {
 }
 export function saveShopStore(key, storage = globalThis.localStorage) {
   try { storage.setItem(SHOP_STORE_KEY, String(key)); return true; } catch { return false; }
+}
+
+/** Device-local List sort choice (v0.1.5): { by, dir }, see list.js cleanSort(). */
+export const LIST_SORT_KEY = 'shopsmartr:listSort:v1';
+export function loadListSort(storage = globalThis.localStorage) {
+  try { return cleanSort(JSON.parse(storage?.getItem(LIST_SORT_KEY) ?? 'null')); } catch { return cleanSort(null); }
+}
+export function saveListSort(sort, storage = globalThis.localStorage) {
+  try { storage.setItem(LIST_SORT_KEY, JSON.stringify(cleanSort(sort))); return true; } catch { return false; }
+}
+
+/** Collapsed store sections on the List tab (v0.1.5), by section key ('any' = Any store). */
+export const COLLAPSED_KEY = 'shopsmartr:collapsed:v1';
+export function loadCollapsed(storage = globalThis.localStorage) {
+  try {
+    const v = JSON.parse(storage?.getItem(COLLAPSED_KEY) ?? '[]');
+    return new Set(Array.isArray(v) ? v.filter((k) => typeof k === 'string' && k.length <= 80) : []);
+  } catch { return new Set(); }
+}
+export function saveCollapsed(set, storage = globalThis.localStorage) {
+  try { storage.setItem(COLLAPSED_KEY, JSON.stringify([...set])); return true; } catch { return false; }
 }

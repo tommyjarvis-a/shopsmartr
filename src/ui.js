@@ -1,6 +1,6 @@
 // DOM rendering only. Clones <template>s from index.html and fills them with textContent,
 // so a reskin changes markup/CSS and never the logic modules.
-import { groupByStore, formatQty, UNITS, linePrice, priceText, money, totals as listTotals } from './list.js';
+import { formatQty, UNITS, linePrice, priceText, money, totals as listTotals } from './list.js';
 import { estimate, regularEach } from './catalog.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -93,29 +93,78 @@ export function renderStores(list, stores, selectedIds, chains, onToggle) {
   }));
 }
 
-export function renderList(container, items, storesById, handlers) {
-  if (items.length === 0) {
+/** Safe id fragment for a section key ('' = Any store). */
+export const secId = (key) => `sec-${(key || 'any').replace(/[^\w-]/g, '_')}`;
+
+function countLine(el, g, collapsed) {
+  const n = g.items.length;
+  const left = g.items.filter((i) => !i.checked).length;
+  const priced = g.items.filter((i) => linePrice(i)).length;
+  const b = document.createElement('b');
+  b.textContent = left ? `${left} left` : 'Done';
+  el.replaceChildren();
+  el.classList.toggle('done', left === 0);
+  if (collapsed) el.append(`${n} item${n === 1 ? '' : 's'} · `, b);
+  else el.append(b, ` · ${priced === n ? 'all priced' : `${priced}/${n} priced`}`);
+  return { n, left, priced };
+}
+
+/**
+ * List tab, one section per store (list.js storeSections) with a sticky header: name, address,
+ * subtotal (or "No prices"), "N left · x/y priced", collapse. With a single section there is no
+ * header (solo), so a one-store list has no extra chrome.
+ * opts: { collapsed: Set of keys ('any' for Any store), onCollapse(key), chainName(chain), row handlers }
+ */
+export function renderList(container, sections, opts) {
+  if (sections.length === 0) {
     const p = document.createElement('p');
     p.className = 'empty';
-    p.textContent = handlers.emptyText || 'Your list is empty. Add your first item.';
+    p.textContent = opts.emptyText || 'Your list is empty. Add your first item.';
     container.replaceChildren(p);
+    container.classList.remove('solo');
     return;
   }
-  container.replaceChildren(...groupByStore(items).map((g) => {
+  const solo = sections.length === 1;
+  container.classList.toggle('solo', solo);
+  container.replaceChildren(...sections.map((g) => {
     const sec = fromTemplate('tpl-group');
-    const store = storesById[g.storeId];
-    sec.dataset.storeId = g.storeId;
-    if (store) sec.dataset.chain = store.chain;
-    $('[data-title]', sec).textContent = g.storeId ? (store?.name ?? 'Store no longer listed') : 'Any store';
-    $('[data-title]', sec).title = $('[data-title]', sec).textContent;
-    const left = g.items.filter((i) => !i.checked).length;
-    $('[data-count]', sec).textContent = left ? `${left} left` : 'done';
-    $('[data-items]', sec).replaceChildren(...g.items.map((it) => renderItem(it, handlers)));
+    const id = secId(g.key);
+    sec.dataset.storeId = g.key;
+    sec.id = id;
+    if (g.chain) sec.dataset.chain = g.chain;
+    const collapsed = !solo && opts.collapsed.has(g.key || 'any');
+    const btn = $('.store-h', sec);
+    btn.id = `${id}-h`;
+    btn.setAttribute('aria-controls', `${id}-rows`);
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    sec.setAttribute('aria-labelledby', btn.id);
+    if (!g.key) $('.dot', btn).classList.add('any');
+    $('[data-title]', sec).textContent = g.name;
+    btn.title = g.name;
+    $('[data-street]', sec).textContent = g.key ? (g.street || g.address || '') : 'Unpriced or manual items';
+    const city = g.key && g.street && g.address.length > g.street.length ? g.address.slice(g.street.length + 2) : '';
+    $('[data-city]', sec).textContent = city;
+    $('[data-city]', sec).hidden = !city;
+    const sub = $('[data-subtotal]', sec);
+    const t = g.total;
+    sub.textContent = t.priced ? priceText(t.all, t.approx) : 'No prices';
+    sub.classList.toggle('none', !t.priced);
+    const c = countLine($('[data-count]', sec), g, collapsed);
+    sec.classList.toggle('all-done', c.left === 0);
+    btn.setAttribute('aria-label', [g.name, g.address || (g.key ? '' : 'unpriced or manual items'),
+      t.priced ? `${t.approx ? 'about ' : ''}${money(t.all)}` : 'no prices',
+      c.left ? `${c.left} left` : 'done', `${c.priced} of ${c.n} priced`].filter(Boolean).join(', '));
+    btn.addEventListener('click', () => opts.onCollapse(g.key || 'any'));
+    const ul = $('[data-items]', sec);
+    ul.id = `${id}-rows`;
+    ul.hidden = collapsed;
+    ul.setAttribute('aria-label', solo ? 'List items' : `${g.name} items`);
+    ul.replaceChildren(...g.items.map((it) => renderItem(it, g.key, opts)));
     return sec;
   }));
 }
 
-function renderItem(it, { onToggle, onEdit, onRemove }) {
+function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c) => c }) {
   const li = fromTemplate('tpl-item');
   li.dataset.itemId = it.id;
   li.classList.toggle('done', it.checked);
@@ -132,19 +181,84 @@ function renderItem(it, { onToggle, onEdit, onRemove }) {
   const p = it.priced;
   if (p) {
     const line = linePrice(it);
-    $('[data-price-col]', li).hidden = false;
-    const price = $('[data-price]', li);
-    price.textContent = priceText(line.total, line.approx);
-    price.classList.toggle('price-sale', Boolean(p.onSale));
-    const was = $('[data-was]', li);
-    if (line.regular) { was.hidden = false; was.textContent = priceText(line.regular, line.approx); }
-    $('[data-price-store]', li).textContent = p.store ?? '';
-    edit.setAttribute('aria-label', `Edit ${it.name}, ${line.approx ? 'about ' : ''}${money(line.total)}${p.store ? ` at ${p.store}` : ''}`);
+    const aisle = $('[data-aisle]', li);
+    if (p.aisle) { aisle.hidden = false; aisle.textContent = p.aisle; }
+    // The section header names the store; a row only says where its price is from when that differs.
+    const priceKey = p.chain && p.storeNo ? `${p.chain}-${p.storeNo}` : '';
+    const other = Boolean(priceKey) && priceKey !== sectionKey;
+    const tail = `${p.aisle ? `, ${p.aisle}` : ''}${other ? `, price from ${chainName(p.chain)}` : ''}`;
+    if (line) {
+      $('[data-price-col]', li).hidden = false;
+      const price = $('[data-price]', li);
+      price.textContent = priceText(line.total, line.approx);
+      price.classList.toggle('price-sale', Boolean(p.onSale));
+      const was = $('[data-was]', li);
+      if (line.regular) { was.hidden = false; was.textContent = priceText(line.regular, line.approx); }
+      if (other) {
+        const src = $('[data-src]', li);
+        src.hidden = false;
+        src.dataset.chain = p.chain;
+        $('[data-src-name]', src).textContent = `${chainName(p.chain)} price`;
+      }
+      edit.setAttribute('aria-label', `Edit ${it.name}, ${line.approx ? 'about ' : ''}${money(line.total)}${tail}`);
+    } else {
+      // L19: the amount can't be turned into whole packages (no size), so no price instead of a wrong one.
+      const hint = document.createElement('span');
+      hint.className = 'nohint';
+      hint.dataset.nohint = '';
+      hint.textContent = `No price for ${formatQty(it)}`;
+      $('[data-meta-line]', li).append(hint);
+      edit.setAttribute('aria-label', `Edit ${it.name}, no price for ${formatQty(it)}${tail}`);
+    }
   }
   const rm = $('[data-remove]', li);
   rm.setAttribute('aria-label', `Remove ${it.name}`);
   rm.addEventListener('click', () => onRemove(it.id));
   return li;
+}
+
+/** One "dot · name · N left · subtotal" row, for the Trip-by-store card and the total-bar breakdown. */
+function storeRow(g, tag) {
+  const r = document.createElement(tag);
+  r.className = 'br';
+  if (g.chain) r.dataset.chain = g.chain;
+  const dot = document.createElement('span'); dot.className = `dot${g.key ? '' : ' any'}`; dot.setAttribute('aria-hidden', 'true');
+  const n = document.createElement('span'); n.className = 'n'; n.textContent = g.name; n.title = g.name;
+  const left = g.items.filter((i) => !i.checked).length;
+  const l = document.createElement('span'); l.className = 'l'; l.textContent = left ? `${left} left` : 'done';
+  const v = document.createElement('span'); v.className = `v${g.total.priced ? '' : ' none'}`;
+  v.textContent = g.total.priced ? priceText(g.total.all, g.total.approx) : (tag === 'a' ? '—' : 'No prices');
+  r.append(dot, n, l, v);
+  return r;
+}
+
+/** Desktop "Trip by store" card (hidden with one section) and the mobile total-bar breakdown. */
+export function renderTrip(sections, all, onJump) {
+  const multi = sections.length > 1;
+  document.getElementById('trip-card').hidden = !multi;
+  document.getElementById('tb-toggle').hidden = !multi;
+  if (!multi) { closeBreakdown(); return; }
+  document.getElementById('trip-rows').replaceChildren(...sections.map((g) => {
+    const a = storeRow(g, 'a');
+    a.href = `#${secId(g.key)}-h`;
+    a.setAttribute('aria-label', `${g.name}: ${a.querySelector('.l').textContent}, ${g.total.priced ? money(g.total.all) : 'no prices'}. Jump to this store`);
+    a.addEventListener('click', (e) => { e.preventDefault(); onJump(g.key); });
+    return a;
+  }));
+  document.getElementById('trip-total').textContent = priceText(all.all, all.approx);
+  document.getElementById('trip-sub').textContent = `In cart ${money(all.inCart)} · ${priceText(all.remaining, all.approxRemaining)} left · ${all.priced} priced${all.unpriced ? `, ${all.unpriced} unpriced` : ''}`;
+  document.getElementById('tb-break-rows').replaceChildren(...sections.map((g) => storeRow(g, 'div')));
+}
+export function closeBreakdown() {
+  document.getElementById('tb-break').hidden = true;
+  document.getElementById('tb-toggle').setAttribute('aria-expanded', 'false');
+  document.getElementById('totalbar').classList.remove('open');
+}
+export function toggleBreakdown() {
+  if (!document.getElementById('tb-break').hidden) { closeBreakdown(); return; }
+  document.getElementById('tb-break').hidden = false;
+  document.getElementById('tb-toggle').setAttribute('aria-expanded', 'true');
+  document.getElementById('totalbar').classList.add('open');
 }
 
 /** rows: [{chain, name, meta, url}] */
@@ -177,7 +291,7 @@ export function setStatus(el, text, kind = '') {
 }
 
 let toastTimer = 0;
-export function toast(text, undo) {
+export function toast(text, undo, ms = 5000) {
   const box = document.getElementById('toast');
   const btn = document.getElementById('toast-undo');
   document.getElementById('toast-text').textContent = text;
@@ -185,7 +299,7 @@ export function toast(text, undo) {
   btn.onclick = undo ? () => { undo(); box.hidden = true; } : null;
   box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { box.hidden = true; btn.onclick = null; }, 5000);
+  toastTimer = setTimeout(() => { box.hidden = true; btn.onclick = null; }, ms);
 }
 
 export function download(filename, text, type) {
@@ -289,7 +403,12 @@ export function renderTotals(items) {
     box.hidden = !show;
     if (!show) continue;
     $('[data-total-est]', box).textContent = `Est. ${id === 'totalbar' ? 'total ' : ''}${priceText(t.all, t.approx)}`;
-    $('[data-total-split]', box).textContent = `In cart ${money(t.inCart)} · ${priceText(t.remaining, t.approxRemaining)} left`;
+    const split = $('[data-total-split]', box);
+    if (id === 'totalbar') {
+      const a = document.createElement('span'); a.textContent = `In cart ${money(t.inCart)}`;
+      const b = document.createElement('span'); b.textContent = `${priceText(t.remaining, t.approxRemaining)} left`;
+      split.replaceChildren(a, b);
+    } else split.textContent = `In cart ${money(t.inCart)} · ${priceText(t.remaining, t.approxRemaining)} left`;
     $('[data-total-count]', box).textContent = `${t.priced} priced${t.unpriced ? ` · ${t.unpriced} unpriced` : ''}`;
   }
   return t;

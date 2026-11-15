@@ -1,5 +1,5 @@
 // CSV and plain-text export. Pure string builders; the UI turns them into downloads.
-import { groupByStore, formatQty, linePrice, totals, priceText, money } from './list.js';
+import { storeSections, formatQty, linePrice, totals, priceText, money } from './list.js';
 
 /** Local calendar date for file names, e.g. 2026-11-14 (not the UTC date: L10). */
 export function localDateStamp(d = new Date()) {
@@ -29,6 +29,7 @@ function priceCells(it) {
   const p = it.priced;
   if (!p) return ['', '', '', '', '', '', '', ''];
   const line = linePrice(it);
+  if (!line) return [fixed(p.each), '', '', p.unitPriceText ?? '', p.aisle ?? '', p.sku ?? '', p.store ?? '', p.asOf ?? ''];   // L19: amount can't be priced
   return [fixed(p.each), fixed(line.total), line.approx ? 'yes' : 'no', p.unitPriceText ?? '', p.aisle ?? '', p.sku ?? '', p.store ?? '', p.asOf ?? ''];
 }
 
@@ -87,18 +88,22 @@ export function favoritesToCSV(fav, storesById = {}, { bom = false } = {}) {
   return (bom ? CSV_BOM : '') + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-export function toText(items, storesById = {}, { title = 'ShopSmartR shopping list', date, favorites = null } = {}) {
+export function toText(items, storesById = {}, { title = 'ShopSmartR shopping list', date, favorites = null, sort = null, order = [] } = {}) {
   const lines = [title];
   if (date) lines.push(date);
-  for (const g of groupByStore(items)) {
-    lines.push('', `== ${storeLabel(g.storeId, storesById)} ==`);
+  const sections = storeSections(items, storesById, sort, order);
+  for (const g of sections) {
+    lines.push('', `== ${g.name}${g.address ? ` — ${g.address}` : ''} ==`);
     for (const it of g.items) {
       const q = formatQty(it);
       const note = it.notes ? ` — ${it.notes.replace(/\s*\r?\n\s*/g, ' ')}` : '';
       const lp = linePrice(it);
-      const price = lp ? ` — ${priceText(lp.total, lp.approx)}${it.priced.store ? ` (${it.priced.store}${it.priced.aisle ? `, ${it.priced.aisle}` : ''})` : ''}` : '';
+      const p = it.priced;
+      const where = p ? [p.store, p.aisle].filter(Boolean).join(', ') : '';
+      const price = p ? ` — ${lp ? priceText(lp.total, lp.approx) : 'no price for this amount'}${where ? ` (${where})` : ''}` : '';
       lines.push(`[${it.checked ? 'x' : ' '}] ${q ? `${q} ` : ''}${it.name.replace(/\s*\r?\n\s*/g, ' ')}${price}${note}`);
     }
+    if (sections.length > 1 && g.total.priced) lines.push(`Subtotal: ${priceText(g.total.all, g.total.approx)}`);
   }
   if (items.length === 0) lines.push('', '(empty list)');
   const t = totals(items);
