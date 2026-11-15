@@ -228,7 +228,7 @@ test('Load list: replace takes the file; merge combines lines with the same name
 test('merge: combineLines adds quantities and keeps the newer price', () => {
   const old = { id: 'x', name: 'Milk', qty: 1, unit: 'gal', notes: '', priced: priced({ each: 3.49, asOf: '2026-11-01T00:00:00Z' }) };
   const neu = { id: 'y', name: 'milk', qty: 2, unit: 'gal', notes: 'organic', priced: priced({ each: 3.79, asOf: '2026-11-14T00:00:00Z' }) };
-  assert.deepEqual(B.combineLines(old, neu), { ...old, qty: 3, notes: 'organic', priced: neu.priced });
+  assert.deepEqual(B.combineLines(old, neu), { ...old, qty: 3, notes: 'organic', priced: neu.priced, checked: false });
   assert.equal(B.combineLines(neu, old).priced.each, 3.79, 'newer wins whichever side it is on');
   assert.equal(B.combineLines({ ...old, qty: null, priced: undefined }, { ...neu, qty: null, priced: undefined }).qty, null);
   assert.equal(B.combineLines({ ...old, qty: 9000 }, { ...neu, qty: 9000 }).qty, 9999, 'capped');
@@ -287,4 +287,18 @@ test('collapsed sections persist per device and ignore junk', () => {
   assert.equal(S.loadCollapsed(st).size, 0);
   mem.set(S.COLLAPSED_KEY, JSON.stringify(['ok', 7, null]));
   assert.deepEqual([...S.loadCollapsed(st)], ['ok']);
+});
+
+test('merge: done state is OR-ed across matching lines; non-matching lines are added as new rows', () => {
+  const line = (id, checked, extra = {}) => ({ id, name: 'Milk', qty: 1, unit: 'gal', notes: '', storeId: 'wegmans-90', checked, ...extra });
+  assert.equal(B.combineLines(line('a', false), line('b', true)).checked, true, 'file done, current not');
+  assert.equal(B.combineLines(line('a', true), line('b', false)).checked, true, 'current done, file not');
+  assert.equal(B.combineLines(line('a', false), line('b', false)).checked, false);
+  const cur = { state: { version: 1, items: [line('a', false)], selectedStoreIds: [], zip: '', radiusMi: 10, chains: [] }, favs: F.emptyFavorites(), shopStore: '', listSort: L.cleanSort() };
+  const file = { state: { ...cur.state, items: [line('b', true, { name: ' MILK ' }), line('c', true, { unit: 'qt' })] }, favs: F.emptyFavorites(), shopStore: '', listSort: L.cleanSort() };
+  const m = B.applyBackup(cur, file, 'merge');
+  assert.equal(m.combined, 1);
+  assert.equal(m.added, 1);
+  assert.equal(m.state.items.length, 2);
+  assert.deepEqual(m.state.items.map((i) => [i.unit, i.qty, i.checked]), [['gal', 2, true], ['qt', 1, true]]);
 });

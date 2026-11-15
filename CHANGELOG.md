@@ -30,7 +30,7 @@ recheck (4afb575). Still alpha; prices are a saved household snapshot, not offic
   settings and sort). It never contains the passphrase or any key. It uses the share sheet when
   the browser can share files, otherwise a download. Load list checks the file, shows what's in it,
   and offers Merge (the default; matching name + unit + store lines are combined, quantities add,
-  newer price kept) or Replace (red confirm "Replace my list", a 10-second Undo, and a copy of the
+  a line done in either copy stays done, newer price kept; anything else is added as a new row) or Replace (red confirm "Replace my list", a 10-second Undo, and a copy of the
   current list in `shopsmartr:beforeLoad:v1.bak`).
 - **Save reminder.** "Last saved N days ago — Save list" after 7 days, or "Not saved to a file yet"
   3 days after a list first has items. × hides it for 7 days.

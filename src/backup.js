@@ -106,7 +106,8 @@ const asOf = (it) => { const t = Date.parse(it.priced?.asOf ?? ''); return Numbe
 /** Two matching lines become one: quantities add (capped), the newer price snapshot wins. */
 export function combineLines(a, b) {
   const qty = a.qty == null && b.qty == null ? null : Math.min(MAX_QTY, Math.round(((a.qty ?? 1) + (b.qty ?? 1)) * 1000) / 1000);
-  const out = { ...a, qty };
+  // Done if either copy was done (checked OR).
+  const out = { ...a, qty, checked: Boolean(a.checked || b.checked) };
   const newer = !a.priced || (b.priced && asOf(b) > asOf(a)) ? b.priced : a.priced;
   if (newer) out.priced = newer; else delete out.priced;
   if (!out.notes && b.notes) out.notes = b.notes;
