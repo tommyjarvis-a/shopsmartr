@@ -319,11 +319,16 @@ export function aisleKey(aisle) {
   const m = /^(.*?)\s*#?\s*(\d+(?:\.\d+)?)\s*(.*)$/.exec(t);
   return m ? [m[1], Number(m[2]), m[3]] : [t, -1, ''];
 }
-/** Natural aisle order: text prefix, then number (2 before 10), then any suffix. Missing last. */
+/** Produce aisles ("Produce", "Produce 2") come first in a store walk (spec §8, L21). */
+const isProduce = (k) => k[0] === 'produce';
+/**
+ * Aisle order: Produce first, then natural order (text prefix, then number so 2 comes before 10,
+ * then any suffix). Lines without an aisle go last.
+ */
 export function compareAisles(a, b) {
   const x = aisleKey(a); const y = aisleKey(b);
   if (!x || !y) return x ? -1 : y ? 1 : 0;
-  return COLL.compare(x[0], y[0]) || x[1] - y[1] || COLL.compare(x[2], y[2]);
+  return (isProduce(y) - isProduce(x)) || COLL.compare(x[0], y[0]) || x[1] - y[1] || COLL.compare(x[2], y[2]);
 }
 
 /**
@@ -367,4 +372,17 @@ export function formatQty(item) {
 export function summary(state) {
   const done = state.items.filter((i) => i.checked).length;
   return { total: state.items.length, done, remaining: state.items.length - done };
+}
+
+/** "No price for 5 kg" (or "No price" with no amount) for a line linePrice() can't price (L19/M5). */
+export function noPriceText(it) {
+  const amt = formatQty(it ?? {});
+  return amt ? `No price for ${amt}` : 'No price';
+}
+
+/** Toast/status text after adding a catalog line; never throws on an unpriceable amount (M5). */
+export function addedText(it) {
+  const line = linePrice(it);
+  if (line) return `Added ${it.name} (${priceText(line.total, line.approx)})`;
+  return `Added ${it.name} (${it?.priced ? noPriceText(it).toLowerCase() : 'no price'})`;
 }

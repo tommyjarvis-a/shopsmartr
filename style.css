@@ -801,3 +801,10 @@ body:not([data-screen="list"]) .tb-break { display: none; }
 @media (min-width: 768px) { .sheet.sheet-dialog { position: fixed; } }
 @media (max-width: 767px) { .sort-btn { height: 44px; font-size: var(--fs-md); } .sort-btn::before { inset: 0; } }   /* Steven: 44px+, 16px text on phones */
 .sort-menu .mi:not([aria-checked="true"]) .tick { visibility: hidden; }
+/* M4 (v0.1.6): the h2 is the sticky box (a sticky child can't leave its own h2). */
+.store-sec > h2 { position: sticky; top: 60px; z-index: 2; background: var(--color-bg); border-radius: var(--radius-md); }
+@media (min-width: 768px) { .store-sec > h2 { top: 0; } }
+.store-h, .store-h:focus-visible { position: relative; top: auto; }
+/* L26 (v0.1.6): each desktop sort segment is itself a 44px target (not just the track). */
+.sort-seg button { height: var(--tap-min); min-height: 44px; }
+.list-toolbar #collapse-all { min-height: 44px; }

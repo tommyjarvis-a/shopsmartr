@@ -1,6 +1,6 @@
 // DOM rendering only. Clones <template>s from index.html and fills them with textContent,
 // so a reskin changes markup/CSS and never the logic modules.
-import { formatQty, UNITS, linePrice, priceText, money, totals as listTotals } from './list.js';
+import { formatQty, UNITS, linePrice, noPriceText, priceText, money, totals as listTotals } from './list.js';
 import { estimate, regularEach } from './catalog.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -206,7 +206,7 @@ function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c
       const hint = document.createElement('span');
       hint.className = 'nohint';
       hint.dataset.nohint = '';
-      hint.textContent = `No price for ${formatQty(it)}`;
+      hint.textContent = noPriceText(it);
       $('[data-meta-line]', li).append(hint);
       edit.setAttribute('aria-label', `Edit ${it.name}, no price for ${formatQty(it)}${tail}`);
     }

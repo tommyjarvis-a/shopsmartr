@@ -485,7 +485,7 @@ async function askPersist() {
 }
 
 async function saveList() {
-  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), listSort, appVersion: VERSION });
+  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION });
   const name = Bk.backupFilename(stamp());
   const json = Bk.backupJSON(doc);
   let shared = false;
@@ -500,6 +500,8 @@ async function saveList() {
   }
   if (!shared) UI.download(name, json, 'application/json');
   setMeta(Bk.markSaved(backupMeta));
+  // L23: a file saved from this list shouldn't be merged back into it (it would double everything).
+  Bk.saveMerged(Bk.recordSaveId(Bk.loadMerged(), doc.saveId, 'saved'));
   if (!storagePersisted) askPersist();
   UI.toast(`List saved · ${name}`);
 }
@@ -512,6 +514,7 @@ function openLoadPicker() {
 }
 async function onLoadFile(file) {
   if (!file) return;
+  if (file.size > Bk.MAX_LOAD_BYTES) { UI.toast(Bk.TOO_LARGE); return; }   // L24: before reading it
   let text = '';
   try { text = await file.text(); } catch { UI.toast(Bk.NOT_A_LIST); return; }
   const r = Bk.parseBackup(text);
@@ -525,7 +528,8 @@ async function onLoadFile(file) {
   const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
   el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
     sm.favorites ? n('favorites', 'favorite') : '', sm.meals ? n('meals', 'meal') : '',
-    sm.dropped ? `${sm.dropped} unreadable skipped` : ''].filter(Boolean).map(pill));
+    sm.dropped ? `${sm.dropped} unreadable skipped` : '',
+    sm.duplicates ? `${sm.duplicates} duplicate${sm.duplicates === 1 ? '' : 's'} skipped` : ''].filter(Boolean).map(pill));
   const cur = state.items.length;
   const fi = n('items', 'item');
   el('load-fs').hidden = cur === 0;
@@ -537,8 +541,8 @@ async function onLoadFile(file) {
   el('load-form').elements.mode.value = 'merge';
   pendingLoad.empty = cur === 0;
   pendingLoad.fileItems = fi;
+  pendingLoad.repeat = cur === 0 ? null : Bk.repeatMergeText(Bk.loadMerged(), r.backup.saveId);
   syncLoadChoice();
-  UI.setStatus(el('load-status'), '');
   el('load-sheet').showModal();
   el('load-confirm').focus();
 }
@@ -551,10 +555,22 @@ function syncLoadChoice() {
   btn.textContent = pendingLoad?.empty ? `Load ${pendingLoad.fileItems}` : mode === 'replace' ? 'Replace my list' : `Merge ${pendingLoad?.fileItems ?? ''}`;
   btn.classList.toggle('btn-danger', mode === 'replace' && !pendingLoad?.empty);
   btn.classList.toggle('btn-primary', !(mode === 'replace' && !pendingLoad?.empty));
+  // L23: merging the same file again is skipped; Replace is still allowed.
+  const rep = pendingLoad?.repeat;
+  if (rep && mode === 'merge') UI.setStatus(el('load-status'), `${rep}. Merging it again would add its quantities twice, so Merge will skip it. Choose Replace to load it instead.`, 'error');
+  else UI.setStatus(el('load-status'), '');
 }
 function applyLoad(mode) {
   if (!pendingLoad) return;
   if (pendingLoad.empty) mode = 'merge';
+  if (mode === 'merge' && pendingLoad.repeat) {
+    const msg = `${pendingLoad.repeat}. Nothing changed.`;
+    pendingLoad = null;
+    el('load-sheet').close();
+    UI.toast(msg);
+    return;
+  }
+  const saveId = pendingLoad.backup.saveId;
   const before = { state, favs, shopStore: loadShopStore(), listSort };
   if (mode === 'replace') {
     try {
@@ -566,6 +582,8 @@ function applyLoad(mode) {
   }
   const res = Bk.applyBackup(before, pendingLoad.backup, mode);
   pendingLoad = null;
+  const mergedBefore = Bk.loadMerged();
+  if (mode === 'merge') Bk.saveMerged(Bk.recordSaveId(mergedBefore, saveId, 'merged'));
   el('load-sheet').close();
   const restore = (x) => {
     commitFavs(x.favs);
@@ -573,21 +591,24 @@ function applyLoad(mode) {
       saveShopStore(x.shopStore);
       if (feed) { shop.store = C.pickStore(feed.catalog, x.shopStore) ?? shop.store; el('shop-store').value = shop.store; renderShop(); }
     }
-    listSort = L.cleanSort(x.listSort); saveListSort(listSort);
-    commit(x.state);
+    commit(x.state);   // the sort choice stays this device's (L22)
   };
   restore(res);
   if (mode === 'replace') UI.toast('List replaced', () => restore(before), 10000);
   else {
     const n = res.added; const c = res.combined;
-    UI.toast(`List merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}`, () => restore(before));
+    UI.toast(`List merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}`, () => { restore(before); Bk.saveMerged(mergedBefore); });
   }
 }
 
 function bindSaveLoad() {
   el('save-nudge-save').addEventListener('click', saveList);
   el('save-nudge-hide').addEventListener('click', () => { setMeta(Bk.hideNudge(backupMeta)); el('list-title').focus(); });
-  el('load-file').addEventListener('change', (e) => onLoadFile(e.currentTarget.files?.[0]));
+  el('load-file').addEventListener('change', (e) => {
+    const f = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';   // picking the same file again still fires a change
+    onLoadFile(f);
+  });
   el('load-form').addEventListener('change', syncLoadChoice);
   el('load-form').addEventListener('submit', (e) => {
     e.preventDefault();   // Enter on a radio doesn't confirm; only the button does
@@ -958,8 +979,7 @@ function addPricedOrThrow(it, qty, unit) {
   const next = L.addItem(state, { name: it.name, qty, unit, storeId: f.storeId, priced: f.priced });
   expandFor(next.items[next.items.length - 1]);
   commit(next);
-  const line = L.linePrice(next.items[next.items.length - 1]);
-  return `Added ${it.name} (${L.priceText(line.total, line.approx)})`;
+  return L.addedText(next.items[next.items.length - 1]);
 }
 
 // ----- combobox suggestions (add bar + mobile add sheet), shared matcher -----

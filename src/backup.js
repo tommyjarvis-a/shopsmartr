@@ -4,7 +4,7 @@
 // key (that lives in IndexedDB and is never read here) or any price catalog data.
 import { serialize, deserialize } from './storage.js';
 import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey } from './favorites.js';
-import { emptyState, newId, normUnit, storeKeyOf, cleanSort, MAX_QTY } from './list.js';
+import { emptyState, newId, normUnit, storeKeyOf, MAX_QTY } from './list.js';
 
 export const BACKUP_SCHEMA = 'shopsmartr.backup/1';
 /** Copy of the list and favorites taken just before a "Load list" replace. */
@@ -18,25 +18,42 @@ export function backupFilename(stamp) {
   return `shopsmartr-list-${stamp}.json`;
 }
 export const NOT_A_LIST = 'That file isn\'t a ShopSmartR list';
+/** Load list limits (L24): checked on the file size before reading, and on the item count. */
+export const MAX_LOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_LOAD_ITEMS = 5000;
+export const TOO_LARGE = 'That file is too large to be a ShopSmartR list (over 5 MB).';
+export const tooManyText = (n) => `That file has ${n.toLocaleString('en-US')} items. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.`;
+/** saveIds this device already merged or saved (L23): { [saveId]: { at, how: 'merged'|'saved' } }. */
+export const MERGED_KEY = 'shopsmartr:mergedSaves:v1';
+const SAVE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+export function newSaveId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 const SHOP_STORE_RE = /^[\w-]{1,40}:[\w-]{1,40}$/;
 
 /**
  * The backup document. state = list state, favs = favorites, shopStore = Shop store key,
- * listSort = { by, dir }. Fields are copied by name, so nothing else in memory can leak in.
+ * Fields are copied by name, so nothing else in memory can leak in. The sort choice is a device
+ * preference and is not saved (L22). saveId is a random UUID per saved file (L23).
  */
-export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', listSort = null, appVersion, now = new Date() }) {
+export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', appVersion, now = new Date(), saveId = newSaveId() }) {
   // Round-trip through the same cleaners the app loads with: only known fields survive.
   const list = deserialize(serialize(state));
   const fav = deserializeFavorites(serializeFavorites(favs));
   return {
     schema: BACKUP_SCHEMA,
+    saveId: String(saveId),
     appVersion: String(appVersion ?? ''),
     createdAt: new Date(now).toISOString(),
     list: { items: list.items },
     favorites: { items: fav.items, meals: fav.meals },
     stores: { shopStore: SHOP_STORE_RE.test(shopStore) ? shopStore : '', selectedStoreIds: list.selectedStoreIds },
-    settings: { zip: list.zip, radiusMi: list.radiusMi, chains: list.chains, listSort: cleanSort(listSort) },
+    settings: { zip: list.zip, radiusMi: list.radiusMi, chains: list.chains },
   };
 }
 
@@ -48,11 +65,13 @@ const isObj = (x) => Boolean(x) && typeof x === 'object' && !Array.isArray(x);
 
 /**
  * Validates a backup file's text. Returns { ok: true, backup, summary } with cleaned contents
- * ({ state, favs, shopStore, listSort, appVersion, createdAt }), or { ok: false, error }.
+ * ({ state, favs, shopStore, saveId, appVersion, createdAt }), or { ok: false, error }.
+ * A sort choice in the file (0.1.5 files) is ignored: sort is device-only (L22).
  */
 export function parseBackup(text) {
   let raw;
-  if (typeof text !== 'string' || text.length > 5e6) return { ok: false, error: `${NOT_A_LIST} (it's too large)` };
+  if (typeof text !== 'string') return { ok: false, error: NOT_A_LIST };
+  if (text.length > MAX_LOAD_BYTES) return { ok: false, error: TOO_LARGE };
   try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch { return { ok: false, error: NOT_A_LIST }; }
   if (!isObj(raw) || typeof raw.schema !== 'string') return { ok: false, error: NOT_A_LIST };
   const m = /^shopsmartr\.backup\/(\d+)$/.exec(raw.schema);
@@ -62,7 +81,10 @@ export function parseBackup(text) {
   const created = Date.parse(raw.createdAt);
   if (!Number.isFinite(created)) return { ok: false, error: 'The saved list is missing its date.' };
   if (!isObj(raw.list) || !Array.isArray(raw.list.items)) return { ok: false, error: 'The saved list has no list items section.' };
+  if (raw.list.items.length > MAX_LOAD_ITEMS) return { ok: false, error: tooManyText(raw.list.items.length) };
   const favRaw = isObj(raw.favorites) ? raw.favorites : {};
+  const favN = (Array.isArray(favRaw.items) ? favRaw.items.length : 0) + (Array.isArray(favRaw.meals) ? favRaw.meals.length : 0);
+  if (favN > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favN.toLocaleString('en-US')} favorites and meals. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
   if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals))) return { ok: false, error: 'The favorites in this file are damaged.' };
   const stores = isObj(raw.stores) ? raw.stores : {};
   const settings = isObj(raw.settings) ? raw.settings : {};
@@ -73,8 +95,60 @@ export function parseBackup(text) {
   const favs = deserializeFavorites(JSON.stringify({ version: 1, items: favRaw.items ?? [], meals: favRaw.meals ?? [] }));
   const shopStore = typeof stores.shopStore === 'string' && SHOP_STORE_RE.test(stores.shopStore) ? stores.shopStore : '';
   const dropped = raw.list.items.length - state.items.length;
-  const backup = { state, favs, shopStore, listSort: cleanSort(settings.listSort), appVersion: raw.appVersion, createdAt: new Date(created).toISOString() };
-  return { ok: true, backup, summary: summarize(backup, dropped) };
+  // L25: one id per row. Exact duplicates are dropped; a different row reusing an id gets a new one.
+  const ids = { dupes: 0, renewed: 0 };
+  const uniq = (rows) => {
+    const seen = new Map(); const out = [];
+    for (const r of rows) {
+      const j = JSON.stringify(r);
+      if (seen.has(r.id)) {
+        if (seen.get(r.id).has(j)) { ids.dupes += 1; continue; }
+        seen.get(r.id).add(j);   // a later exact copy of this row is dropped too
+        const id = freshId(seen); seen.set(id, new Set()); out.push({ ...r, id }); ids.renewed += 1; continue;
+      }
+      seen.set(r.id, new Set([j])); out.push(r);
+    }
+    return out;
+  };
+  state.items = uniq(state.items);
+  favs.items = uniq(favs.items);
+  favs.meals = uniq(favs.meals);
+  const saveId = typeof raw.saveId === 'string' && SAVE_ID_RE.test(raw.saveId) ? raw.saveId : '';
+  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString() };
+  return { ok: true, backup, summary: { ...summarize(backup, dropped), duplicates: ids.dupes, renewedIds: ids.renewed } };
+}
+function freshId(seen) {
+  let id;
+  do id = newId(); while (seen.has(id));
+  return id;
+}
+
+// ---------- merged / saved file ids (L23) ----------
+export function cleanMerged(x) {
+  const out = {};
+  if (!isObj(x)) return out;
+  const rows = Object.entries(x).filter(([k, v]) => SAVE_ID_RE.test(k) && isObj(v) && Number.isFinite(Date.parse(v.at)) && (v.how === 'merged' || v.how === 'saved'));
+  rows.sort((a, b) => Date.parse(b[1].at) - Date.parse(a[1].at));
+  for (const [k, v] of rows.slice(0, 200)) out[k] = { at: new Date(Date.parse(v.at)).toISOString(), how: v.how };
+  return out;
+}
+export function loadMerged(storage = globalThis.localStorage) {
+  try { return cleanMerged(JSON.parse(storage?.getItem(MERGED_KEY) ?? 'null')); } catch { return {}; }
+}
+export function saveMerged(map, storage = globalThis.localStorage) {
+  try { storage.setItem(MERGED_KEY, JSON.stringify(cleanMerged(map))); return true; } catch { return false; }
+}
+/** Records a saveId (keeps the first record: a later merge of a file saved here stays 'saved'). */
+export function recordSaveId(map, saveId, how, now = Date.now()) {
+  if (!saveId || !SAVE_ID_RE.test(saveId) || map[saveId]) return cleanMerged(map);
+  return cleanMerged({ ...map, [saveId]: { at: new Date(now).toISOString(), how } });
+}
+/** Warning when merging this file again would double it, or null. */
+export function repeatMergeText(map, saveId) {
+  const r = saveId ? cleanMerged(map)[saveId] : null;
+  if (!r) return null;
+  const d = new Date(r.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return r.how === 'merged' ? `This file was already merged on ${d}` : `This file was saved from this list on ${d}`;
 }
 
 export function summarize(b, dropped = 0) {
@@ -143,12 +217,12 @@ function mergeRows(current, incoming, keyOf, combine) {
  * replace the current ones. mode 'merge': a list line with the same name + unit + source store
  * as one already there is combined into it (quantities add, the newer price wins); other lines
  * are added. Favorites with the same name + unit + store are skipped, meals with the same name
- * are skipped, store picks are united, and zip, distance and sort keep the current values unless
- * unset. Returns { state, favs, shopStore, listSort, added, combined }.
+ * are skipped, store picks are united, and zip and distance keep the current values unless
+ * unset. The sort choice is never changed by a file (device-only, L22). Returns { state, favs, shopStore, listSort, added, combined }.
  */
 export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
-    return { state: b.state, favs: b.favs, shopStore: b.shopStore || cur.shopStore, listSort: b.listSort, added: b.state.items.length, combined: 0 };
+    return { state: b.state, favs: b.favs, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);

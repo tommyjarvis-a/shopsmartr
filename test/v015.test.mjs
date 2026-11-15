@@ -92,10 +92,14 @@ test('text export lists aisle tags and per-store subtotals', () => {
 
 // ---------- sort ----------
 const names = (list) => list.map((i) => i.name);
-test('sort: natural aisle order (Aisle 2 before Aisle 10, Dairy with Dairy), no aisle last', () => {
+test('sort: Produce first, then natural aisle order (Aisle 2 before Aisle 10), no aisle last (L21)', () => {
   const mk = (name, aisle) => ({ name, priced: aisle === undefined ? undefined : priced({ each: 1, aisle }) });
   const list = [mk('k', 'Aisle 10'), mk('a', 'Dairy 10'), mk('b', 'Aisle 2'), mk('n', undefined), mk('c', 'Dairy 2'), mk('d', 'Produce'), mk('z', 'Aisle 2'), mk('e', 'aisle 3')];
-  assert.deepEqual(names(L.sortItems(list, { by: 'aisle' })), ['b', 'z', 'e', 'k', 'c', 'a', 'd', 'n']);
+  assert.deepEqual(names(L.sortItems(list, { by: 'aisle' })), ['d', 'b', 'z', 'e', 'k', 'c', 'a', 'n']);
+  assert.ok(L.compareAisles('Produce 6', 'Aisle 1') < 0 && L.compareAisles('Produce 6', 'Bakery') < 0, 'Produce before every other aisle');
+  assert.ok(L.compareAisles('Produce 2', 'Produce 10') < 0 && L.compareAisles('produce', 'Produce 1') < 0, 'natural order inside Produce');
+  assert.ok(L.compareAisles('Produce', null) < 0, 'no aisle still last');
+  assert.ok(L.compareAisles('Bakery', 'Dairy 2') < 0 && L.compareAisles('Dairy 9', 'Dairy 12') < 0);
   assert.ok(L.compareAisles('Aisle 2', 'Aisle 10') < 0);
   assert.ok(L.compareAisles('Dairy 2', 'Aisle 10') > 0);
   assert.ok(L.compareAisles(null, 'Aisle 1') > 0);
@@ -141,17 +145,21 @@ test('sort choice persists on the device and bad values fall back', () => {
 const state = { ...L.emptyState(), items: items.map((i) => ({ ...i, notes: '', checked: i.id === 'e' })), selectedStoreIds: ['wegmans-90', 'tops-1'], zip: '14221', radiusMi: 15, chains: ['wegmans'] };
 let favs = F.addFavorite(F.emptyFavorites(), { name: 'Coffee', qty: 1, unit: 'bag', storeId: 'tops-1' }, 'f1');
 favs = F.createMeal(favs, 'Taco night', [{ name: 'Tortillas' }, { name: 'Salsa' }], { id: 'm1' });
-const doc = B.makeBackup({ state, favs, shopStore: 'wegmans:90', listSort: { by: 'aisle' }, appVersion: '0.1.5-alpha', now: new Date('2026-11-15T16:00:00Z') });
+const SAVE_ID = '0b7c2f0e-7d1a-4c55-9a2e-5f1d3c9b8a71';
+const doc = B.makeBackup({ state, favs, shopStore: 'wegmans:90', appVersion: '0.1.6-alpha', now: new Date('2026-11-15T16:00:00Z'), saveId: SAVE_ID });
 
 test('Save list: versioned document with list, favorites, store picks and settings', () => {
   assert.equal(doc.schema, 'shopsmartr.backup/1');
-  assert.equal(doc.appVersion, '0.1.5-alpha');
+  assert.equal(doc.appVersion, '0.1.6-alpha');
+  assert.equal(doc.saveId, SAVE_ID);
+  assert.match(B.makeBackup({ state, favs, appVersion: '0.1.6-alpha' }).saveId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, 'random UUID by default');
+  assert.notEqual(B.makeBackup({ state, appVersion: '0.1.6-alpha' }).saveId, B.makeBackup({ state, appVersion: '0.1.6-alpha' }).saveId);
   assert.equal(doc.createdAt, '2026-11-15T16:00:00.000Z');
   assert.equal(doc.list.items.length, 5);
   assert.deepEqual(doc.favorites.items.map((i) => i.name), ['Coffee']);
   assert.deepEqual(doc.favorites.meals.map((m) => m.name), ['Taco night']);
   assert.deepEqual(doc.stores, { shopStore: 'wegmans:90', selectedStoreIds: ['wegmans-90', 'tops-1'] });
-  assert.deepEqual(doc.settings, { zip: '14221', radiusMi: 15, chains: ['wegmans'], listSort: { by: 'aisle', dir: 'desc' } });
+  assert.deepEqual(doc.settings, { zip: '14221', radiusMi: 15, chains: ['wegmans'] }, 'L22: the sort choice is device-only and not saved');
   assert.equal(B.backupFilename('2026-11-15'), 'shopsmartr-list-2026-11-15.json');
 });
 
@@ -171,12 +179,13 @@ test('Save list: the file contains no passphrase, key or ciphertext material', (
 test('Load list: round trip, validation of schema, version and shape', () => {
   const r = B.parseBackup(B.backupJSON(doc));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, stores: 2, dropped: 0, appVersion: '0.1.5-alpha', createdAt: '2026-11-15T16:00:00.000Z' });
+  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, stores: 2, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
+  assert.equal(r.backup.saveId, SAVE_ID);
   assert.equal(B.summaryText(r.summary), '5 list items · 1 favorite · 1 meal · 2 stores');
   assert.deepEqual(r.backup.state.items, state.items);
   assert.deepEqual(r.backup.favs, favs);
   assert.equal(r.backup.shopStore, 'wegmans:90');
-  assert.deepEqual(r.backup.listSort, { by: 'aisle', dir: 'desc' });
+  assert.equal('listSort' in r.backup, false, 'L22: a sort in the file is ignored');
   const bad = (x) => B.parseBackup(typeof x === 'string' ? x : JSON.stringify(x));
   assert.equal(bad('nope').error, "That file isn't a ShopSmartR list");
   assert.equal(bad({ version: 1, items: [] }).error, "That file isn't a ShopSmartR list", 'the live list format is not a saved list file');
@@ -206,7 +215,7 @@ test('Load list: replace takes the file; merge combines lines with the same name
   const rep = B.applyBackup(cur, r, 'replace');
   assert.deepEqual(rep.state, r.state);
   assert.deepEqual(rep.favs, r.favs);
-  assert.deepEqual(rep.listSort, { by: 'aisle', dir: 'desc' });
+  assert.deepEqual(rep.listSort, { by: 'name', dir: 'desc' }, 'L22: Replace keeps this device\'s sort');
   const m = B.applyBackup(cur, r, 'merge');
   // Bananas@wegmans-90 matches (name fold): combined. Milk '' vs gal differ by unit; Bread differs by source store (wegmans-105 vs Any).
   assert.equal(m.combined, 1);
