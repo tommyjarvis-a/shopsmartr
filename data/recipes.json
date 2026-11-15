@@ -1,0 +1,27 @@
+{
+ "schema": "shopsmartr.recipefeed/1",
+ "available": true,
+ "file": "recipes.enc",
+ "bytes": 968037,
+ "sha256": "7152a7fc26053498ed9b1401f12528ae0f22a61054f3bc2ce1686a860467b6f3",
+ "itemCount": 1344,
+ "categories": {
+  "breads": 21,
+  "main-dishes": 529,
+  "side-dishes": 221,
+  "cocktails": 105,
+  "salads": 117,
+  "appetizers": 72,
+  "breakfast-and-brunch": 42,
+  "condiments-and-sauces": 51,
+  "soups": 120,
+  "beverages": 14,
+  "desserts": 49,
+  "snacks": 3
+ },
+ "generatedAt": "2026-11-15T21:37:11.453Z",
+ "updated": "2026-11-15T21:44:26Z",
+ "dataSchema": "shopsmartr.recipes/1",
+ "envelope": 2,
+ "complete": true
+}
