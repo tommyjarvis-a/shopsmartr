@@ -1,42 +1,45 @@
 /* ShopSmartR design tokens — plain CSS custom properties.
-   Light is the default; dark follows the OS unless [data-theme] forces one. */
+   Light is the default; dark follows the OS unless [data-theme] forces one.
+   Colours + shadows: Tomato & Parmesan (v0.1.9; design/v018-dark-themes/final, contrast tables in its spec.md). */
 :root {
+  /* Colour + shadow (Tomato & Parmesan, light) */
   color-scheme: light;
-  /* Surfaces */
-  --color-bg: #FFFFFF;
+  --color-bg: #FFFCF6;
   --color-surface: #FFFFFF;
-  --color-surface-2: #F3FAF4;        /* soft mint wash for sections / app bar */
-  --color-border: #E3EBE5;
-  --color-border-strong: #C5D3C9;
-  /* Text */
-  --color-text: #15241B;             /* 16.2:1 on white */
-  --color-text-muted: #4D5E54;       /* 6.9:1 on white */
-  --color-text-faint: #5E6D64;       /* 5.4:1 on white, 5.1:1 on mint — meta text only */
-  /* Primary: fresh green */
-  --color-primary: #16A34A;          /* fills, icons, checkmarks (not small text) */
-  --color-primary-strong: #15803D;   /* buttons with white labels (5.0:1), links */
-  --color-primary-text: #166534;     /* green text on white/mint (7.1:1) */
-  --color-primary-soft: #DCFCE7;     /* selected chips, highlights */
+  --color-surface-2: #FBF1DF;
+  --color-border: #EEE2CE;
+  --color-border-strong: #9A8775;
+  --color-text: #2A1714;
+  --color-text-muted: #3D2C26;
+  --color-text-faint: #6B5850;
+  --color-primary: #D63A25;
+  --color-primary-strong: #C8321F;
+  --color-primary-text: #AE2A17;
+  --color-primary-soft: #FDE4DD;
   --color-on-primary: #FFFFFF;
-  /* Secondary: sunny yellow / orange */
-  --color-sun: #FBBF24;              /* fills, badges, accents */
-  --color-sun-soft: #FEF3C7;
-  --color-on-sun: #422006;           /* text on sun fills (10.9:1) */
-  --color-orange-text: #C2410C;      /* orange text on white (5.2:1) */
-  --color-on-sun-soft: #422006;      /* text on sun-soft (13.1:1) */
-  --color-track: rgba(255,255,255,.75);
-  /* Feedback */
-  --color-heart: #E11D48;            /* small love-note heart */
-  --color-heart-soft: #FFF1F3;
-  --color-danger: #B91C1C;           /* 6.5:1 on white */
-  --color-danger-soft: #FEF2F2;      /* v0.1.5 Replace card; danger text on it 5.9:1 */
+  --color-sun: #F4B21B;
+  --color-sun-soft: #FFF0C7;
+  --color-on-sun: #3D2604;
+  --color-orange-text: #B47500;
+  --color-on-sun-soft: #5A3A00;
+  --color-track: rgba(255,255,255,.8);
+  --color-heart: #D81B55;
+  --color-heart-soft: #FFF0F4;
+  --color-danger: #A3124D;
+  --color-danger-soft: #FFEEF4;
   --color-focus: #2563EB;
-  --color-scrim: rgba(16, 32, 22, .42);
-  /* Store tag dots (neutral, not brand colours) */
-  --store-1: #0EA5E9;  --store-1-soft: #E0F2FE;
-  --store-2: #8B5CF6;  --store-2-soft: #EDE9FE;
-  --store-3: #F97316;  --store-3-soft: #FFEDD5;
-  --store-4: #14B8A6;  --store-4-soft: #CCFBF1;
+  --color-scrim: rgba(42,23,20,.45);
+  --store-1: #0284C7;
+  --store-1-soft: #E0F2FE;
+  --store-2: #7C3AED;
+  --store-2-soft: #EDE9FE;
+  --store-3: #DB2777;
+  --store-3-soft: #FCE7F3;
+  --store-4: #0D9488;
+  --store-4-soft: #D5F5F0;
+  --shadow-1: 0 1px 2px rgba(42,23,20,.06), 0 1px 3px rgba(42,23,20,.08);
+  --shadow-2: 0 4px 12px rgba(42,23,20,.10), 0 2px 4px rgba(42,23,20,.06);
+  --shadow-3: 0 12px 32px rgba(42,23,20,.18);
 
   /* Type */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -55,44 +58,89 @@
   /* Radii */
   --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-pill: 999px;
 
-  /* Shadows */
-  --shadow-1: 0 1px 2px rgba(16, 40, 24, .06), 0 1px 3px rgba(16, 40, 24, .08);
-  --shadow-2: 0 4px 12px rgba(16, 40, 24, .10), 0 2px 4px rgba(16, 40, 24, .06);
-  --shadow-3: 0 12px 32px rgba(16, 40, 24, .18);
-
   /* Sizing */
   --tap-min: 44px;
   --control-h: 48px;
 }
 
+/* ---------- Dark: OS setting, unless [data-theme="light"]; and the manual override ---------- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --color-bg: #0F1712; --color-surface: #16211A; --color-surface-2: #1C2A21;
-    --color-border: #2A3A30; --color-border-strong: #3B4F42;
-    --color-text: #ECF5EF; --color-text-muted: #A9BCB0; --color-text-faint: #8A9E91;
-    --color-primary: #4ADE80; --color-primary-strong: #22C55E; --color-primary-text: #86EFAC;
-    --color-primary-soft: #193D27; --color-on-primary: #052E16;
-    --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
-  --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
-    --color-danger: #FCA5A5; --color-danger-soft: #3A1414; --color-scrim: rgba(0,0,0,.6);
-    --color-heart: #FB7185; --color-heart-soft: #2A1A1F;
-    --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
-    --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);
+    --color-bg: #121213;
+    --color-surface: #1B1B1D;
+    --color-surface-2: #262628;
+    --color-border: #38383B;
+    --color-border-strong: #7E7E84;
+    --color-text: #F8F4F1;
+    --color-text-muted: #C9C5C2;
+    --color-text-faint: #ADA8A5;
+    --color-primary: #EE4B37;
+    --color-primary-strong: #FF6B57;
+    --color-primary-text: #FF9585;
+    --color-primary-soft: #43201C;
+    --color-on-primary: #1E0806;
+    --color-sun: #FFC94D;
+    --color-sun-soft: #3B2D12;
+    --color-on-sun: #2B1A03;
+    --color-orange-text: #FFC94D;
+    --color-on-sun-soft: #FFD36E;
+    --color-track: rgba(255,255,255,.16);
+    --color-heart: #FF85A1;
+    --color-heart-soft: #311B22;
+    --color-danger: #FF8DB6;
+    --color-danger-soft: #3A1527;
+    --color-focus: #93C5FD;
+    --color-scrim: rgba(0,0,0,.62);
+    --store-1: #38BDF8;
+    --store-1-soft: #0E2A3A;
+    --store-2: #A78BFA;
+    --store-2-soft: #2B2245;
+    --store-3: #F472B6;
+    --store-3-soft: #3D1A2C;
+    --store-4: #2DD4BF;
+    --store-4-soft: #0F3330;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-3: 0 12px 32px rgba(0,0,0,.65);
   }
 }
-/* Manual override (wins over the OS setting) */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #0F1712; --color-surface: #16211A; --color-surface-2: #1C2A21;
-  --color-border: #2A3A30; --color-border-strong: #3B4F42;
-  --color-text: #ECF5EF; --color-text-muted: #A9BCB0; --color-text-faint: #8A9E91;
-  --color-primary: #4ADE80; --color-primary-strong: #22C55E; --color-primary-text: #86EFAC;
-  --color-primary-soft: #193D27; --color-on-primary: #052E16;
-  --color-sun: #FCD34D; --color-sun-soft: #3A2E10; --color-on-sun: #2B1A03; --color-orange-text: #FDBA74;
-  --color-on-sun-soft: #FCD34D; --color-track: rgba(255,255,255,.14);
-  --color-danger: #FCA5A5; --color-danger-soft: #3A1414; --color-scrim: rgba(0,0,0,.6);
-  --color-heart: #FB7185; --color-heart-soft: #2A1A1F;
-  --store-1-soft: #0C2A3A; --store-2-soft: #2A2145; --store-3-soft: #3A2414; --store-4-soft: #0E332F;
-  --shadow-1: 0 1px 2px rgba(0,0,0,.4); --shadow-2: 0 4px 12px rgba(0,0,0,.45); --shadow-3: 0 12px 32px rgba(0,0,0,.6);
+  --color-bg: #121213;
+  --color-surface: #1B1B1D;
+  --color-surface-2: #262628;
+  --color-border: #38383B;
+  --color-border-strong: #7E7E84;
+  --color-text: #F8F4F1;
+  --color-text-muted: #C9C5C2;
+  --color-text-faint: #ADA8A5;
+  --color-primary: #EE4B37;
+  --color-primary-strong: #FF6B57;
+  --color-primary-text: #FF9585;
+  --color-primary-soft: #43201C;
+  --color-on-primary: #1E0806;
+  --color-sun: #FFC94D;
+  --color-sun-soft: #3B2D12;
+  --color-on-sun: #2B1A03;
+  --color-orange-text: #FFC94D;
+  --color-on-sun-soft: #FFD36E;
+  --color-track: rgba(255,255,255,.16);
+  --color-heart: #FF85A1;
+  --color-heart-soft: #311B22;
+  --color-danger: #FF8DB6;
+  --color-danger-soft: #3A1527;
+  --color-focus: #93C5FD;
+  --color-scrim: rgba(0,0,0,.62);
+  --store-1: #38BDF8;
+  --store-1-soft: #0E2A3A;
+  --store-2: #A78BFA;
+  --store-2-soft: #2B2245;
+  --store-3: #F472B6;
+  --store-3-soft: #3D1A2C;
+  --store-4: #2DD4BF;
+  --store-4-soft: #0F3330;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.65);
 }

@@ -386,7 +386,7 @@ body:not([data-screen="list"]) .fab, body:not([data-screen="list"]) .only-list {
 .row.done .side-price .price { color: var(--color-text-muted); font-weight: var(--fw-medium); }
 
 /* Running total: sticky bar above the tabs on mobile, header block on desktop */
-.totalbar { position: fixed; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 52px; padding: 8px var(--space-4); background: var(--color-surface); border-top: 1px solid var(--color-border); box-shadow: 0 -1px 6px rgba(16, 40, 24, .06); }
+.totalbar { position: fixed; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 52px; padding: 8px var(--space-4); background: var(--color-surface); border-top: 1px solid var(--color-border); box-shadow: 0 -1px 6px rgba(42, 23, 20, .06); }
 body:not([data-screen="list"]) .totalbar { display: none; }
 .totalbar .est { font-size: var(--fs-md); line-height: 20px; font-weight: var(--fw-bold); color: var(--color-text); }
 .totalbar .total-split { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); text-align: right; }
@@ -710,7 +710,7 @@ body.has-total .main { padding-bottom: calc(230px + env(safe-area-inset-bottom))
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  box-shadow: 0 -6px 16px rgba(16, 40, 24, .10);
+  box-shadow: 0 -6px 16px rgba(42, 23, 20, .10);
   padding: var(--space-3) var(--space-4) var(--space-2);
 }
 .tb-break .br {
@@ -827,3 +827,27 @@ body:not([data-screen="list"]) .tb-break { display: none; }
 .confirm-dlg .dlg-actions.three .btn-primary { flex-basis: 100%; }
 @media (min-width: 768px) { .confirm-dlg .dlg-actions.three .btn-primary { flex-basis: auto; margin-right: auto; } }
 .menu .mi[aria-disabled="true"] { opacity: .45; cursor: default; }
+
+/* --- v0.1.9: Tomato & Parmesan danger buttons (design/v018-dark-themes/final/danger-button.css, verbatim) --- */
+/* ShopSmartR v0.1.8 (Tomato & Parmesan): destructive buttons are OUTLINED in crimson-rose, never
+   filled, so they can't be mistaken for the filled-tomato primary button. Append to style.css (or
+   paste after the existing `.btn-danger` rules at style.css:690 and :788). Uses existing tokens only:
+   --color-danger (label + 2px outline) and --color-danger-soft (light tint). Applies to every
+   .btn-danger: Clear checked items, Remove favorite, and Load list > Replace. */
+.btn-danger,
+.btn-primary.btn-danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border: 2px solid var(--color-danger);
+  box-shadow: none;
+}
+/* Trash glyph in confirm dialogs (Clear, Remove): a second, non-colour cue. Mask = currentColor. */
+.confirm-dlg .btn-danger::before {
+  content: ""; flex: none; width: 20px; height: 20px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/%3E%3C/svg%3E") center / 20px no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'/%3E%3C/svg%3E") center / 20px no-repeat;
+}
+/* In confirm dialogs the way out (Cancel) is neutral, so only the safe action (tomato fill) and the
+   destructive one (crimson outline + trash) carry colour. */
+.confirm-dlg .btn-secondary { color: var(--color-text); }
+@media (forced-colors: active) { .btn-danger { border-color: ButtonText; } }
