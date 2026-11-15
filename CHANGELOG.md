@@ -2,6 +2,39 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.4-alpha] - 2026-11-14 (alpha)
+
+Fixes from the QA gate on 0.1.3-alpha (7c1a626). Still alpha; prices are a saved household
+snapshot, not official checkout prices.
+
+### Fixed
+- **M2 – line totals respect the unit.** One function (`linePrice` in `src/list.js`) now prices a
+  line for the list rows, the running total, the CSV and the text export:
+  - sold-by-weight items with a weight quantity use the per-lb price (2 lb at $3.99/lb = $7.98,
+    not 2 × the estimated piece price); lb, oz, g and kg convert into each other;
+  - package items with a weight or volume quantity use the unit price when it converts (marked ~);
+  - when no compatible unit price exists the line shows one package price marked ~ instead of an
+    invented number; count quantities ("3", "2 ea", "1 pkg") are a package count.
+  - Adding the same product again only merges into a line with the same unit.
+- **M3 – typo search against word prefixes.** One edit is allowed against a word or its prefixes
+  of length ±1, so "bananna" finds Bananas (ranked at or above Banana Bread). Add-bar suggestions
+  use the same matcher.
+- **L12** – the struck regular price next to a sale estimate is on the same basis (per estimated
+  piece for by-weight items, per line on the list), not the per-lb price.
+- **L13** – stricter matching for short words: subsequences need 3+ letters and the same first
+  letter (word start), typo matching needs 5+ letters and only runs when nothing matches exactly
+  or by prefix. "rice" no longer matches Ice Cream or "price"; "chkn brst" still works.
+- **L14** – prices up to $999,999.99 are kept (rows at $1M or more are dropped as bad data);
+  money shows thousands separators ($1,234.56); quantities are capped at 9,999.
+- **L15** – every form control is 16px on phones, including the Shop store dropdown, so iOS
+  Safari no longer zooms on focus.
+- **L16** – a damaged price file (bad gzip or JSON after decrypting) now says so ("The price file
+  is damaged (gzip)") in the console and on the unlock card instead of "Failed to fetch"; nothing is
+  cached for an unreadable file. Note: if the manifest is published ahead of `prices.enc`, the
+  browser itself still logs the 404 for that request; the app handles it and stays usable.
+- **L17** – the Qty field in the add sheet is at least 44px wide at 360px.
+- Shop render is faster: money formatting reuses one number formatter.
+
 ## [0.1.3-alpha] - 2026-11-14 (alpha)
 
 Prices move into the shopping flow. Everything below is alpha; prices are a saved household
