@@ -159,7 +159,7 @@ function removeFavWithUndo(id) {
   if (idx < 0) return;
   const it = favs.items[idx];
   commitFavs(F.removeFavorite(favs, id));
-  UI.toast(`Removed ${it.name} from favorites`, () => {
+  UI.toast(`Removed ${it.name} from Favorites`, () => {
     if (favs.items.some((i) => i.id === id)) return;
     const items = [...favs.items];
     items.splice(Math.min(idx, items.length), 0, it);
@@ -486,7 +486,7 @@ async function askPersist() {
   renderStoreStatus();
 }
 
-async function saveList() {
+async function saveListNow() {
   const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION });
   const name = Bk.backupFilename(stamp());
   const json = Bk.backupJSON(doc);
@@ -508,6 +508,9 @@ async function saveList() {
   UI.toast(`List saved · ${name}`);
   return name;
 }
+
+/** Save list, guarded against a double tap or a second call while one is in flight (L29). */
+const saveList = Bk.makeSaveGuard(saveListNow, { ms: 800, now: () => performance.now() });
 
 let pendingLoad = null;
 /** Copy of the list taken just before "Clear checked items" (v0.1.7), parallel to the Replace .bak. */
@@ -629,7 +632,7 @@ function bindSaveLoad() {
 
 // ---------- Favorite stars (v0.1.7): Shop results and list rows ----------
 const favKeys = () => new Set(favs.items.map(F.favKey));
-/** Favorite identity source for a catalog result: name, no unit, its store (directory id or chain-store). */
+/** Favorite identity source for a catalog result: name and its store (directory id or chain-store). The unit is not identity (L30). */
 function catalogFavSource(it) {
   const f = C.pricedFields(feed.catalog, it, data.byId);
   return { name: it.name, qty: null, unit: '', storeId: f.storeId, priced: f.priced };
@@ -663,8 +666,13 @@ let confirmResolve = null;
  * actions: [{ label, value, kind: 'primary'|'secondary'|'danger' }]. Resolves with the chosen value,
  * or 'cancel' (Esc, backdrop, Cancel). returnFocus gets focus back when it closes.
  */
-function confirmDialog({ title, body = [], actions, initial, returnFocus, status = '' }) {
+function confirmDialog({ title, body = [], actions, initial, returnFocus, status = '', armMs = 0 }) {
   const dlg = el('confirm-dlg');
+  // armMs (L29): a dialog reopened under the finger ignores taps for a moment, so a double tap
+  // on a button doesn't also press the same button of the reopened dialog.
+  const armedAt = performance.now() + armMs;
+  dlg.dataset.armed = armMs ? 'false' : 'true';
+  if (armMs) setTimeout(() => { dlg.dataset.armed = 'true'; }, armMs);
   el('confirm-title').textContent = title;
   el('confirm-body').replaceChildren(...body.map((t) => { const p = document.createElement('p'); if (typeof t === 'string') p.textContent = t; else p.append(...t); return p; }));
   UI.setStatus(el('confirm-status'), status);
@@ -676,7 +684,7 @@ function confirmDialog({ title, body = [], actions, initial, returnFocus, status
     b.className = `btn btn-${a.kind}`;
     b.dataset.value = a.value;
     b.textContent = a.label;
-    b.addEventListener('click', () => finish(a.value));
+    b.addEventListener('click', () => { if (performance.now() >= armedAt) finish(a.value); });
     return b;
   }));
   const finish = (v) => {
@@ -735,6 +743,7 @@ async function clearCheckedFlow(opener) {
       initial: 'save',
       returnFocus: opener,
       status,
+      armMs: status ? 600 : 0,   // reopened right after Save list first (L29)
     });
     if (choice === 'save') { const name = await saveList(); status = name ? `Saved ${name}. You can clear the checked items now.` : ''; continue; }
     if (choice !== 'clear') return;
@@ -1355,8 +1364,11 @@ async function init() {
   if (loaded.problem === 'unreadable') {
     showNotice(`Your saved list couldn't be read, so ShopSmartR started a new one.${loaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:v1.bak).' : ''}`);
   }
+  if (favLoaded.merged) {
+    showNotice(`Combined ${favLoaded.merged} duplicate Favorite${favLoaded.merged === 1 ? '' : 's'}: the same item at the same store is now one favorite, whatever the amount. A copy of the old set was kept in this browser (${F.FAVORITES_DEDUPE_BAK_KEY}).`);
+  }
   if (favLoaded.problem === 'unreadable') {
-    showNotice(`Your saved favorites couldn't be read, so ShopSmartR started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);
+    showNotice(`Your saved Favorites couldn't be read, so ShopSmartR started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);
   }
   if (loaded.problem === 'unavailable' || favLoaded.problem === 'unavailable') showNotice(CANT_SAVE);
 }

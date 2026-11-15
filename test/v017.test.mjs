@@ -7,16 +7,18 @@ import * as B from '../src/backup.js';
 const W90 = { chain: 'wegmans', storeNo: '90', store: 'Wegmans #90' };
 const row = (o) => ({ id: o.id ?? 'r', name: 'Whole Milk', qty: 1, unit: 'gal', notes: '', storeId: 'wegmans-90', checked: false, ...o });
 
-test('favorite identity: normalized name + unit + store, shared with Load list merge', () => {
+test('favorite identity: normalized name + store (v0.1.8 L30: unit is not identity); list merge keeps the unit', () => {
   const a = row({});
-  assert.equal(F.favKey(a), 'whole milk|gal|wegmans-90');
-  assert.equal(F.favKey({ ...a, name: '  WHOLE   milk ', unit: 'gallon' }), F.favKey(a), 'name folded, unit alias normalized');
+  assert.equal(F.favKey(a), 'whole milk|wegmans-90');
+  assert.equal(F.favKey({ ...a, name: '  WHOLE   milk ', unit: 'gallon' }), F.favKey(a), 'name folded');
   assert.equal(F.favKey({ ...a, name: 'Crème Fraîche' }), F.favKey({ ...a, name: 'creme fraiche' }), 'accents folded');
-  assert.notEqual(F.favKey({ ...a, unit: 'qt' }), F.favKey(a), 'unit matters');
+  assert.equal(F.favKey({ ...a, unit: 'qt' }), F.favKey(a), 'unit is an amount, not identity (L30)');
   assert.notEqual(F.favKey({ ...a, storeId: 'tops-451' }), F.favKey(a), 'store matters');
   assert.equal(F.favKey({ ...a, storeId: '', priced: L.cleanPriced({ each: 1, ...W90 }) }), F.favKey(a), 'no chosen store: the price source store');
-  assert.equal(B.lineKey(a), F.favKey(a), 'merge uses the same identity');
-  assert.equal(F.favKey({ name: 'Napkins' }), 'napkins||');
+  assert.equal(B.lineKey(a), 'whole milk|gal|wegmans-90', 'list lines still merge on name + unit + store (quantities add)');
+  assert.equal(B.lineKey({ ...a, unit: 'gallon' }), B.lineKey(a), 'unit alias normalized');
+  assert.notEqual(B.lineKey({ ...a, unit: 'qt' }), B.lineKey(a));
+  assert.equal(F.favKey({ name: 'Napkins' }), 'napkins|');
 });
 
 test('star on adds immediately (once); star off removes only that identity', () => {

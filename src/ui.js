@@ -467,7 +467,7 @@ function favRow(it, storesById, { onEdit, onAdd, onRemove }) {
     add.addEventListener('click', () => onAdd(it.id));
   } else add.remove();
   const rm = $('[data-fav-remove]', li);
-  rm.setAttribute('aria-label', `Remove ${it.name} from favorites`);
+  rm.setAttribute('aria-label', `Remove ${it.name} from Favorites`);
   rm.addEventListener('click', () => onRemove(it.id));
   return li;
 }

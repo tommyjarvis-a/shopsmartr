@@ -3,8 +3,8 @@
 // Only list, favorites, store picks and settings go in. Never the price passphrase, the cached
 // key (that lives in IndexedDB and is never read here) or any price catalog data.
 import { serialize, deserialize } from './storage.js';
-import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favKey } from './favorites.js';
-import { emptyState, newId, storeKeyOf, MAX_QTY } from './list.js';
+import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favKey, dedupeFavorites } from './favorites.js';
+import { emptyState, newId, storeKeyOf, normUnit, MAX_QTY } from './list.js';
 
 export const BACKUP_SCHEMA = 'shopsmartr.backup/1';
 /** Copy of the list and favorites taken just before a "Load list" replace. */
@@ -84,8 +84,8 @@ export function parseBackup(text) {
   if (raw.list.items.length > MAX_LOAD_ITEMS) return { ok: false, error: tooManyText(raw.list.items.length) };
   const favRaw = isObj(raw.favorites) ? raw.favorites : {};
   const favN = (Array.isArray(favRaw.items) ? favRaw.items.length : 0) + (Array.isArray(favRaw.meals) ? favRaw.meals.length : 0);
-  if (favN > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favN.toLocaleString('en-US')} favorites and meals. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
-  if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals))) return { ok: false, error: 'The favorites in this file are damaged.' };
+  if (favN > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favN.toLocaleString('en-US')} Favorites and meals. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
+  if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals))) return { ok: false, error: 'The Favorites in this file are damaged.' };
   const stores = isObj(raw.stores) ? raw.stores : {};
   const settings = isObj(raw.settings) ? raw.settings : {};
   const state = deserialize(JSON.stringify({
@@ -167,15 +167,18 @@ export function summarize(b, dropped = 0) {
   };
 }
 
-/** "12 list items · 4 favorites · 2 meals · 3 stores" */
+/** "12 list items · 4 Favorites · 2 meals · 3 stores" */
 export function summaryText(s) {
   const n = (k, one, many = `${one}s`) => `${s[k]} ${s[k] === 1 ? one : many}`;
-  return [n('items', 'list item'), n('favorites', 'favorite'), n('meals', 'meal'), n('stores', 'store')].join(' · ');
+  return [n('items', 'list item'), n('favorites', 'Favorite'), n('meals', 'meal'), n('stores', 'store')].join(' · ');
 }
 
-/** Merge key for list lines: name + unit + source store (L5 style name folding). */
+/**
+ * Merge key for list lines: name + unit + source store (L5 style name folding). Quantities of
+ * matching lines add up, so the unit must match too. (Favorites merge on favKey, name + store.)
+ */
 export function lineKey(it) {
-  return favKey(it);   // the same identity as favorites (v0.1.7)
+  return `${nameKey(it?.name)}|${normUnit(it?.unit) || String(it?.unit ?? '').toLowerCase()}|${storeKeyOf(it ?? {})}`;
 }
 
 const asOf = (it) => { const t = Date.parse(it.priced?.asOf ?? ''); return Number.isFinite(t) ? t : -Infinity; };
@@ -218,17 +221,17 @@ function mergeRows(current, incoming, keyOf, combine) {
  * Applies a parsed backup. mode 'replace': the file's list, favorites, store picks and settings
  * replace the current ones. mode 'merge': a list line with the same name + unit + source store
  * as one already there is combined into it (quantities add, the newer price wins); other lines
- * are added. Favorites with the same name + unit + store are skipped, meals with the same name
+ * are added. Favorites with the same name + store (favKey) are skipped, meals with the same name
  * are skipped, store picks are united, and zip and distance keep the current values unless
  * unset. The sort choice is never changed by a file (device-only, L22). Returns { state, favs, shopStore, listSort, added, combined }.
  */
 export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
-    return { state: b.state, favs: b.favs, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
+    return { state: b.state, favs: dedupeFavorites(b.favs).favorites, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
-  const favItems = mergeRows(cur.favs.items, b.favs.items, lineKey, false);
+  const favItems = mergeRows(cur.favs.items, b.favs.items, favKey, false);
   const mealNames = new Set(cur.favs.meals.map((m) => nameKey(m.name)));
   const mealIds = new Set(cur.favs.meals.map((m) => m.id));
   const meals = [...cur.favs.meals];
@@ -307,4 +310,24 @@ export function storageText(persisted) {
   if (persisted === true) return 'Storage: persistent';
   if (persisted === false) return 'Storage: may be cleared by the browser';
   return 'Storage: browser default';
+}
+
+/**
+ * v0.1.8 (L29): one Save list at a time. While a save is in flight, more calls get that same
+ * result; for `ms` after a save finished, a repeat (a double tap landing on the reopened
+ * "Save list first") returns the last file name instead of saving a second copy.
+ */
+export function makeSaveGuard(run, { ms = 800, now = () => Date.now() } = {}) {
+  let busy = null;
+  let last = { at: -Infinity, name: null };
+  return async function guardedSave(...args) {
+    if (busy) return busy;
+    if (now() - last.at < ms) return last.name;
+    busy = (async () => run(...args))();
+    try {
+      const name = await busy;
+      if (name) last = { at: now(), name };
+      return name;
+    } finally { busy = null; }
+  };
 }

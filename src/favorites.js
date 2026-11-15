@@ -1,7 +1,7 @@
 // Pure favorites model: staple items and favorite meals (named groups of items).
 // Every function returns a new value; nothing touches the DOM. Persistence helpers take an
 // injectable storage object so tests can use memoryStorage().
-import { cleanItemInput, addItem, newId, normUnit, storeKeyOf } from './list.js';
+import { cleanItemInput, addItem, newId, storeKeyOf } from './list.js';
 
 export const FAVORITES_KEY = 'shopsmartr:favorites:v1';
 export const FAVORITES_BACKUP_KEY = 'shopsmartr:favorites:v1.bak';
@@ -35,12 +35,42 @@ export function removeFavorite(fav, id) {
 
 // ---------- favorite identity (stars on Shop results and list rows, v0.1.7) ----------
 /**
- * The one favorite identity, shared by the stars, the Favorites tab and Load list merge:
- * normalized name + unit + store (the chosen store, else the price's source store).
+ * The one favorite identity, shared by the Shop stars, the list stars, the Favorites tab and the
+ * Favorites half of Load list merge: normalized name + store (the chosen store, else the price's
+ * source store). v0.1.8 (L30): the unit is an amount, not part of the identity. A Shop result has
+ * no unit, so "2 lb Boneless Chicken" starred on the list and the same chicken in Shop are one
+ * favorite. (List lines still merge on name + unit + store: see backup.js lineKey.)
  */
 export function favKey(x) {
-  return `${nameKey(x?.name)}|${normUnit(x?.unit) || String(x?.unit ?? '').toLowerCase()}|${storeKeyOf(x ?? {})}`;
+  return `${nameKey(x?.name)}|${storeKeyOf(x ?? {})}`;
 }
+
+/**
+ * v0.1.8 (L30) migration: v0.1.7 keyed favorites on name + unit + store, so the same item could be
+ * a favorite twice ("2 lb" from the list, no unit from Shop). Keeps the FIRST of each identity in
+ * place (its qty/unit/store as the user made it), fills its empty qty, unit or note from the later
+ * copies, and joins two different notes. Meals are never touched. Returns { favorites, merged }.
+ */
+export function dedupeFavorites(fav) {
+  const at = new Map();
+  const items = [];
+  let merged = 0;
+  for (const it of fav.items) {
+    const k = favKey(it);
+    if (!at.has(k)) { at.set(k, items.length); items.push(it); continue; }
+    merged += 1;
+    const i = at.get(k);
+    const a = items[i];
+    const out = { ...a };
+    if (a.qty == null && it.qty != null) out.qty = it.qty;
+    if (!a.unit && it.unit) out.unit = it.unit;
+    if (it.notes && !a.notes) out.notes = it.notes;
+    else if (it.notes && a.notes && nameKey(it.notes) !== nameKey(a.notes)) out.notes = `${a.notes} · ${it.notes}`.slice(0, 500);
+    items[i] = out;
+  }
+  return merged ? { favorites: { ...fav, items }, merged } : { favorites: fav, merged: 0 };
+}
+export const FAVORITES_DEDUPE_BAK_KEY = 'shopsmartr:favorites:v1.predupe.bak';
 /** Favorite fields for a list row or a Shop result: name, qty, unit and its store (chosen or price source). */
 export function favInputOf(x) {
   return { name: x.name, qty: x.qty ?? null, unit: x.unit ?? '', storeId: storeKeyOf(x), notes: '' };
@@ -192,7 +222,20 @@ export function loadFavoritesWithStatus(storage = globalThis.localStorage) {
   let json;
   try { json = storage.getItem(FAVORITES_KEY); } catch { return { favorites: emptyFavorites(), problem: 'unavailable', backedUp: false }; }
   if (!json) return { favorites: emptyFavorites(), problem: null, backedUp: false };
-  if (isReadableFavorites(json)) return { favorites: deserializeFavorites(json), problem: null, backedUp: false };
+  if (isReadableFavorites(json)) {
+    // L30: combine favorites that are now one identity. Only after the old set is copied aside,
+    // and only if the combined set saves; otherwise load it unchanged (the stars still work).
+    const d = dedupeFavorites(deserializeFavorites(json));
+    if (!d.merged) return { favorites: d.favorites, problem: null, backedUp: false, merged: 0 };
+    try {
+      storage.setItem(FAVORITES_DEDUPE_BAK_KEY, json);
+      storage.setItem(FAVORITES_KEY, serializeFavorites(d.favorites));
+      return { favorites: d.favorites, problem: null, backedUp: false, merged: d.merged };
+    } catch {
+      try { storage.setItem(FAVORITES_KEY, json); } catch { /* unchanged */ }
+      return { favorites: deserializeFavorites(json), problem: null, backedUp: false, merged: 0 };
+    }
+  }
   let backedUp = false;
   try { storage.setItem(FAVORITES_BACKUP_KEY, json); backedUp = true; } catch { /* ignore */ }
   return { favorites: emptyFavorites(), problem: 'unreadable', backedUp };

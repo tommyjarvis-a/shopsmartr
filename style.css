@@ -230,7 +230,7 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 
 /* Menu */
 .menu .love p { min-width: 0; overflow-wrap: anywhere; }
-.menu { position: fixed; z-index: 30; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); border: 1px solid var(--color-border); padding: var(--space-2); width: 248px; }
+.menu { position: fixed; z-index: 50; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); border: 1px solid var(--color-border); padding: var(--space-2); width: 248px; }
 .menu .mh { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--color-text-faint); text-transform: uppercase; letter-spacing: .06em; padding: var(--space-2) var(--space-3) var(--space-1); }
 .menu .mi { display: flex; width: 100%; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-3); border-radius: var(--radius-sm); font-weight: var(--fw-medium); text-align: left; }
 .menu .mi:hover, .menu .mi:focus-visible { background: var(--color-surface-2); }
@@ -487,7 +487,7 @@ body.has-total .main { padding-bottom: calc(230px + env(safe-area-inset-bottom))
   background: var(--color-primary-soft);
   color: var(--color-primary-text);
 }
-.sort-menu { width: 264px; z-index: 30; }
+.sort-menu { width: 264px; z-index: 50; }
 .sort-menu .mi { justify-content: flex-start; width: 100%; }
 .sort-menu .mi .tick { margin-left: auto; color: var(--color-primary-text); }
 .sort-menu .mi[aria-checked="true"] { color: var(--color-primary-text); font-weight: var(--fw-semibold); }
@@ -742,7 +742,10 @@ body.has-total .main { padding-bottom: calc(230px + env(safe-area-inset-bottom))
 .trip-card .tot-sub { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); margin-top: 2px; }
 
 /* --- Layering + fit fixes --- */
-.menu { z-index: 30; }
+/* L28 (v0.1.8): an open menu sits ABOVE the Undo toast (40), like Material's menu-over-snackbar
+   elevation, so a tap on a menu item always runs that item. The toast stays up (and its Undo
+   works again) once the menu closes. */
+.menu { z-index: 50; }
 .fab { z-index: 4; }
 .totalbar { z-index: 5; }
 .row .side-price { min-width: 4.5rem; }
