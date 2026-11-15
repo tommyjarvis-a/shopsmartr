@@ -3,6 +3,8 @@
 // searches, department filters and add-bar suggestions. No DOM, no network. Everything returned by
 // normalizeDoc()/buildIndex() is structured-cloneable, so both can run in a Worker.
 
+import { normUnit } from './list.js';
+
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : (typeof x === 'string' && x.trim() !== '' && Number.isFinite(Number(x)) ? Number(x) : null));
 const str = (x, n = 200) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : (typeof x === 'number' && Number.isFinite(x) ? String(x) : null));
 const cents = (x) => (x == null ? null : Math.round(x * 100) / 100);
@@ -15,7 +17,9 @@ export function tokenize(text) {
     .replace(/&/g, ' and ').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 }
 
-const STR_COLS = ['sku', 'name', 'brand', 'size', 'unitPriceText', 'saleText', 'aisle', 'category'];
+const STR_COLS = ['sku', 'name', 'brand', 'size', 'unit', 'unitPriceText', 'saleText', 'aisle', 'category'];
+/** Prices at or above this are treated as bad rows (matches the list's limit). */
+export const MAX_PRICE = 1e6;
 
 /** Accepts v1 and v2 documents; drops rows without a name or price, and duplicate SKUs/UPCs. */
 export function normalizeDoc(doc) {
@@ -38,7 +42,7 @@ export function normalizeDoc(doc) {
     if (!raw || typeof raw !== 'object') continue;
     const name = str(raw.name) ?? str(raw.staple);
     const p = cents(num(raw.price));
-    if (!name || p == null || p < 0) continue;
+    if (!name || p == null || p < 0 || p >= MAX_PRICE) continue;
     const chain = str(raw.chain, 40) ?? stores[0]?.chain ?? 'store';
     const sid = str(raw.storeId, 40) ?? stores[0]?.storeId ?? '';
     const sku = str(raw.sku, 40) ?? str(raw.productID, 40);
@@ -52,7 +56,7 @@ export function normalizeDoc(doc) {
     let reg = cents(num(raw.regularPrice));
     const sale = Boolean(raw.onSale) || (reg != null && reg > p);
     if (!(sale && reg != null && reg > p)) reg = null;
-    cols.sku.push(sku); cols.name.push(name); cols.brand.push(str(raw.brand, 80)); cols.size.push(str(raw.size, 40));
+    cols.sku.push(sku); cols.name.push(name); cols.brand.push(str(raw.brand, 80)); cols.size.push(str(raw.size, 40)); cols.unit.push(str(raw.unit, 20));
     cols.unitPriceText.push(str(raw.unitPriceText, 40)); cols.saleText.push(str(raw.saleText, 80));
     cols.aisle.push(str(raw.aisle, 40)); cols.category.push(str(raw.category, 80));
     price[n] = p; regular[n] = reg ?? NaN; unitPrice[n] = cents(num(raw.unitPrice)) ?? NaN;
@@ -80,7 +84,7 @@ export function getItem(cat, i) {
   const s = cat.stores[c.store[i]];
   return {
     idx: i, key: `${s.chain}:${s.storeId}:${c.sku[i] ?? `#${i}`}`, chain: s.chain, storeId: s.storeId,
-    sku: c.sku[i], name: c.name[i], brand: c.brand[i], size: c.size[i],
+    sku: c.sku[i], name: c.name[i], brand: c.brand[i], size: c.size[i], unit: c.unit[i],
     price: c.price[i], regularPrice: nan(c.regular[i]), unitPrice: nan(c.unitPrice[i]), unitPriceText: c.unitPriceText[i],
     onSale: Boolean(c.flags[i] & ON_SALE), saleText: c.saleText[i], aisle: c.aisle[i],
     department: cat.deptNames[c.dept[i]], category: c.category[i],
@@ -198,10 +202,24 @@ export function isSubsequence(q, t) {
   return i === q.length;
 }
 
+/** True when q is within one edit of t or of a prefix of t of length |q|-1..|q|+1 ("bananna" ~ "bananas"). */
+export function nearPrefix(q, t) {
+  if (t.length < q.length - 1) return false;
+  for (let L = q.length - 1; L <= q.length + 1 && L <= t.length; L += 1) if (editDistance1(q, t.slice(0, L))) return true;
+  return false;
+}
+
+/** Minimum query-token lengths for the looser rules (L13: keeps "rice" from matching "ice"/"price"). */
+export const MIN_SUBSEQ = 3;
+export const MIN_FUZZY = 5;
+
 /**
  * Index tokens matching one query token: [[tokenIndex, class], ...]. Memoised per index, so typing
- * one more letter only resolves the last token. Subsequence candidates share the first letter (one
- * binary-searched range); fuzzy (edit distance 1, query tokens of 4+ chars) scans tokens of length +-1.
+ * one more letter only resolves the last token.
+ * - exact / prefix: binary-searched range of the sorted token list;
+ * - subsequence (3+ letters): same first letter, so it always starts at a word start;
+ * - fuzzy (5+ letters, and only when the token has no exact or prefix hit): one edit against the
+ *   word or against a word prefix of length |q|-1..|q|+1.
  */
 export function matchToken(index, q) {
   const memo = index.qmemo ?? (index.qmemo = new Map());
@@ -213,18 +231,18 @@ export function matchToken(index, q) {
   for (let k = lowerBound(tokens, q); k < tokens.length && tokens[k].startsWith(q); k += 1) {
     out.push([k, tokens[k] === q ? EXACT : PREFIX]); seen.add(k);
   }
-  if (q.length >= 2 && !/^\d+$/.test(q)) {
+  const direct = out.length;
+  const word = !/^\d+$/.test(q);
+  if (q.length >= MIN_SUBSEQ && word) {
     const c = q[0];
     const next = String.fromCharCode(c.charCodeAt(0) + 1);
     for (let k = lowerBound(tokens, c), end = lowerBound(tokens, next); k < end; k += 1) {
       if (!seen.has(k) && isSubsequence(q, tokens[k])) { out.push([k, SUBSEQ]); seen.add(k); }
     }
   }
-  if (q.length >= 4 && !/^\d+$/.test(q)) {
-    const byLen = index.byLen ?? (index.byLen = bucketByLength(tokens));
-    for (let L = q.length - 1; L <= q.length + 1; L += 1) {
-      for (const k of byLen[L] ?? []) if (!seen.has(k) && editDistance1(q, tokens[k])) { out.push([k, FUZZY]); seen.add(k); }
-    }
+  if (q.length >= MIN_FUZZY && word && direct === 0) {
+    const n = tokens.length;
+    for (let k = 0; k < n; k += 1) if (!seen.has(k) && nearPrefix(q, tokens[k])) { out.push([k, FUZZY]); seen.add(k); }
   }
   if (memo.size > 500) memo.clear();
   memo.set(q, out);
@@ -341,6 +359,19 @@ export function suggest(cat, index, name, { limit = 6, store = '' } = {}) {
   return search(cat, index, q, { limit, store }).items;
 }
 
+/** Unit the item's unit price is quoted in ("lb", "oz", "ea"...), from unit or unitPriceText. */
+export function unitOf(it) {
+  const tail = /\/\s*([a-z. ]+)$/i.exec(it.unitPriceText ?? '')?.[1];
+  return normUnit(tail) || normUnit(it.unit);
+}
+
+/** Regular (pre-sale) price on the same basis as estimate(): per estimated piece for by-weight items. */
+export function regularEach(it) {
+  if (!it.onSale || !it.regularPrice) return null;
+  const est = estimate(it);
+  return Math.round(est.each * (it.regularPrice / it.price) * 100) / 100;
+}
+
 /** Fields copied onto a list item added from the catalog. directory = stores.json rows by id. */
 export function pricedFields(cat, it, directory = {}) {
   const est = estimate(it);
@@ -351,6 +382,7 @@ export function pricedFields(cat, it, directory = {}) {
       each: est.each, approx: est.approx, regular: it.regularPrice, onSale: it.onSale,
       unitPriceText: it.unitPriceText, size: it.size, aisle: it.aisle, sku: it.sku,
       store: storeLabel(it), chain: it.chain, storeNo: it.storeId, asOf: cat.asOf,
+      shelf: it.price, unitPrice: it.unitPrice, unitOf: unitOf(it), byWeight: it.soldByWeight,
     },
   };
 }

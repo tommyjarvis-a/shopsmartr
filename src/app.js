@@ -635,7 +635,7 @@ function openShopSheet(idx, opener) {
   price.textContent = UI.itemPriceText(it);
   price.classList.toggle('price-sale', it.onSale);
   el('ci-sale').hidden = !it.onSale;
-  el('ci-was').textContent = it.onSale && it.regularPrice ? L.money(it.regularPrice) : '';
+  el('ci-was').textContent = it.onSale && it.regularPrice ? L.priceText(C.regularEach(it), it.soldByWeight) : '';
   el('ci-unit').textContent = [it.soldByWeight ? `${it.unitPriceText ?? ''}, estimated for ${it.approxWeightLb ?? 1} lb` : it.unitPriceText].filter(Boolean).join('');
   el('ci-aisle').textContent = [it.aisle, it.department].filter(Boolean).join(' · ');
   el('ci-store').textContent = C.storeLabel(it);
@@ -646,15 +646,22 @@ function openShopSheet(idx, opener) {
 
 /** Adds a catalog item; merges into an unchecked line for the same product from the same store. */
 function addPriced(it, qty = 1, unit = '') {
+  try { return addPricedOrThrow(it, qty, unit); } catch (err) { return err.message; }
+}
+function addPricedOrThrow(it, qty, unit) {
   const f = C.pricedFields(feed.catalog, it, data.byId);
-  const same = state.items.find((x) => !x.checked && x.priced && x.priced.sku === f.priced.sku && x.priced.chain === f.priced.chain && x.priced.storeNo === f.priced.storeNo);
+  const u = L.normUnit(unit) || unit;
+  const same = state.items.find((x) => !x.checked && x.priced && x.priced.sku === f.priced.sku && x.priced.chain === f.priced.chain
+    && x.priced.storeNo === f.priced.storeNo && (L.normUnit(x.unit) || x.unit) === u);
   if (same) {
-    const n = Math.round(((same.qty ?? 1) + qty) * 1000) / 1000;
+    const n = Math.min(L.MAX_QTY, Math.round(((same.qty ?? 1) + qty) * 1000) / 1000);
     commit(L.updateItem(state, same.id, { qty: n }));
-    return `${it.name}: now ${n} on your list`;
+    return `${it.name}: now ${L.formatQty({ qty: n, unit: same.unit })} on your list`;
   }
-  commit(L.addItem(state, { name: it.name, qty, unit, storeId: f.storeId, priced: f.priced }));
-  return `Added ${it.name} (${L.priceText(Math.round(f.priced.each * qty * 100) / 100, f.priced.approx)})`;
+  const next = L.addItem(state, { name: it.name, qty, unit, storeId: f.storeId, priced: f.priced });
+  commit(next);
+  const line = L.linePrice(next.items[next.items.length - 1]);
+  return `Added ${it.name} (${L.priceText(line.total, line.approx)})`;
 }
 
 // ----- combobox suggestions (add bar + mobile add sheet), shared matcher -----
@@ -796,6 +803,17 @@ function bindShop() {
   });
 }
 
+// L16: say what actually went wrong (a damaged file is not a network problem).
+function feedProblem(err) {
+  if (err instanceof Prices.FeedFormatError) return `${err.message}; it can't be read until the next refresh is published.`;
+  return `the price snapshot couldn't be opened (${err?.name || 'Error'}: ${err?.message || err}).`;
+}
+function unlockError(err) {
+  if (err instanceof Prices.WrongPassphraseError) return 'Wrong passphrase. Please try again.';
+  if (err instanceof Prices.FeedFormatError) return 'The price snapshot file is damaged, so it can\'t be opened. Try again after the next price refresh.';
+  return 'Could not unlock the price snapshot.';
+}
+
 async function initPrices() {
   bindShop();
   el('unlock-form').addEventListener('submit', async (e) => {
@@ -816,8 +834,8 @@ async function initPrices() {
     } catch (err) {
       input.value = '';
       input.focus();
-      UI.setStatus(el('unlock-status'), err instanceof Prices.WrongPassphraseError ? 'Wrong passphrase. Please try again.' : 'Could not unlock the price snapshot.', 'error');
-      if (!(err instanceof Prices.WrongPassphraseError)) console.warn('price feed:', err?.message);
+      UI.setStatus(el('unlock-status'), unlockError(err), 'error');
+      if (!(err instanceof Prices.WrongPassphraseError)) console.warn(`price feed: ${feedProblem(err)}`);
     } finally { btn.disabled = false; }
   });
   el('prices-forget').addEventListener('click', async () => {
@@ -836,8 +854,9 @@ async function initPrices() {
     const res = await Prices.unlockWithCache(priceEnv, undefined, undefined, timedDecode);
     if (res) { showShop(res); perf.usable = performance.now() - t0; perf.cached = true; } else showShop(null);
   } catch (err) {
-    console.warn('price feed:', err?.message);
+    console.warn(`price feed: ${feedProblem(err)}`);
     showShop(null);
+    UI.setStatus(el('unlock-status'), unlockError(err), 'error');
   }
 }
 

@@ -1,7 +1,7 @@
 // DOM rendering only. Clones <template>s from index.html and fills them with textContent,
 // so a reskin changes markup/CSS and never the logic modules.
-import { groupByStore, formatQty, UNITS, lineTotal, priceText, money, totals as listTotals } from './list.js';
-import { estimate } from './catalog.js';
+import { groupByStore, formatQty, UNITS, linePrice, priceText, money, totals as listTotals } from './list.js';
+import { estimate, regularEach } from './catalog.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const fromTemplate = (id) => document.getElementById(id).content.firstElementChild.cloneNode(true);
@@ -131,15 +131,15 @@ function renderItem(it, { onToggle, onEdit, onRemove }) {
   edit.addEventListener('click', () => onEdit(it.id));
   const p = it.priced;
   if (p) {
-    const qty = it.qty ?? 1;
+    const line = linePrice(it);
     $('[data-price-col]', li).hidden = false;
     const price = $('[data-price]', li);
-    price.textContent = priceText(lineTotal(it), p.approx);
+    price.textContent = priceText(line.total, line.approx);
     price.classList.toggle('price-sale', Boolean(p.onSale));
     const was = $('[data-was]', li);
-    if (p.onSale && p.regular) { was.hidden = false; was.textContent = money(Math.round(p.regular * qty * 100) / 100); }
+    if (line.regular) { was.hidden = false; was.textContent = priceText(line.regular, line.approx); }
     $('[data-price-store]', li).textContent = p.store ?? '';
-    edit.setAttribute('aria-label', `Edit ${it.name}, ${p.approx ? 'about ' : ''}${money(lineTotal(it))}${p.store ? ` at ${p.store}` : ''}`);
+    edit.setAttribute('aria-label', `Edit ${it.name}, ${line.approx ? 'about ' : ''}${money(line.total)}${p.store ? ` at ${p.store}` : ''}`);
   }
   const rm = $('[data-remove]', li);
   rm.setAttribute('aria-label', `Remove ${it.name}`);
@@ -222,7 +222,7 @@ export function catRow(it, onOpen) {
   $('[data-meta]', btn).textContent = [it.size, sale || it.soldByWeight ? it.unitPriceText : '', it.aisle].filter(Boolean).join(' · ');
   fillPrice(btn, it);
   const was = $('[data-was]', btn);
-  if (sale) { was.hidden = false; was.textContent = money(it.regularPrice); }
+  if (sale) { was.hidden = false; was.textContent = priceText(regularEach(it), it.soldByWeight); }
   $('[data-unit]', btn).textContent = sale ? '' : (it.soldByWeight ? 'est. each' : (it.unitPriceText ?? ''));
   btn.setAttribute('aria-label', `${it.name}, ${it.soldByWeight ? 'about ' : ''}${money(estimate(it).each)}${it.onSale ? ', on sale' : ''}`);
   btn.addEventListener('click', () => onOpen(it.idx, btn));

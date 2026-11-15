@@ -430,3 +430,10 @@ body.has-total .main { padding-bottom: calc(230px + env(safe-area-inset-bottom))
 @media (min-width: 1024px) { .dept-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .dept-card .count { background: none; padding: 0; border-radius: 0; font-weight: var(--fw-medium); }
 .screen-shop:has(#shop-open:not([hidden])) #shop-sub { display: none; }
+
+/* v0.1.4 */
+/* L15: 16px text in every form control on phones, so iOS Safari doesn't zoom on focus */
+@media (max-width: 767px) { input, select, textarea, .input, .shop-store-field select.input { font-size: 16px; } }
+/* L17: give the add sheet's quantity stepper room for a 44px-wide field at 360 */
+#item-form .field-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+#item-form .stepper input { min-width: 44px; }

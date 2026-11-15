@@ -9,6 +9,11 @@ const UNIT_ALIASES = {
   bunches: 'bunch', cups: 'cup', doz: 'dozen', loaves: 'loaf', tubs: 'tub',
 };
 
+/** Upper bound for a quantity (also covers weights such as 1000 g). */
+export const MAX_QTY = 9999;
+/** Upper bound for a stored price (catalog prices above this are dropped too). */
+export const MAX_PRICE = 1e6;
+
 export function emptyState() {
   return { version: 1, items: [], selectedStoreIds: [], zip: '', radiusMi: 10, chains: [] };
 }
@@ -28,6 +33,7 @@ export function cleanItemInput(input = {}) {
   else {
     qty = Number(qty);
     if (!Number.isFinite(qty) || qty <= 0) throw new Error('Quantity must be a positive number');
+    if (qty > MAX_QTY) throw new Error(`Quantity must be ${MAX_QTY} or less`);
     qty = Math.round(qty * 1000) / 1000;
   }
   const out = {
@@ -43,7 +49,8 @@ export function cleanItemInput(input = {}) {
 }
 
 const pStr = (x, n = 80) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : (typeof x === 'number' && Number.isFinite(x) ? String(x) : null));
-const pNum = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x < 100000 ? Math.round(x * 100) / 100 : null);
+const pNum = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 && x < MAX_PRICE ? Math.round(x * 100) / 100 : null);
+const pPos = (x) => (typeof x === 'number' && Number.isFinite(x) && x > 0 && x < MAX_PRICE ? x : null);
 
 /** Price snapshot carried by items added from the catalog; null when absent or invalid. */
 export function cleanPriced(p) {
@@ -54,7 +61,7 @@ export function cleanPriced(p) {
   return {
     each,
     approx: Boolean(p.approx),
-    regular: regular != null && regular > each ? regular : null,
+    regular: regular != null && regular > (pNum(p.shelf) ?? each) ? regular : null,
     onSale: Boolean(p.onSale),
     unitPriceText: pStr(p.unitPriceText),
     size: pStr(p.size),
@@ -64,13 +71,70 @@ export function cleanPriced(p) {
     chain: pStr(p.chain, 40),
     storeNo: pStr(p.storeNo, 40),
     asOf: pStr(p.asOf, 40),
+    shelf: pNum(p.shelf),
+    unitPrice: pPos(p.unitPrice),
+    unitOf: normUnit(p.unitOf),
+    byWeight: Boolean(p.byWeight),
   };
 }
 
-/** Line total for one item (qty defaults to 1); null when the item has no price. */
+// ---------- units ----------
+const UNIT_NORM = {
+  lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb', oz: 'oz', ounce: 'oz', ounces: 'oz', g: 'g', gram: 'g', grams: 'g',
+  kg: 'kg', kgs: 'kg', kilogram: 'kg', gal: 'gal', gallon: 'gal', gallons: 'gal', qt: 'qt', quart: 'qt', quarts: 'qt',
+  l: 'L', liter: 'L', liters: 'L', litre: 'L', ml: 'ml', milliliter: 'ml', cup: 'cup', cups: 'cup',
+  floz: 'floz', 'fl oz': 'floz', 'fluid ounce': 'floz', 'fl. oz': 'floz',
+  ea: 'ea', each: 'ea', ct: 'ea', count: 'ea',
+};
+/** Canonical unit name, or '' when unknown. Accepts "lb.", "Pounds", "fl oz". */
+export function normUnit(u) {
+  const k = String(u ?? '').trim().toLowerCase().replace(/\.$/, '').replace(/\s+/g, ' ');
+  return UNIT_NORM[k] ?? UNIT_NORM[k.replace(/s$/, '')] ?? '';
+}
+const TO_LB = { lb: 1, oz: 1 / 16, g: 1 / 453.59237, kg: 2.20462262 };
+const TO_ML = { gal: 3785.411784, qt: 946.352946, L: 1000, ml: 1, cup: 236.5882365, floz: 29.5735295625 };
+/** Factor turning one `from` into `to` units (weights with weights, volumes with volumes); null otherwise. */
+export function convert(from, to) {
+  if (from === to) return 1;
+  if (TO_LB[from] && TO_LB[to]) return TO_LB[from] / TO_LB[to];
+  const f = from === 'oz' && to in TO_ML ? 'floz' : from;   // "oz" of a liquid priced per fl oz
+  if (TO_ML[f] && TO_ML[to]) return TO_ML[f] / TO_ML[to];
+  return null;
+}
+export const isWeight = (u) => u in TO_LB;
+export const isMeasure = (u) => u in TO_LB || u in TO_ML;
+
+const r2 = (x) => Math.round(x * 100) / 100;
+
+/**
+ * Price of one list line, from the snapshot carried on the item. Returns { total, approx, regular }
+ * or null when the item has no price. Rules (M2):
+ * - qty in a weight/volume unit and a unit price in a compatible unit: qty converted x unit price.
+ *   Exact for items sold by weight; "~" for package items (you buy whole packages).
+ * - qty in a weight/volume unit without a usable unit price: one line at the package price, marked
+ *   "~" (we don't invent a conversion).
+ * - otherwise qty counts packages (or estimated pieces for by-weight items): qty x each.
+ * regular is the same line at the regular price when the item was on sale.
+ */
+export function linePrice(it) {
+  const p = it?.priced;
+  if (!p) return null;
+  const qty = it.qty ?? 1;
+  const u = normUnit(it.unit);
+  const ratio = p.onSale && p.regular ? p.regular / (p.shelf || p.each) : null;
+  let total;
+  let approx = p.approx;
+  if (isMeasure(u)) {
+    const f = p.unitPrice && p.unitOf ? convert(u, p.unitOf) : null;
+    if (f) { total = qty * f * p.unitPrice; approx = !p.byWeight; } else { total = p.each; approx = true; }
+  } else total = qty * p.each;
+  total = r2(total);
+  return { total, approx: Boolean(approx), regular: ratio && ratio > 1 ? r2(total * ratio) : null };
+}
+
+/** Line total for one item; null when the item has no price. Same rules as linePrice(). */
 export function lineTotal(it) {
-  if (!it?.priced) return null;
-  return Math.round(it.priced.each * (it.qty ?? 1) * 100) / 100;
+  return linePrice(it)?.total ?? null;
 }
 
 /**
@@ -80,18 +144,21 @@ export function lineTotal(it) {
 export function totals(items) {
   const t = { all: 0, remaining: 0, inCart: 0, priced: 0, unpriced: 0, approx: false, approxRemaining: false };
   for (const it of items) {
-    const line = lineTotal(it);
-    if (line == null) { t.unpriced += 1; continue; }
+    const line = linePrice(it);
+    if (!line) { t.unpriced += 1; continue; }
     t.priced += 1;
-    t.all += line;
-    if (it.checked) t.inCart += line; else { t.remaining += line; if (it.priced.approx) t.approxRemaining = true; }
-    if (it.priced.approx) t.approx = true;
+    t.all += line.total;
+    if (it.checked) t.inCart += line.total; else { t.remaining += line.total; if (line.approx) t.approxRemaining = true; }
+    if (line.approx) t.approx = true;
   }
   for (const k of ['all', 'remaining', 'inCart']) t[k] = Math.round(t[k] * 100) / 100;
   return t;
 }
-
-export const money = (n) => (Number.isFinite(n) ? `$${n.toFixed(2)}` : '');
+/** "$1,234.50" (thousands separators, 2 decimals). */
+// One shared formatter: toLocaleString() with options builds a new Intl formatter per call,
+// which doubled the Shop render time for 50 rows.
+const MONEY = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const money = (n) => (Number.isFinite(n) ? `$${MONEY.format(n)}` : '');
 /** "$3.99", or "~$3.99" for an estimate. */
 export const priceText = (n, approx = false) => (Number.isFinite(n) ? `${approx ? '~' : ''}${money(n)}` : '');
 

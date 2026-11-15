@@ -1,5 +1,5 @@
 // CSV and plain-text export. Pure string builders; the UI turns them into downloads.
-import { groupByStore, formatQty, lineTotal, totals, priceText, money } from './list.js';
+import { groupByStore, formatQty, linePrice, totals, priceText, money } from './list.js';
 
 /** Local calendar date for file names, e.g. 2026-11-14 (not the UTC date: L10). */
 export function localDateStamp(d = new Date()) {
@@ -28,7 +28,8 @@ const fixed = (n) => (Number.isFinite(n) ? n.toFixed(2) : '');
 function priceCells(it) {
   const p = it.priced;
   if (!p) return ['', '', '', '', '', '', '', ''];
-  return [fixed(p.each), fixed(lineTotal(it)), p.approx ? 'yes' : 'no', p.unitPriceText ?? '', p.aisle ?? '', p.sku ?? '', p.store ?? '', p.asOf ?? ''];
+  const line = linePrice(it);
+  return [fixed(p.each), fixed(line.total), line.approx ? 'yes' : 'no', p.unitPriceText ?? '', p.aisle ?? '', p.sku ?? '', p.store ?? '', p.asOf ?? ''];
 }
 
 export function toCSV(items, storesById = {}, { bom = false } = {}) {
@@ -94,7 +95,8 @@ export function toText(items, storesById = {}, { title = 'ShopSmartR shopping li
     for (const it of g.items) {
       const q = formatQty(it);
       const note = it.notes ? ` — ${it.notes.replace(/\s*\r?\n\s*/g, ' ')}` : '';
-      const price = it.priced ? ` — ${priceText(lineTotal(it), it.priced.approx)}${it.priced.store ? ` (${it.priced.store}${it.priced.aisle ? `, ${it.priced.aisle}` : ''})` : ''}` : '';
+      const lp = linePrice(it);
+      const price = lp ? ` — ${priceText(lp.total, lp.approx)}${it.priced.store ? ` (${it.priced.store}${it.priced.aisle ? `, ${it.priced.aisle}` : ''})` : ''}` : '';
       lines.push(`[${it.checked ? 'x' : ' '}] ${q ? `${q} ` : ''}${it.name.replace(/\s*\r?\n\s*/g, ' ')}${price}${note}`);
     }
   }

@@ -1,6 +1,6 @@
 // Main-thread glue for the encrypted price feed: a decode() for prices.js unlock functions that runs
 // the heavy work in src/price-worker.js, with a main-thread fallback when Workers are unavailable.
-import { decryptWithKey, WrongPassphraseError } from './prices.js';
+import { decryptWithKey, WrongPassphraseError, FeedFormatError } from './prices.js';
 import { prepare } from './catalog.js';
 
 export function makeDecoder() {
@@ -24,6 +24,7 @@ export function makeDecoder() {
     const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, env, key }); });
     if (res.ok) return { catalog: res.catalog, index: res.index, ms: res.ms, where: 'worker' };
     if (res.wrong) throw new WrongPassphraseError();
+    if (res.format) throw new FeedFormatError(/\((.+)\)/.exec(res.message)?.[1] ?? 'contents');
     if (res.message === 'worker failed') return onMain(env, key);
     throw new Error(res.message);
   };

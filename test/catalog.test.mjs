@@ -88,7 +88,7 @@ test('pricedFields keeps the source store, sku and estimate', () => {
   const apples = C.search(cat, index, 'apples').items[0];
   const f = C.pricedFields(cat, apples, { 'wegmans-90': { id: 'wegmans-90' } });
   assert.equal(f.storeId, 'wegmans-90');
-  assert.deepEqual(f.priced, { each: 4.98, approx: true, regular: null, onSale: false, unitPriceText: '$2.49/lb', size: '1 lb.', aisle: null, sku: '1003', store: 'Wegmans #90', chain: 'wegmans', storeNo: '90', asOf: '2026-11-14T12:00:00Z' });
+  assert.deepEqual(f.priced, { each: 4.98, approx: true, regular: null, onSale: false, unitPriceText: '$2.49/lb', size: '1 lb.', aisle: null, sku: '1003', store: 'Wegmans #90', chain: 'wegmans', storeNo: '90', asOf: '2026-11-14T12:00:00Z', shelf: 2.49, unitPrice: 2.49, unitOf: 'lb', byWeight: true });
   const b = C.pricedFields(cat, C.search(cat, index, 'bagels', { store: B }).items[0], { 'wegmans-90': {} });
   assert.equal(b.storeId, '', 'stores not in the directory go to Any store');
   assert.equal(b.priced.store, 'Wegmans #999');
@@ -175,4 +175,61 @@ test('matcher is store-scoped', () => {
 test('onSale lists only real sale items of the selected store', () => {
   assert.deepEqual(C.onSale(cat, index, A).map((i) => i.name), ['Fake Almondmilk Unsweetened']);
   assert.deepEqual(C.onSale(cat, index, B), []);
+});
+
+// ---------- v0.1.4: M3 typo against word prefixes, L13 tighter short-token rules ----------
+const N = mk([
+  { name: 'Bananas', department: 'Produce' },
+  { name: 'Organic Bananas', department: 'Produce' },
+  { name: 'Banana Bread', department: 'Bakery' },
+  { name: 'Long Grain White Rice', department: 'Grocery' },
+  { name: 'Vanilla Ice Cream', department: 'Frozen' },
+  { name: 'Mega Price Pack Cookies', department: 'Snacks' },
+  { name: 'Rich Tea Biscuits', department: 'Snacks' },
+  { name: 'Ground Beef 80/20', department: 'Meat' },
+  { name: 'Beer Battered Fish', department: 'Seafood' },
+  { name: 'Sparkling Water Multipack', department: 'Beverages' },
+  { name: 'Whole Milk 500 ml', department: 'Dairy' },
+  { name: 'Boneless Skinless Chicken Breast', department: 'Meat' },
+  { name: 'Salmon Fillet', department: 'Seafood' },
+]);
+const n = (text) => C.search(N.catalog, N.index, text).items.map((i) => i.name);
+
+test('M3: "bananna" finds Bananas (one edit against a word prefix), ranked at or above Banana Bread', () => {
+  assert.ok(C.nearPrefix('bananna', 'bananas'));
+  assert.ok(C.nearPrefix('bananna', 'banana'));
+  assert.ok(!C.nearPrefix('bananna', 'bandana'));
+  const r = n('bananna');
+  assert.ok(r.includes('Bananas') && r.includes('Organic Bananas') && r.includes('Banana Bread'), r.join(' | '));
+  assert.ok(r.indexOf('Bananas') < r.indexOf('Banana Bread'));
+  assert.deepEqual(C.suggest(N.catalog, N.index, 'bananna').map((i) => i.name)[0], 'Bananas', 'suggestions share the fix');
+  assert.deepEqual(n('salmom'), ['Salmon Fillet']);
+  assert.deepEqual(n('chickem'), ['Boneless Skinless Chicken Breast'], 'one substitution');
+});
+
+test('L13: short tokens stay precise; chkn brst still works', () => {
+  assert.deepEqual(n('rice'), ['Long Grain White Rice']);
+  assert.deepEqual(n('beef'), ['Ground Beef 80/20']);
+  assert.deepEqual(n('ml'), ['Whole Milk 500 ml']);
+  assert.deepEqual(n('chkn brst'), ['Boneless Skinless Chicken Breast']);
+  assert.deepEqual(n('bread'), ['Banana Bread'], 'no fuzzy noise (breast) when the word has real hits');
+  assert.equal(C.MIN_FUZZY, 5);
+  assert.equal(C.MIN_SUBSEQ, 3);
+});
+
+test('L14: huge and absurd prices', () => {
+  const big = mk([{ name: 'Gold Bar', price: 123456.78 }, { name: 'Broken', price: 5e6 }]);
+  assert.equal(big.catalog.n, 1, 'prices >= $1M are dropped as bad rows');
+  assert.equal(C.getItem(big.catalog, 0).price, 123456.78);
+});
+
+test('L12: regular price on the estimate basis for by-weight sale items', () => {
+  const it = { price: 0.69, regularPrice: 0.79, onSale: true, soldByWeight: true, unitPrice: 0.69, approxWeightLb: 2 };
+  assert.deepEqual(C.estimate(it), { each: 1.38, approx: true });
+  assert.equal(C.regularEach(it), 1.58);
+  assert.equal(C.regularEach({ price: 3.49, regularPrice: 3.99, onSale: true }), 3.99);
+  assert.equal(C.regularEach({ price: 3.49, regularPrice: null, onSale: false }), null);
+  assert.equal(C.unitOf({ unitPriceText: '$3.99/lb', unit: 'Each' }), 'lb');
+  assert.equal(C.unitOf({ unitPriceText: '$0.08/ounce' }), 'oz');
+  assert.equal(C.unitOf({ unit: 'Each' }), 'ea');
 });

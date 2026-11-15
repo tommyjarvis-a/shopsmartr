@@ -146,3 +146,25 @@ test('unlock with a custom decode: key is cached only after decode succeeds', as
   assert.ok(await cache.get('base'));
   assert.ok(calls >= 3);
 });
+
+test('L16: a damaged gzip or JSON body is a FeedFormatError, not a network or passphrase error', async () => {
+  const subtle = globalThis.crypto.subtle;
+  const b64 = (u) => Buffer.from(u).toString('base64');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const pass = 'throwaway-l16-test-passphrase';
+  const base = await subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 600000 }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const seal = async (v, body) => {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const aad = P.AAD[v];
+    const ct = await subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(aad), tagLength: 128 }, key, body);
+    return { v, kdf: 'PBKDF2-SHA256', iter: 600000, alg: 'AES-GCM-256', ...(v === 2 ? { z: 'gzip' } : {}), aad, salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) };
+  };
+  const badGzip = await seal(2, new TextEncoder().encode('definitely not gzip'));
+  await assert.rejects(P.decryptWithKey(badGzip, key), (e) => e instanceof P.FeedFormatError && /gzip/.test(e.message));
+  const badJson = await seal(1, new TextEncoder().encode('{not json'));
+  await assert.rejects(P.decryptWithKey(badJson, key), (e) => e instanceof P.FeedFormatError && /JSON/.test(e.message));
+  const cache = P.memoryKeyCache();
+  await assert.rejects(P.unlockWithPassphrase(badGzip, pass, cache), P.FeedFormatError);
+  assert.equal(await cache.get('base'), null, 'nothing cached for an unreadable file');
+});

@@ -32,6 +32,11 @@ const dec = new TextDecoder();
 const subtleOf = (s) => s || globalThis.crypto.subtle;
 export const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
+/** The envelope authenticated but its contents can't be read (corrupt gzip or JSON). */
+export class FeedFormatError extends Error {
+  constructor(what) { super(`The price file is damaged (${what})`); this.name = 'FeedFormatError'; }
+}
+
 export class WrongPassphraseError extends Error {
   constructor() { super('Wrong passphrase'); this.name = 'WrongPassphraseError'; }
 }
@@ -84,9 +89,11 @@ export async function decryptWithKey(env, key, subtle, ms = null) {
     );
   } catch { throw new WrongPassphraseError(); }
   if (ms) { ms.decrypt = now() - t; t = now(); }
-  const bytes = env.z === 'gzip' ? await gunzip(new Uint8Array(pt)) : new Uint8Array(pt);
+  let bytes;
+  try { bytes = env.z === 'gzip' ? await gunzip(new Uint8Array(pt)) : new Uint8Array(pt); } catch { throw new FeedFormatError('gzip'); }
   if (ms) { ms.gunzip = now() - t; t = now(); }
-  const doc = JSON.parse(dec.decode(bytes));
+  let doc;
+  try { doc = JSON.parse(dec.decode(bytes)); } catch { throw new FeedFormatError('JSON'); }
   if (ms) ms.parse = now() - t;
   return doc;
 }
