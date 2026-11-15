@@ -2,6 +2,34 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.8-alpha] - 2026-11-15 (alpha)
+
+Small fix release for the Lows from the QA gate on 0.1.7-alpha (d4e65be). Still alpha; prices are
+a saved household snapshot, not official checkout prices.
+
+### Changed
+- **One favorite identity for Shop and the list (L30).** A favorite is now the normalized name +
+  store (the chosen store, else the price's store). The unit is an amount, not part of the
+  identity, so "2 lb Mini Apples" starred on the list shows filled on the same Shop result and
+  can't be favorited twice. Different stores stay separate. Load list uses the same rule for
+  Favorites; list lines still merge on name + unit + store (their quantities add).
+- **Old duplicates are combined once (L30).** On load, favorites that are now the same identity
+  become one: the first is kept as it was (its qty, unit and store), empty fields are filled from
+  the others and different notes are joined. The old set is copied to
+  `shopsmartr:favorites:v1.predupe.bak` first, and a notice says how many were combined. If the
+  copy can't be written, nothing changes. Meals are never touched. A Replace from an older file
+  is combined the same way.
+- **"Favorites" is capitalized (L31)** in the remove toast and label on the Favorites tab, the
+  empty state, "Add all Favorites to this week's list", the unreadable-data notice, Load list
+  messages and the file summary ("4 Favorites"). The singular "favorite" is unchanged.
+
+### Fixed
+- **L28:** an open ⋮ or sort menu now sits above the Undo toast, so tapping a menu item always runs
+  that item instead of the toast's Undo. The toast stays up and its Undo works once the menu closes.
+- **L29:** a double tap on "Save list first" saves once. The reopened confirm ignores taps for
+  0.6 s, and Save list ignores a repeat while a save is running or within 0.8 s of the last one.
+  A deliberate second save after that still works.
+
 ## [0.1.7-alpha] - 2026-11-15 (alpha)
 
 Favorite stars and list actions. Still alpha; prices are a saved household snapshot, not official
