@@ -74,13 +74,16 @@ test('L30: a weight line starred on the list is the same favorite as its Shop re
 });
 
 test('L30: dedupeFavorites keeps the first, fills blanks, joins notes, never touches meals; idempotent', () => {
-  let fav = F.emptyFavorites();
-  fav = F.addFavorite(fav, { name: 'Boneless Chicken', qty: 2, unit: 'lb', storeId: 'wegmans-90', notes: '' }, 'a');
-  fav = F.addFavorite(fav, { name: 'Bread', storeId: 'wegmans-90' }, 'b');
-  fav = F.addFavorite(fav, { name: 'boneless chicken', storeId: 'wegmans-90', notes: 'thin cut' }, 'c');
-  fav = F.addFavorite(fav, { name: 'Bread', qty: 1, unit: 'loaf', storeId: 'wegmans-90', notes: 'rye' }, 'd');
-  fav = F.addFavorite(fav, { name: 'Bread', storeId: 'wegmans-90', notes: 'seeded' }, 'e');
-  fav = F.addFavorite(fav, { name: 'Bread', storeId: 'tops-451' }, 'f');
+  // Old (pre-v0.1.10) data could hold duplicates; addFavorite now refuses them (M6), so build it raw.
+  const raw = [
+    { id: 'a', name: 'Boneless Chicken', qty: 2, unit: 'lb', storeId: 'wegmans-90', notes: '' },
+    { id: 'b', name: 'Bread', storeId: 'wegmans-90' },
+    { id: 'c', name: 'boneless chicken', storeId: 'wegmans-90', notes: 'thin cut' },
+    { id: 'd', name: 'Bread', qty: 1, unit: 'loaf', storeId: 'wegmans-90', notes: 'rye' },
+    { id: 'e', name: 'Bread', storeId: 'wegmans-90', notes: 'seeded' },
+    { id: 'f', name: 'Bread', storeId: 'tops-451' },
+  ];
+  let fav = F.deserializeFavorites(JSON.stringify({ version: 1, items: raw, meals: [] }));
   fav = F.createMeal(fav, 'Dinner', [{ name: 'Bread' }, { name: 'bread' }], { id: 'm' });
   const r = F.dedupeFavorites(fav);
   assert.equal(r.merged, 3);

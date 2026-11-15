@@ -223,11 +223,14 @@ function bindFavorites() {
     const input = e.currentTarget.elements.text;
     const q = L.parseQuick(input.value);
     try {
+      // M6: same identity check as the stars; an existing favorite is not added a second time.
       commitFavs(F.addFavorite(favs, { name: q.name, qty: q.qty, unit: q.unit }));
       input.value = '';
       UI.setStatus(el('fav-status'), '');
       input.focus();
-    } catch (err) { UI.setStatus(el('fav-status'), err.message, 'error'); }
+    } catch (err) {
+      UI.setStatus(el('fav-status'), err instanceof F.DuplicateFavoriteError ? `${err.existing.name} is already in your Favorites. Edit it to change the amount.` : err.message, 'error');
+    }
   });
   el('fav-add-all').addEventListener('click', () => addFavsToList(favs.items, 'Favorites'));
   el('meal-add').addEventListener('submit', (e) => {
@@ -250,7 +253,9 @@ function bindFavorites() {
       const { mealId, id } = favEditing;
       commitFavs(mealId ? F.updateMealItem(favs, mealId, id, patch) : F.updateFavorite(favs, id, patch));
       el('fav-sheet').close();
-    } catch (err) { UI.setStatus(el('fav-sheet-status'), err.message, 'error'); }
+    } catch (err) {
+      UI.setStatus(el('fav-sheet-status'), err instanceof F.DuplicateFavoriteError ? `${err.existing.name} at this store is already in your Favorites. Change the name or store, or edit that one.` : err.message, 'error');
+    }
   });
   el('meal-form').addEventListener('submit', (e) => {
     const v = e.submitter?.value;
@@ -535,7 +540,7 @@ async function onLoadFile(file) {
   const pill = (t) => { const x = document.createElement('span'); x.textContent = t; return x; };
   const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
   el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
-    sm.favorites ? n('favorites', 'favorite') : '', sm.meals ? n('meals', 'meal') : '',
+    sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.meals ? n('meals', 'meal') : '',
     sm.dropped ? `${sm.dropped} unreadable skipped` : '',
     sm.duplicates ? `${sm.duplicates} duplicate${sm.duplicates === 1 ? '' : 's'} skipped` : ''].filter(Boolean).map(pill));
   const cur = state.items.length;
@@ -662,6 +667,7 @@ async function toggleStar(x, btn) {
 
 // ---------- Confirm dialog (v0.1.7): focus trapped, Esc = Cancel, focus returns to the opener ----------
 let confirmResolve = null;
+const BACKDROP_GRACE_MS = 300;
 /**
  * actions: [{ label, value, kind: 'primary'|'secondary'|'danger' }]. Resolves with the chosen value,
  * or 'cancel' (Esc, backdrop, Cancel). returnFocus gets focus back when it closes.
@@ -697,6 +703,7 @@ function confirmDialog({ title, body = [], actions, initial, returnFocus, status
   return new Promise((resolve) => {
     confirmResolve = resolve;
     dlg._finish = finish;
+    dlg._openedAt = performance.now();
     dlg.showModal();
     (row.querySelector(`[data-value="${initial}"]`) ?? row.querySelector('button')).focus();
   });
@@ -704,7 +711,13 @@ function confirmDialog({ title, body = [], actions, initial, returnFocus, status
 function bindConfirm() {
   const dlg = el('confirm-dlg');
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); dlg._finish?.('cancel'); });   // Esc = Cancel
-  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg._finish?.('cancel'); });   // backdrop
+  // Backdrop. L32: ignored while the dialog is not armed and for BACKDROP_GRACE_MS after it opens,
+  // so the second click of a desktop double-click (the reopened dialog is still sliding in) can't close it.
+  dlg.addEventListener('click', (e) => {
+    if (e.target !== dlg) return;
+    if (dlg.dataset.armed === 'false' || performance.now() - (dlg._openedAt ?? 0) < BACKDROP_GRACE_MS) return;
+    dlg._finish?.('cancel');
+  });
   // A late 'close' from the previous round must not cancel a dialog that was opened again since.
   dlg.addEventListener('close', () => { if (!dlg.open) dlg._finish?.('cancel'); });
   dlg.addEventListener('keydown', (e) => {
@@ -1364,8 +1377,8 @@ async function init() {
   if (loaded.problem === 'unreadable') {
     showNotice(`Your saved list couldn't be read, so ShopSmartR started a new one.${loaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:v1.bak).' : ''}`);
   }
-  if (favLoaded.merged) {
-    showNotice(`Combined ${favLoaded.merged} duplicate Favorite${favLoaded.merged === 1 ? '' : 's'}: the same item at the same store is now one favorite, whatever the amount. A copy of the old set was kept in this browser (${F.FAVORITES_DEDUPE_BAK_KEY}).`);
+  if (favLoaded.notice) {
+    showNotice(`Combined ${favLoaded.merged === 1 ? '1 duplicate favorite' : `${favLoaded.merged} duplicate Favorites`}: the same item at the same store is now one favorite, whatever the amount. A copy of the old set was kept in this browser (${F.FAVORITES_DEDUPE_BAK_KEY}).`);
   }
   if (favLoaded.problem === 'unreadable') {
     showNotice(`Your saved Favorites couldn't be read, so ShopSmartR started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);

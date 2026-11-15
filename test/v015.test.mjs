@@ -181,7 +181,7 @@ test('Load list: round trip, validation of schema, version and shape', () => {
   assert.equal(r.ok, true);
   assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, stores: 2, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
   assert.equal(r.backup.saveId, SAVE_ID);
-  assert.equal(B.summaryText(r.summary), '5 list items · 1 Favorite · 1 meal · 2 stores');
+  assert.equal(B.summaryText(r.summary), '5 list items · 1 favorite · 1 meal · 2 stores');
   assert.deepEqual(r.backup.state.items, state.items);
   assert.deepEqual(r.backup.favs, favs);
   assert.equal(r.backup.shopStore, 'wegmans:90');

@@ -23,11 +23,34 @@ function cleanMealName(name) {
 }
 
 // ---------- staple items ----------
-export function addFavorite(fav, input, id = newId()) {
-  return { ...fav, items: [...fav.items, { id, ...cleanFav(input) }] };
+/** Thrown when an add or edit would make a second favorite with the same identity (M6). */
+export class DuplicateFavoriteError extends Error {
+  constructor(existing) {
+    super(`${existing.name} is already in your Favorites`);
+    this.name = 'DuplicateFavoriteError';
+    this.existing = existing;
+  }
 }
+/**
+ * Every staple add goes through the identity check (v0.1.10, M6): name + store (favKey). An add
+ * that matches an existing favorite throws DuplicateFavoriteError and changes nothing, so the
+ * L30 migration never has anything to combine again.
+ */
+export function addFavorite(fav, input, id = newId()) {
+  const row = { id, ...cleanFav(input) };
+  const existing = findFavorite(fav, row);
+  if (existing) throw new DuplicateFavoriteError(existing);
+  return { ...fav, items: [...fav.items, row] };
+}
+/** Edits a favorite; an edit (rename or store change) into another favorite's identity throws DuplicateFavoriteError. */
 export function updateFavorite(fav, id, patch) {
-  return { ...fav, items: fav.items.map((it) => (it.id === id ? { ...it, ...cleanFav({ ...it, ...patch }) } : it)) };
+  const cur = fav.items.find((it) => it.id === id);
+  if (!cur) return fav;
+  const next = { ...cur, ...cleanFav({ ...cur, ...patch }) };
+  const k = favKey(next);
+  const other = fav.items.find((it) => it.id !== id && favKey(it) === k);
+  if (other) throw new DuplicateFavoriteError(other);
+  return { ...fav, items: fav.items.map((it) => (it.id === id ? next : it)) };
 }
 export function removeFavorite(fav, id) {
   return { ...fav, items: fav.items.filter((it) => it.id !== id) };
@@ -71,6 +94,40 @@ export function dedupeFavorites(fav) {
   return merged ? { favorites: { ...fav, items }, merged } : { favorites: fav, merged: 0 };
 }
 export const FAVORITES_DEDUPE_BAK_KEY = 'shopsmartr:favorites:v1.predupe.bak';
+/**
+ * v0.1.10 (M6): { noticedAt, extra: [keys] }. noticedAt makes the "Combined N duplicate…" notice
+ * one-time; extra lists timestamped copies made by any later combine (the first copy in
+ * FAVORITES_DEDUPE_BAK_KEY is never overwritten). At most MAX_EXTRA_DEDUPE_BAKS are kept.
+ */
+export const FAVORITES_DEDUPE_META_KEY = 'shopsmartr:favorites:v1.dedupeMeta';
+export const MAX_EXTRA_DEDUPE_BAKS = 3;
+const dedupeExtraBase = (iso) => `shopsmartr:favorites:v1.predupe.${iso.replace(/[^0-9TZ]/g, '')}`;
+function readDedupeMeta(storage) {
+  try {
+    const m = JSON.parse(storage.getItem(FAVORITES_DEDUPE_META_KEY) ?? 'null');
+    const extra = Array.isArray(m?.extra) ? m.extra.filter((k) => typeof k === 'string' && /^shopsmartr:favorites:v1\.predupe\.[0-9TZ]+(\.\d+)?\.bak$/.test(k)) : [];
+    return { noticedAt: typeof m?.noticedAt === 'string' ? m.noticedAt : null, extra };
+  } catch { return { noticedAt: null, extra: [] }; }
+}
+/**
+ * Copies the pre-combine set aside without ever overwriting an earlier copy: the first goes to
+ * FAVORITES_DEDUPE_BAK_KEY; later ones get a timestamped key, keeping the newest few. Throws when
+ * the copy can't be written (the caller then loads unchanged).
+ */
+export function keepDedupeCopy(json, storage, now = new Date()) {
+  const meta = readDedupeMeta(storage);
+  if (storage.getItem(FAVORITES_DEDUPE_BAK_KEY) == null) {
+    storage.setItem(FAVORITES_DEDUPE_BAK_KEY, json);
+    return { key: FAVORITES_DEDUPE_BAK_KEY, meta };
+  }
+  const base = dedupeExtraBase(new Date(now).toISOString());
+  let key = `${base}.bak`;
+  for (let i = 2; storage.getItem(key) != null; i += 1) key = `${base}.${i}.bak`;
+  storage.setItem(key, json);
+  const extra = [...meta.extra.filter((k) => k !== key), key];
+  while (extra.length > MAX_EXTRA_DEDUPE_BAKS) { const old = extra.shift(); try { storage.removeItem(old); } catch { /* ignore */ } }
+  return { key, meta: { ...meta, extra } };
+}
 /** Favorite fields for a list row or a Shop result: name, qty, unit and its store (chosen or price source). */
 export function favInputOf(x) {
   return { name: x.name, qty: x.qty ?? null, unit: x.unit ?? '', storeId: storeKeyOf(x), notes: '' };
@@ -218,22 +275,27 @@ export function loadFavorites(storage = globalThis.localStorage) {
  * Like the list (storage.js loadStateWithStatus): an unreadable value is copied to
  * FAVORITES_BACKUP_KEY before anything can overwrite it, and reported as problem 'unreadable'.
  */
-export function loadFavoritesWithStatus(storage = globalThis.localStorage) {
+export function loadFavoritesWithStatus(storage = globalThis.localStorage, now = new Date()) {
   let json;
   try { json = storage.getItem(FAVORITES_KEY); } catch { return { favorites: emptyFavorites(), problem: 'unavailable', backedUp: false }; }
   if (!json) return { favorites: emptyFavorites(), problem: null, backedUp: false };
   if (isReadableFavorites(json)) {
     // L30: combine favorites that are now one identity. Only after the old set is copied aside,
     // and only if the combined set saves; otherwise load it unchanged (the stars still work).
+    // v0.1.10 (M6): idempotent. A combined set has no duplicates, so the next load does nothing;
+    // the notice is shown once per device, and an earlier backup copy is never overwritten.
     const d = dedupeFavorites(deserializeFavorites(json));
-    if (!d.merged) return { favorites: d.favorites, problem: null, backedUp: false, merged: 0 };
+    if (!d.merged) return { favorites: d.favorites, problem: null, backedUp: false, merged: 0, notice: false };
     try {
-      storage.setItem(FAVORITES_DEDUPE_BAK_KEY, json);
+      const { key, meta } = keepDedupeCopy(json, storage, now);
       storage.setItem(FAVORITES_KEY, serializeFavorites(d.favorites));
-      return { favorites: d.favorites, problem: null, backedUp: false, merged: d.merged };
+      // One notice per device, and only with the copy it names (a v0.1.8 copy already existing = already told).
+      const notice = !meta.noticedAt && key === FAVORITES_DEDUPE_BAK_KEY;
+      try { storage.setItem(FAVORITES_DEDUPE_META_KEY, JSON.stringify({ noticedAt: meta.noticedAt ?? new Date(now).toISOString(), extra: meta.extra })); } catch { /* the notice may show again */ }
+      return { favorites: d.favorites, problem: null, backedUp: false, merged: d.merged, notice, bakKey: key };
     } catch {
       try { storage.setItem(FAVORITES_KEY, json); } catch { /* unchanged */ }
-      return { favorites: deserializeFavorites(json), problem: null, backedUp: false, merged: 0 };
+      return { favorites: deserializeFavorites(json), problem: null, backedUp: false, merged: 0, notice: false };
     }
   }
   let backedUp = false;

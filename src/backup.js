@@ -170,7 +170,8 @@ export function summarize(b, dropped = 0) {
 /** "12 list items · 4 Favorites · 2 meals · 3 stores" */
 export function summaryText(s) {
   const n = (k, one, many = `${one}s`) => `${s[k]} ${s[k] === 1 ? one : many}`;
-  return [n('items', 'list item'), n('favorites', 'Favorite'), n('meals', 'meal'), n('stores', 'store')].join(' · ');
+  // L33: the plural names the Favorites collection (capitalized); one item is "1 favorite".
+  return [n('items', 'list item'), n('favorites', 'favorite', 'Favorites'), n('meals', 'meal'), n('stores', 'store')].join(' · ');
 }
 
 /**
