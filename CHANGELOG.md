@@ -2,6 +2,30 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.9-alpha] - 2026-11-15 (alpha)
+
+Tomato & Parmesan theme (light + dark), outlined destructive buttons, control outlines now 3:1.
+Theme only: no JavaScript changes. Still alpha; prices are a saved household snapshot, not
+official checkout prices.
+
+### Changed
+- **New colours in both themes** (`tokens.css`): warm white page and Parmesan-cream sections, a
+  tomato primary, gold sun and star, crimson-rose danger, store dots retuned for each theme, and
+  warm (non-green) shadows. Dark follows the OS setting (or `data-theme="dark"`). Only colour and
+  shadow tokens changed; type, spacing, radii and sizing are unchanged.
+- **Destructive buttons are outlined, not filled:** a 2px crimson outline on a pale tint (Clear,
+  Remove, Load list → Replace), with a trash icon in confirm dialogs. In confirm dialogs Cancel
+  is neutral, so only the safe action (tomato fill) and the destructive one carry colour. Windows
+  High Contrast keeps the outline.
+- The two remaining hard-coded green shadows (total bar and its breakdown) are now warm.
+- The browser bar colour follows the theme (`theme-color` `#FFFCF6` light / `#121213` dark).
+
+### Accessibility
+- Checked against WCAG 2.2 AA in the rendered app in both themes at 360/390/414/1280 px:
+  text at least 4.5:1 (lowest: aisle pill on a checked row, 4.84:1 light / 5.09:1 dark), and
+  checkboxes, radios, inputs, the Cancel outline, danger outline, stars, selected chips, store
+  dots and focus ring at least 3:1. Control outlines move from about 1.5:1 to 3.1:1 or more.
+
 ## [0.1.8-alpha] - 2026-11-15 (alpha)
 
 Small fix release for the Lows from the QA gate on 0.1.7-alpha (d4e65be). Still alpha; prices are
