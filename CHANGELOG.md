@@ -2,6 +2,36 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.1.7-alpha] - 2026-11-15 (alpha)
+
+Favorite stars and list actions. Still alpha; prices are a saved household snapshot, not official
+checkout prices.
+
+### Added
+- **Favorite star** on every Shop result (including "On sale this week") and every list row.
+  Outlined = not a favorite; filled = a favorite. Tapping an outlined star adds it to Favorites
+  right away. Tapping a filled star asks "Remove <item> from Favorites?" (Cancel / Remove) and
+  removes it only on Remove (with an Undo toast). Stars use the same favorite identity as the
+  Favorites tab and Load list merge (normalized name + unit + store, the chosen store or else the
+  price's store) and stay in sync both ways. 44px targets, `aria-pressed`, "Add/Remove <item>
+  to/from Favorites" labels; a star never opens the item sheet or checks the row. The confirm
+  dialog keeps focus inside, Esc is Cancel, and focus returns to the star.
+- **Check all** in the ⋮ menu beside the existing Uncheck all, with an Undo toast that puts back
+  each line's previous done state. Uncheck all now offers the same Undo.
+
+### Changed
+- **Clear checked items asks first.** The existing action now opens a confirm that says it can't be
+  undone and recommends saving: "Save list first" runs Save list and comes back to the confirm,
+  plus Cancel and a destructive Clear. A copy of the list is kept in
+  `shopsmartr:beforeClear:v1.bak`; the existing Undo toast is unchanged. Favorites, meals and
+  stores are never touched.
+- Check all, Uncheck all and Clear checked items are disabled when they'd do nothing
+  (including an empty list).
+
+### Fixed
+- **L27** – Load list Replace now remembers the file's saveId, so merging the same file later is
+  refused ("This file was already loaded on …"); Undo of the Replace forgets it again.
+
 ## [0.1.6-alpha] - 2026-11-15 (alpha)
 
 Fixes from the QA gate on 0.1.5-alpha (aca2720). Still alpha; prices are a saved household
