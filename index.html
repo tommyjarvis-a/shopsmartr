@@ -31,6 +31,8 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
     <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-star-fill" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check-all" viewBox="0 0 24 24"><path d="M2.5 12.5l4 4 8-9M10.5 16.5l1 1 10-11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0112 7.6a4.3 4.3 0 017.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" fill="currentColor"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -326,8 +328,9 @@
     <button type="button" class="mi" role="menuitem" data-action="share" hidden><svg class="icon icon-20"><use href="#i-share"/></svg>Share…</button>
     <button type="button" class="mi" role="menuitem" data-action="favcsv"><svg class="icon icon-20"><use href="#i-star"/></svg>Favorites CSV<span class="sub">.csv</span></button>
     <div class="sep" role="separator"></div>
-    <button type="button" class="mi" role="menuitem" data-action="uncheck"><svg class="icon icon-20"><use href="#i-check"/></svg>Uncheck all</button>
-    <button type="button" class="mi danger" role="menuitem" data-action="clear"><svg class="icon icon-20"><use href="#i-trash"/></svg>Clear checked items</button>
+    <button type="button" class="mi" role="menuitem" data-action="checkall" data-list-action><svg class="icon icon-20"><use href="#i-check-all"/></svg>Check all</button>
+    <button type="button" class="mi" role="menuitem" data-action="uncheck" data-list-action><svg class="icon icon-20"><use href="#i-check"/></svg>Uncheck all</button>
+    <button type="button" class="mi danger" role="menuitem" data-action="clear" data-list-action><svg class="icon icon-20"><use href="#i-trash"/></svg>Clear checked items</button>
   </div>
 
   <div class="menu sort-menu" id="sort-menu" role="menu" aria-labelledby="sort-menu-h" hidden>
@@ -362,6 +365,16 @@
         <button type="button" class="btn btn-secondary" data-close>Cancel</button>
         <button type="submit" class="btn btn-primary" id="load-confirm" value="ok"></button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog class="sheet sheet-dialog confirm-dlg" id="confirm-dlg" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <form method="dialog" id="confirm-form" novalidate>
+      <div class="grab" aria-hidden="true"></div>
+      <h2 id="confirm-title"></h2>
+      <div id="confirm-body" class="confirm-body"></div>
+      <p class="status" id="confirm-status" role="status" aria-live="polite"></p>
+      <div class="dlg-actions" id="confirm-actions"></div>
     </form>
   </dialog>
 
@@ -525,6 +538,7 @@
         <span class="meta-line" data-meta-line><span class="aisle" data-aisle hidden></span><span class="note" data-notes></span></span>
       </button>
       <span class="side-price" data-price-col hidden><span class="price" data-price></span><span class="was" data-was hidden></span><span class="src-tag" data-src hidden><span class="dot" aria-hidden="true"></span><span data-src-name></span></span></span>
+      <button type="button" class="fav-star" data-fav-star aria-pressed="false"><svg class="icon icon-20" aria-hidden="true"><use href="#i-star"/></svg></button>
       <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>
     </li>
   </template>
@@ -564,13 +578,13 @@
     </li>
   </template>
   <template id="tpl-cat-row">
-    <li><button type="button" class="cat-row">
+    <li class="cat-li"><button type="button" class="cat-row">
       <span class="body"><span class="name" data-name></span><span class="meta" data-meta></span></span>
       <span class="cat-side">
         <span class="price-line"><span class="price" data-price></span><span class="badge-sale" data-sale hidden>Sale</span></span>
         <span class="was" data-was hidden></span><span class="unit-price" data-unit></span>
       </span>
-    </button></li>
+    </button><button type="button" class="fav-star" data-fav-star aria-pressed="false"><svg class="icon icon-20" aria-hidden="true"><use href="#i-star"/></svg></button></li>
   </template>
 
   <template id="tpl-dept-card">

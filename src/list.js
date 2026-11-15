@@ -211,6 +211,14 @@ export function removeItem(state, id) {
   return { ...state, items: state.items.filter((it) => it.id !== id) };
 }
 
+export function checkAll(state) {
+  return { ...state, items: state.items.map((it) => (it.checked ? it : { ...it, checked: true })) };
+}
+/** Puts back each line's done state from a { id: checked } snapshot (Undo for Check all / Uncheck all). */
+export function restoreChecked(state, snapshot) {
+  return { ...state, items: state.items.map((it) => (it.id in snapshot && snapshot[it.id] !== it.checked ? { ...it, checked: snapshot[it.id] } : it)) };
+}
+export const checkedSnapshot = (state) => Object.fromEntries(state.items.map((it) => [it.id, it.checked]));
 export function uncheckAll(state) {
   return { ...state, items: state.items.map((it) => (it.checked ? { ...it, checked: false } : it)) };
 }

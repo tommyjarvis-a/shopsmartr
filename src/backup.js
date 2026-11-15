@@ -3,8 +3,8 @@
 // Only list, favorites, store picks and settings go in. Never the price passphrase, the cached
 // key (that lives in IndexedDB and is never read here) or any price catalog data.
 import { serialize, deserialize } from './storage.js';
-import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey } from './favorites.js';
-import { emptyState, newId, normUnit, storeKeyOf, MAX_QTY } from './list.js';
+import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favKey } from './favorites.js';
+import { emptyState, newId, storeKeyOf, MAX_QTY } from './list.js';
 
 export const BACKUP_SCHEMA = 'shopsmartr.backup/1';
 /** Copy of the list and favorites taken just before a "Load list" replace. */
@@ -23,7 +23,7 @@ export const MAX_LOAD_BYTES = 5 * 1024 * 1024;
 export const MAX_LOAD_ITEMS = 5000;
 export const TOO_LARGE = 'That file is too large to be a ShopSmartR list (over 5 MB).';
 export const tooManyText = (n) => `That file has ${n.toLocaleString('en-US')} items. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.`;
-/** saveIds this device already merged or saved (L23): { [saveId]: { at, how: 'merged'|'saved' } }. */
+/** saveIds this device already merged, loaded with Replace, or saved (L23/L27): { [saveId]: { at, how } }. */
 export const MERGED_KEY = 'shopsmartr:mergedSaves:v1';
 const SAVE_ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 export function newSaveId() {
@@ -127,7 +127,7 @@ function freshId(seen) {
 export function cleanMerged(x) {
   const out = {};
   if (!isObj(x)) return out;
-  const rows = Object.entries(x).filter(([k, v]) => SAVE_ID_RE.test(k) && isObj(v) && Number.isFinite(Date.parse(v.at)) && (v.how === 'merged' || v.how === 'saved'));
+  const rows = Object.entries(x).filter(([k, v]) => SAVE_ID_RE.test(k) && isObj(v) && Number.isFinite(Date.parse(v.at)) && ['merged', 'saved', 'replaced'].includes(v.how));
   rows.sort((a, b) => Date.parse(b[1].at) - Date.parse(a[1].at));
   for (const [k, v] of rows.slice(0, 200)) out[k] = { at: new Date(Date.parse(v.at)).toISOString(), how: v.how };
   return out;
@@ -148,7 +148,9 @@ export function repeatMergeText(map, saveId) {
   const r = saveId ? cleanMerged(map)[saveId] : null;
   if (!r) return null;
   const d = new Date(r.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  return r.how === 'merged' ? `This file was already merged on ${d}` : `This file was saved from this list on ${d}`;
+  if (r.how === 'merged') return `This file was already merged on ${d}`;
+  if (r.how === 'replaced') return `This file was already loaded on ${d}`;
+  return `This file was saved from this list on ${d}`;
 }
 
 export function summarize(b, dropped = 0) {
@@ -173,7 +175,7 @@ export function summaryText(s) {
 
 /** Merge key for list lines: name + unit + source store (L5 style name folding). */
 export function lineKey(it) {
-  return `${nameKey(it.name)}|${normUnit(it.unit) || String(it.unit ?? '').toLowerCase()}|${storeKeyOf(it)}`;
+  return favKey(it);   // the same identity as favorites (v0.1.7)
 }
 
 const asOf = (it) => { const t = Date.parse(it.priced?.asOf ?? ''); return Number.isFinite(t) ? t : -Infinity; };

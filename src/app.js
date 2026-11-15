@@ -105,6 +105,7 @@ function commitFavs(next, focus) {
   favs = next;
   if (!F.saveFavorites(favs)) warnCantSave();
   renderFavs();
+  UI.syncStars(favKeys());   // stars on Shop results and list rows follow Favorites everywhere
   if (focus) document.querySelector(focus)?.focus({ preventScroll: true });
 }
 
@@ -295,6 +296,7 @@ function renderListScreen() {
     collapsed,
     onCollapse: toggleCollapsed,
     chainName: (c) => data.chains[c]?.shortName || data.chains[c]?.name || c,
+    star: (it) => starFor(it),
     emptyText: 'Your list is empty. Add your first item.',
   });
   renderSortControl(state.items.length > 1, sections.length > 1);
@@ -496,7 +498,7 @@ async function saveList() {
       shared = true;
     }
   } catch (err) {
-    if (err?.name === 'AbortError') { UI.toast('Save list cancelled'); return; }
+    if (err?.name === 'AbortError') { UI.toast('Save list cancelled'); return null; }
   }
   if (!shared) UI.download(name, json, 'application/json');
   setMeta(Bk.markSaved(backupMeta));
@@ -504,9 +506,12 @@ async function saveList() {
   Bk.saveMerged(Bk.recordSaveId(Bk.loadMerged(), doc.saveId, 'saved'));
   if (!storagePersisted) askPersist();
   UI.toast(`List saved · ${name}`);
+  return name;
 }
 
 let pendingLoad = null;
+/** Copy of the list taken just before "Clear checked items" (v0.1.7), parallel to the Replace .bak. */
+const CLEAR_BAK_KEY = 'shopsmartr:beforeClear:v1.bak';
 function openLoadPicker() {
   const input = el('load-file');
   input.value = '';
@@ -583,7 +588,8 @@ function applyLoad(mode) {
   const res = Bk.applyBackup(before, pendingLoad.backup, mode);
   pendingLoad = null;
   const mergedBefore = Bk.loadMerged();
-  if (mode === 'merge') Bk.saveMerged(Bk.recordSaveId(mergedBefore, saveId, 'merged'));
+  // L23/L27: remember this file (merged or replaced) so merging it again is refused; Undo forgets it.
+  Bk.saveMerged(Bk.recordSaveId(mergedBefore, saveId, mode === 'replace' ? 'replaced' : 'merged'));
   el('load-sheet').close();
   const restore = (x) => {
     commitFavs(x.favs);
@@ -594,7 +600,7 @@ function applyLoad(mode) {
     commit(x.state);   // the sort choice stays this device's (L22)
   };
   restore(res);
-  if (mode === 'replace') UI.toast('List replaced', () => restore(before), 10000);
+  if (mode === 'replace') UI.toast('List replaced', () => { restore(before); Bk.saveMerged(mergedBefore); }, 10000);
   else {
     const n = res.added; const c = res.combined;
     UI.toast(`List merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}`, () => { restore(before); Bk.saveMerged(mergedBefore); });
@@ -618,6 +624,145 @@ function bindSaveLoad() {
   el('load-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
   el('load-sheet').addEventListener('close', () => { pendingLoad = null; });
   askPersist();
+}
+
+
+// ---------- Favorite stars (v0.1.7): Shop results and list rows ----------
+const favKeys = () => new Set(favs.items.map(F.favKey));
+/** Favorite identity source for a catalog result: name, no unit, its store (directory id or chain-store). */
+function catalogFavSource(it) {
+  const f = C.pricedFields(feed.catalog, it, data.byId);
+  return { name: it.name, qty: null, unit: '', storeId: f.storeId, priced: f.priced };
+}
+function starFor(x) {
+  return { key: F.favKey(x), on: F.isFavorite(favs, x), onStar: (btn) => toggleStar(x, btn) };
+}
+async function toggleStar(x, btn) {
+  if (!F.isFavorite(favs, x)) {
+    commitFavs(F.starFavorite(favs, x));
+    UI.toast(`Added ${x.name} to Favorites`);
+    btn.focus({ preventScroll: true });
+    return;
+  }
+  const choice = await confirmDialog({
+    title: `Remove ${x.name} from Favorites?`,
+    body: [state.items.some((i) => F.favKey(i) === F.favKey(x)) ? 'It stays on your list. You can star it again any time.' : 'You can star it again any time.'],
+    actions: [{ label: 'Cancel', value: 'cancel', kind: 'secondary' }, { label: 'Remove', value: 'remove', kind: 'danger' }],
+    initial: 'cancel',
+    returnFocus: btn,
+  });
+  if (choice !== 'remove') return;
+  const before = favs;
+  commitFavs(F.unstarFavorite(favs, x));
+  UI.toast(`Removed ${x.name} from Favorites`, () => commitFavs(before));
+}
+
+// ---------- Confirm dialog (v0.1.7): focus trapped, Esc = Cancel, focus returns to the opener ----------
+let confirmResolve = null;
+/**
+ * actions: [{ label, value, kind: 'primary'|'secondary'|'danger' }]. Resolves with the chosen value,
+ * or 'cancel' (Esc, backdrop, Cancel). returnFocus gets focus back when it closes.
+ */
+function confirmDialog({ title, body = [], actions, initial, returnFocus, status = '' }) {
+  const dlg = el('confirm-dlg');
+  el('confirm-title').textContent = title;
+  el('confirm-body').replaceChildren(...body.map((t) => { const p = document.createElement('p'); if (typeof t === 'string') p.textContent = t; else p.append(...t); return p; }));
+  UI.setStatus(el('confirm-status'), status);
+  const row = el('confirm-actions');
+  row.classList.toggle('three', actions.length > 2);
+  row.replaceChildren(...actions.map((a) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `btn btn-${a.kind}`;
+    b.dataset.value = a.value;
+    b.textContent = a.label;
+    b.addEventListener('click', () => finish(a.value));
+    return b;
+  }));
+  const finish = (v) => {
+    if (!confirmResolve) return;
+    const r = confirmResolve; confirmResolve = null;
+    if (dlg.open) dlg.close();
+    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    r(v);
+  };
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    dlg._finish = finish;
+    dlg.showModal();
+    (row.querySelector(`[data-value="${initial}"]`) ?? row.querySelector('button')).focus();
+  });
+}
+function bindConfirm() {
+  const dlg = el('confirm-dlg');
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); dlg._finish?.('cancel'); });   // Esc = Cancel
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg._finish?.('cancel'); });   // backdrop
+  // A late 'close' from the previous round must not cancel a dialog that was opened again since.
+  dlg.addEventListener('close', () => { if (!dlg.open) dlg._finish?.('cancel'); });
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const f = [...dlg.querySelectorAll('button:not([disabled])')].filter((b) => b.offsetParent);
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+  });
+  el('confirm-form').addEventListener('submit', (e) => e.preventDefault());
+}
+
+// ---------- List actions: Check all (new in v0.1.7) beside the existing Uncheck all / Clear checked ----------
+function setAllChecked(on) {
+  const snap = L.checkedSnapshot(state);
+  const n = state.items.filter((i) => i.checked !== on).length;
+  if (!n) { UI.toast(on ? 'Everything is already checked' : 'Nothing is checked'); return; }
+  commit(on ? L.checkAll(state) : L.uncheckAll(state));
+  UI.toast(`${on ? 'Checked' : 'Unchecked'} ${n} item${n === 1 ? '' : 's'}`, () => commit(L.restoreChecked(state, snap)));
+}
+/**
+ * The existing "Clear checked items" action (v0.1.6 and earlier: no confirm, Undo toast).
+ * v0.1.7: confirm first with "Save list first" (runs Save list, then comes back here), Cancel and
+ * a destructive Clear; keeps a .bak copy; the existing Undo toast is unchanged. Favorites untouched.
+ */
+async function clearCheckedFlow(opener) {
+  let status = '';
+  for (;;) {
+    const n = state.items.filter((i) => i.checked).length;
+    if (!n) { UI.toast('No checked items'); return; }
+    const choice = await confirmDialog({
+      title: `Clear ${n} checked item${n === 1 ? '' : 's'} from your list?`,
+      body: ['This can\'t be undone after you leave the page. Save list first to keep a copy as a file.', 'Favorites, meals and your stores are not changed.'],
+      actions: [{ label: 'Save list first', value: 'save', kind: 'primary' }, { label: 'Cancel', value: 'cancel', kind: 'secondary' }, { label: 'Clear', value: 'clear', kind: 'danger' }],
+      initial: 'save',
+      returnFocus: opener,
+      status,
+    });
+    if (choice === 'save') { const name = await saveList(); status = name ? `Saved ${name}. You can clear the checked items now.` : ''; continue; }
+    if (choice !== 'clear') return;
+    try {
+      localStorage.setItem(CLEAR_BAK_KEY, JSON.stringify({ savedAt: new Date().toISOString(), list: localStorage.getItem(STORAGE_KEY) }));
+    } catch {
+      UI.toast('Couldn\'t keep a copy of your list on this device, so nothing was cleared. Save list first.');
+      return;
+    }
+    const before = state.items;
+    commit(L.clearChecked(state));
+    UI.toast(`Cleared ${n} checked item${n === 1 ? '' : 's'}`, () => commit({ ...state, items: before }));
+    return;
+  }
+}
+/** Menu state: Check all / Uncheck all / Clear checked items are disabled when they'd do nothing. */
+function syncListActions() {
+  const items = state.items;
+  const any = items.length > 0;
+  const done = items.filter((i) => i.checked).length;
+  const set = (action, show, enabled = true) => {
+    const b = menu().querySelector(`[data-action="${action}"]`);
+    b.hidden = !show;
+    if (enabled) b.removeAttribute('aria-disabled'); else b.setAttribute('aria-disabled', 'true');
+  };
+  set('checkall', true, any && done < items.length);
+  set('uncheck', true, done > 0);
+  set('clear', true, done > 0);
 }
 
 function renderAds() {
@@ -708,6 +853,7 @@ function openMenu(btn) {
   const m = menu();
   el('love-text').textContent = nextNote(NOTES);
   renderStoreStatus();
+  syncListActions();
   m.hidden = false;
   const r = btn.getBoundingClientRect();
   const w = m.offsetWidth;
@@ -728,6 +874,7 @@ const stamp = () => localDateStamp();
 const asText = () => toText(state.items, data.byId, { date: stamp(), favorites: favs, sort: listSort, order: state.selectedStoreIds });
 
 async function menuAction(action) {
+  const opener = document.querySelector('[data-menu-toggle][aria-expanded="true"]');
   closeMenu();
   if (action === 'csv') UI.download(`shopsmartr-list-${stamp()}.csv`, toCSV(state.items, data.byId, { bom: true }), 'text/csv;charset=utf-8');
   else if (action === 'favcsv') downloadFavs();
@@ -738,14 +885,9 @@ async function menuAction(action) {
     try { await navigator.clipboard.writeText(asText()); UI.toast('Copied the list as text'); } catch { UI.toast('Copy failed. Try Download text.'); }
   } else if (action === 'share') {
     try { await navigator.share({ title: 'Shopping list', text: asText() }); } catch { /* cancelled */ }
-  } else if (action === 'uncheck') commit(L.uncheckAll(state));
-  else if (action === 'clear') {
-    const before = state.items;
-    const n = state.items.filter((i) => i.checked).length;
-    if (!n) { UI.toast('No checked items'); return; }
-    commit(L.clearChecked(state));
-    UI.toast(`Cleared ${n} checked item${n === 1 ? '' : 's'}`, () => commit({ ...state, items: before }));
-  }
+  } else if (action === 'checkall') setAllChecked(true);
+  else if (action === 'uncheck') setAllChecked(false);
+  else if (action === 'clear') clearCheckedFlow(opener);
 }
 
 // ---------- Routing ----------
@@ -821,7 +963,12 @@ function bind() {
     e.stopPropagation();
     if (!menu().hidden && b.getAttribute('aria-expanded') === 'true') closeMenu(true); else openMenu(b);
   }));
-  menu().addEventListener('click', (e) => { const mi = e.target.closest('[data-action]'); if (mi) menuAction(mi.dataset.action); });
+  menu().addEventListener('click', (e) => {
+    const mi = e.target.closest('[data-action]');
+    if (!mi) return;
+    if (mi.getAttribute('aria-disabled') === 'true') { e.stopPropagation(); return; }   // stays open; nothing to do
+    menuAction(mi.dataset.action);
+  });
   menu().addEventListener('keydown', (e) => {
     const items = [...menu().querySelectorAll('.mi:not([hidden])')];
     const i = items.indexOf(document.activeElement);
@@ -905,7 +1052,7 @@ function renderShop({ keepScroll = true } = {}) {
     el('shop-dept-grid').replaceChildren(...depts.map((d) => UI.deptCard(d, (name) => { shop.dept = name; shop.offset = 0; renderShop(); })));
     const sale = C.onSale(cat, index, shop.store, 6);
     el('shop-sale').hidden = sale.length === 0;
-    el('shop-sale-list').replaceChildren(...sale.map((it) => UI.catRow(it, open)));
+    el('shop-sale-list').replaceChildren(...sale.map((it) => UI.catRow(it, open, starFor(catalogFavSource(it)))));
     el('shop-results').hidden = true;
     el('shop-more').hidden = true;
     el('shop-empty').hidden = true;
@@ -915,7 +1062,7 @@ function renderShop({ keepScroll = true } = {}) {
   const r = C.search(cat, index, q, { store: shop.store, department: shop.dept, offset: shop.offset, limit: PAGE });
   const tSearch = performance.now() - t0;
   el('shop-results').hidden = r.total === 0;
-  el('shop-results').replaceChildren(...r.items.map((it) => UI.catRow(it, open)));
+  el('shop-results').replaceChildren(...r.items.map((it) => UI.catRow(it, open, starFor(catalogFavSource(it)))));
   const end = r.offset + r.items.length;
   const where = shop.dept ? ` in ${shop.dept}` : '';
   el('shop-meta').textContent = r.total === 0 ? ''
@@ -1185,6 +1332,7 @@ async function init() {
   bindFavorites();
   bindSaveLoad();
   bindSort();
+  bindConfirm();
   try {
     const [storesDoc, zipsDoc] = await Promise.all([
       fetch('data/stores.json').then((r) => r.json()),

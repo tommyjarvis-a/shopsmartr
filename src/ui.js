@@ -164,7 +164,7 @@ export function renderList(container, sections, opts) {
   }));
 }
 
-function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c) => c }) {
+function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c) => c, star = null }) {
   const li = fromTemplate('tpl-item');
   li.dataset.itemId = it.id;
   li.classList.toggle('done', it.checked);
@@ -211,6 +211,9 @@ function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c
       edit.setAttribute('aria-label', `Edit ${it.name}, no price for ${formatQty(it)}${tail}`);
     }
   }
+  const sb = $('[data-fav-star]', li);
+  const st = star?.(it);
+  if (st) initStar(sb, { name: it.name, ...st }); else sb.remove();
   const rm = $('[data-remove]', li);
   rm.setAttribute('aria-label', `Remove ${it.name}`);
   rm.addEventListener('click', () => onRemove(it.id));
@@ -327,7 +330,32 @@ function fillPrice(root, it) {
   $('[data-sale]', root).hidden = !it.onSale;
 }
 
-export function catRow(it, onOpen) {
+// ---------- favorite stars (v0.1.7) ----------
+/** Sets a star's pressed state, icon and label. */
+export function setStar(btn, on) {
+  const name = btn.dataset.favName;
+  btn.setAttribute('aria-pressed', String(on));
+  btn.setAttribute('aria-label', on ? `Remove ${name} from Favorites` : `Add ${name} to Favorites`);
+  btn.title = on ? 'In Favorites' : 'Add to Favorites';
+  btn.querySelector('use').setAttribute('href', on ? '#i-star-fill' : '#i-star');
+}
+/** Wires a star: key = favorite identity, on = current state, onStar(btn) handles the tap. */
+function initStar(btn, { key, name, on, onStar }) {
+  btn.dataset.favKey = key;
+  btn.dataset.favName = name;
+  setStar(btn, on);
+  btn.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); onStar(btn); });
+  btn.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') e.stopPropagation(); });
+}
+/** Re-syncs every star on the page with the favorite identities in keys (a Set). */
+export function syncStars(keys) {
+  for (const b of document.querySelectorAll('[data-fav-star][data-fav-key]')) {
+    const on = keys.has(b.dataset.favKey);
+    if ((b.getAttribute('aria-pressed') === 'true') !== on) setStar(b, on);
+  }
+}
+
+export function catRow(it, onOpen, star = null) {
   const li = fromTemplate('tpl-cat-row');
   const btn = li.firstElementChild;
   btn.dataset.idx = it.idx;
@@ -340,6 +368,8 @@ export function catRow(it, onOpen) {
   $('[data-unit]', btn).textContent = sale ? '' : (it.soldByWeight ? 'est. each' : (it.unitPriceText ?? ''));
   btn.setAttribute('aria-label', `${it.name}, ${it.soldByWeight ? 'about ' : ''}${money(estimate(it).each)}${it.onSale ? ', on sale' : ''}`);
   btn.addEventListener('click', () => onOpen(it.idx, btn));
+  const sb = $('[data-fav-star]', li);
+  if (star) initStar(sb, { name: it.name, ...star }); else sb.remove();
   return li;
 }
 

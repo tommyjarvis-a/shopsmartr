@@ -808,3 +808,19 @@ body:not([data-screen="list"]) .tb-break { display: none; }
 /* L26 (v0.1.6): each desktop sort segment is itself a 44px target (not just the track). */
 .sort-seg button { height: var(--tap-min); min-height: 44px; }
 .list-toolbar #collapse-all { min-height: 44px; }
+
+/* ---------- v0.1.7: favorite stars, confirm dialog, list actions ---------- */
+.fav-star { flex: none; width: var(--tap-min); height: var(--tap-min); display: grid; place-items: center; border-radius: var(--radius-pill); color: var(--color-text-faint); }
+.fav-star[aria-pressed="true"] { color: var(--color-orange-text); }   /* 5.2:1 light, filled star */
+.fav-star:hover { background: var(--color-surface-2); }
+.fav-star:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -2px; }
+.row .fav-star { margin-right: -6px; }
+.cat-li { display: flex; align-items: center; gap: var(--space-1); border-bottom: 1px solid var(--color-border); }
+.cat-li .cat-row { flex: 1; min-width: 0; border-bottom: 0; }
+.confirm-dlg h2 { font-size: var(--fs-lg); line-height: var(--lh-lg); overflow-wrap: anywhere; }
+.confirm-body { display: grid; gap: var(--space-2); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.confirm-body b { color: var(--color-text); }
+.confirm-dlg .dlg-actions { flex-wrap: wrap; }
+.confirm-dlg .dlg-actions.three .btn-primary { flex-basis: 100%; }
+@media (min-width: 768px) { .confirm-dlg .dlg-actions.three .btn-primary { flex-basis: auto; margin-right: auto; } }
+.menu .mi[aria-disabled="true"] { opacity: .45; cursor: default; }

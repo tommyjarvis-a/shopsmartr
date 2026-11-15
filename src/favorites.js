@@ -1,7 +1,7 @@
 // Pure favorites model: staple items and favorite meals (named groups of items).
 // Every function returns a new value; nothing touches the DOM. Persistence helpers take an
 // injectable storage object so tests can use memoryStorage().
-import { cleanItemInput, addItem, newId } from './list.js';
+import { cleanItemInput, addItem, newId, normUnit, storeKeyOf } from './list.js';
 
 export const FAVORITES_KEY = 'shopsmartr:favorites:v1';
 export const FAVORITES_BACKUP_KEY = 'shopsmartr:favorites:v1.bak';
@@ -31,6 +31,33 @@ export function updateFavorite(fav, id, patch) {
 }
 export function removeFavorite(fav, id) {
   return { ...fav, items: fav.items.filter((it) => it.id !== id) };
+}
+
+// ---------- favorite identity (stars on Shop results and list rows, v0.1.7) ----------
+/**
+ * The one favorite identity, shared by the stars, the Favorites tab and Load list merge:
+ * normalized name + unit + store (the chosen store, else the price's source store).
+ */
+export function favKey(x) {
+  return `${nameKey(x?.name)}|${normUnit(x?.unit) || String(x?.unit ?? '').toLowerCase()}|${storeKeyOf(x ?? {})}`;
+}
+/** Favorite fields for a list row or a Shop result: name, qty, unit and its store (chosen or price source). */
+export function favInputOf(x) {
+  return { name: x.name, qty: x.qty ?? null, unit: x.unit ?? '', storeId: storeKeyOf(x), notes: '' };
+}
+export function findFavorite(fav, x) {
+  const k = favKey(x);
+  return fav.items.find((f) => favKey(f) === k) ?? null;
+}
+export const isFavorite = (fav, x) => Boolean(findFavorite(fav, x));
+/** Star on: adds the favorite unless one with the same identity exists (then unchanged). */
+export function starFavorite(fav, x, id = newId()) {
+  return isFavorite(fav, x) ? fav : addFavorite(fav, favInputOf(x), id);
+}
+/** Star off: removes every favorite item with this identity (meals are never touched). */
+export function unstarFavorite(fav, x) {
+  const k = favKey(x);
+  return { ...fav, items: fav.items.filter((f) => favKey(f) !== k) };
 }
 
 // ---------- meals ----------
