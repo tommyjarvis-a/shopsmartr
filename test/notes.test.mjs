@@ -26,6 +26,42 @@ test('no near-duplicates once the name and punctuation are ignored', () => {
   assert.equal(new Set(NOTES.map(k)).size, NOTES.length);
 });
 
+// Word-sequence similarity (2*LCS / total words), ignoring the name and punctuation.
+const words = (s) => s.toLowerCase().replace(/\blauren\b/g, '').replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(Boolean);
+function similarity(a, b) {
+  const d = Array(b.length + 1).fill(0);
+  for (const x of a) {
+    let prev = 0;
+    for (let j = 1; j <= b.length; j += 1) { const t = d[j]; d[j] = x === b[j - 1] ? prev + 1 : Math.max(d[j], d[j - 1]); prev = t; }
+  }
+  return (2 * d[b.length]) / (a.length + b.length);
+}
+
+test('no two notes share most of their wording (similarity < 0.7)', () => {
+  const W = NOTES.map(words);
+  const close = [];
+  for (let i = 0; i < W.length; i += 1) {
+    for (let j = i + 1; j < W.length; j += 1) if (similarity(W[i], W[j]) >= 0.7) close.push(`${NOTES[i]} | ${NOTES[j]}`);
+  }
+  assert.deepEqual(close, []);
+});
+
+// Notes must not assert facts about Steven and Lauren's life that we can't know (kids, pets, a
+// house, places, holidays, shared history). "home" is banned too: it presumes a shared place.
+const BANNED = [
+  'kid', 'kids', 'kiddo', 'child', 'children', 'baby', 'babies', 'son', 'sons', 'daughter', 'daughters',
+  'dog', 'dogs', 'puppy', 'pup', 'pups', 'cat', 'cats', 'kitten', 'kitty', 'pet', 'pets',
+  'mom', 'mommy', 'mother', 'mama', 'dad', 'daddy', 'father', 'parent', 'parents', 'family', 'grandkids',
+  'wedding', 'anniversary', 'honeymoon', 'engaged', 'proposal', 'birthday', 'christmas', 'thanksgiving', 'holidays',
+  'house', 'home', 'homes', 'kitchen', 'couch', 'sofa', 'porch', 'fridge', 'yard', 'garden', 'bedroom', 'window',
+  'snow', 'snowy', 'snowstorm', 'buffalo', 'bedtime', 'school', 'years',
+];
+
+test('no note uses a banned "family fact" word', () => {
+  const hits = NOTES.filter((n) => words(n).some((w) => BANNED.includes(w.replace(/'s$/, ''))));
+  assert.deepEqual(hits, []);
+});
+
 test('"Lauren" appears in 25%-40% of notes', () => {
   const named = NOTES.filter((n) => /\bLauren\b/.test(n)).length;
   const share = named / NOTES.length;
