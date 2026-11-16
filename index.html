@@ -65,7 +65,6 @@
         <a class="nav" href="#recipes" data-nav="recipes"><svg class="icon"><use href="#i-pot"/></svg>Recipes</a>
         <a class="nav" href="#favorites" data-nav="favorites"><svg class="icon"><use href="#i-star"/></svg>Favorites</a>
         <a class="nav" href="#stores" data-nav="stores"><svg class="icon"><use href="#i-store"/></svg>Stores</a>
-        <a class="nav" href="#ads" data-nav="ads"><svg class="icon"><use href="#i-tag"/></svg>Weekly ads</a>
       </nav>
       <div class="spacer"></div>
       <p class="footer footer-side">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. Not official checkout prices; confirm hours and prices with the store. <span class="version" data-version></span></p>
@@ -146,8 +145,11 @@
       <!-- SHOP -->
       <section class="screen screen-shop" data-screen="shop" aria-labelledby="shop-title">
         <div class="shop-head">
-          <h1 id="shop-title" tabindex="-1">Shop</h1>
-          <p class="shop-store" id="shop-sub"><span class="dot" data-chain="wegmans" aria-hidden="true"></span><span>Store prices</span></p>
+          <div class="shop-head-t">
+            <h1 id="shop-title" tabindex="-1">Shop</h1>
+            <p class="shop-store" id="shop-sub"><span class="dot" data-chain="wegmans" aria-hidden="true"></span><span>Store prices</span></p>
+          </div>
+          <button type="button" class="icon-btn ads-btn" id="ads-btn" aria-label="Weekly ads" aria-haspopup="dialog" aria-expanded="false" aria-controls="ads-sheet"><svg class="icon" aria-hidden="true"><use href="#i-tag"/></svg></button>
         </div>
         <div id="shop-locked" class="card prices-card">
           <p class="muted">Your household price snapshot is locked.</p>
@@ -284,16 +286,9 @@
         </div>
       </section>
 
-      <!-- WEEKLY ADS -->
-      <section class="screen screen-ads" data-screen="ads" aria-labelledby="ads-title">
-        <h1 id="ads-title">Weekly ads</h1>
-        <p class="muted lead">Official ads for your stores. They open on each store's own website.</p>
-        <ul class="card ad-list" data-ad-list></ul>
-        <p class="tip"><svg class="icon icon-20" aria-hidden="true"><use href="#i-bulb"/></svg><span>Spot a deal? Add it to your list with the store tag so it's grouped for that trip.</span></p>
-        <a class="btn btn-ghost" href="#stores">Change stores</a>
-        <p class="footer">ShopSmartR isn't affiliated with Tops, Wegmans, Trader Joe's or Aldi. ShopSmartR doesn't show official checkout prices; confirm hours and prices with the store.</p>
-      </section>
     </main>
+
+    <aside class="rx-side" id="rx-side" aria-label="Add this recipe to your list"></aside>
 
     <aside class="panel" aria-label="My stores and weekly ads">
       <section class="card trip-card" id="trip-card" aria-labelledby="trip-h" hidden>
@@ -330,7 +325,6 @@
       <a class="tab" href="#shop" data-nav="shop" data-needs-feed hidden><span class="pill"><svg class="icon"><use href="#i-bag"/></svg></span>Shop</a>
       <a class="tab" href="#recipes" data-nav="recipes"><span class="pill"><svg class="icon"><use href="#i-pot"/></svg></span>Recipes</a>
       <a class="tab" href="#favorites" data-nav="favorites"><span class="pill"><svg class="icon"><use href="#i-star"/></svg></span>Favorites</a>
-      <a class="tab" href="#ads" data-nav="ads"><span class="pill"><svg class="icon"><use href="#i-tag"/></svg></span><span aria-hidden="true">Ads</span><span class="sr-only">Weekly ads</span></a>
     </nav>
   </div>
 
@@ -374,6 +368,20 @@
   </div>
 
   <input type="file" id="load-file" accept=".json,application/json" hidden>
+  <dialog class="sheet sheet-dialog rx-sheet" id="rx-sheet" aria-labelledby="rx-sheet-title">
+    <div class="rx-sheet-body"></div>
+  </dialog>
+
+  <dialog class="sheet ads-sheet" id="ads-sheet" aria-labelledby="ads-sheet-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="ads-sheet-title">Weekly ads</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <ul class="ad-list" data-ad-list></ul>
+    <p class="faint ads-note">Opens the store's official site in a new tab. <a href="#stores" data-close>Change stores</a></p>
+  </dialog>
+
   <dialog class="sheet sheet-dialog" id="household-sheet" aria-labelledby="household-title">
     <form method="dialog" id="household-form" novalidate>
       <div class="grab" aria-hidden="true"></div>
@@ -582,6 +590,7 @@
         <span class="title"><span data-name></span><span class="qty" data-qty></span></span>
         <span class="meta-line" data-meta-line><span class="aisle" data-aisle hidden></span><span class="note" data-notes></span></span>
       </button>
+      <a class="in-rx" data-recipe-link hidden><svg class="icon icon-16" aria-hidden="true"><use href="#i-pot"/></svg><span class="t">in recipe</span></a>
       <span class="side-price" data-price-col hidden><span class="price" data-price></span><span class="was" data-was hidden></span><span class="src-tag" data-src hidden><span class="dot" aria-hidden="true"></span><span data-src-name></span></span></span>
       <button type="button" class="fav-star" data-fav-star aria-pressed="false"><svg class="icon icon-20" aria-hidden="true"><use href="#i-star"/></svg></button>
       <button type="button" class="rm" data-remove><svg class="icon icon-18"><use href="#i-x"/></svg></button>

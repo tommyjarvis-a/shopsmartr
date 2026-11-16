@@ -119,3 +119,60 @@ test('L41: one wording for the toast and the button', async () => {
   assert.equal(addedText(0, 1), 'Updated 1 item');
   assert.equal(addedText(2, 1), 'Added 2, updated 1');
 });
+
+// ---------- v0.2.3: a different-food modifier before the head is penalized, not rejected ----------
+test('a bare "cream" prefers Heavy / Whipping Cream over Ice Cream; Ice Cream stays offered lower', () => {
+  const m = mini('Ice Cream', 'Heavy Cream', 'Sour Cream', 'Bagged Ice');
+  assert.equal(m('cream')[0], 'Heavy Cream');
+  const n = mini('Ice Cream', 'Sour Cream', 'Bagged Ice')('cream');
+  assert.deepEqual(n, ['Sour Cream', 'Ice Cream'], 'penalized below Sour Cream, not rejected');
+  assert.deepEqual(mini('Ice Cream', 'Bagged Ice')('cream'), ['Ice Cream'], 'still offered when it is all there is');
+  assert.equal(mini('Ice Cream', 'Heavy Whipping Cream', 'Bagged Ice')('cream')[0], 'Heavy Whipping Cream');
+});
+
+test('a bare "bread" prefers plain or sandwich bread over Banana Bread', () => {
+  assert.equal(mini('Banana Bread', 'Sandwich Bread', 'Bananas')('bread')[0], 'Sandwich Bread');
+  assert.equal(mini('Banana Bread', 'Sourdough Bread', 'Bananas')('bread')[0], 'Sourdough Bread');
+  assert.deepEqual(mini('Banana Bread', 'Bananas')('bread'), ['Banana Bread'], 'still offered when nothing better exists');
+});
+
+test('the M9 set is unchanged by the modifier penalty', () => {
+  const m = mini('Parmesan Cheese', 'Ricotta Cheese', 'Sharp Cheddar Cheese', 'Avocados Hass', 'Boneless Skinless Chicken Breast', 'Garlic Bulb', 'Garlic Ham', 'Fresh Ice Cream Value Pack', 'Cheese Pizza');
+  assert.deepEqual(m('parmesan'), ['Parmesan Cheese']);
+  assert.deepEqual(m('ricotta'), ['Ricotta Cheese']);
+  assert.deepEqual(m('cheddar'), ['Sharp Cheddar Cheese']);
+  assert.deepEqual(m('avocado'), ['Avocados Hass']);
+  assert.deepEqual(m('chicken'), ['Boneless Skinless Chicken Breast']);
+  assert.deepEqual(m('garlic'), ['Garlic Bulb']);
+  assert.deepEqual(m('ice'), []);
+});
+
+test('a bare "cream" stays off Cream Cheese', () => {
+  assert.equal(mini('Cream Cheese', 'Heavy Cream', 'Ice Cream', 'Bagged Ice')('cream')[0], 'Heavy Cream');
+  assert.ok(!mini('Cream Cheese', 'Heavy Cream')('cream').includes('Cream Cheese'));
+  assert.equal(mini('Cream Cheese', 'Heavy Whipping Cream')('cream')[0], 'Heavy Whipping Cream');
+  assert.equal(mini('Cream Cheese', 'Sour Cream')('cream')[0], 'Sour Cream');
+});
+
+test('L43: celery hearts, pineapple chunks and corn on the cob are the same food', () => {
+  assert.deepEqual(mini('Celery Hearts', 'Celery Salt Seasoning')('celery'), ['Celery Hearts']);
+  assert.deepEqual(mini('Pineapple Chunks', 'Pineapple Juice')('pineapple'), ['Pineapple Chunks']);
+  assert.deepEqual(mini('Corn on the Cob', 'Corn Chips')('corn').slice(0, 1), ['Corn on the Cob']);
+});
+
+test('L44: plain forms rank above processed ones, even when the processed name is shorter or cheaper', () => {
+  const m = mini('Chicken Nuggets', 'Boneless Skinless Chicken Breast', 'Chicken Patties');
+  assert.equal(m('chicken')[0], 'Boneless Skinless Chicken Breast');
+  assert.ok(m('chicken').includes('Chicken Nuggets'), 'processed forms stay as Swap alternatives');
+  const p = mini('Potato Wedges', 'Russet Potatoes Bag', 'Potato Fries');
+  assert.equal(p('potato')[0], 'Russet Potatoes Bag');
+  // through lineOptions (price order within a level): the plain form still leads
+  const { catalog, index } = C.prepare({ schema: 'shopsmartr.prices/2', stores: [{ chain: 'wegmans', storeId: '90', name: 'W' }], items: [
+    { chain: 'wegmans', storeId: '90', name: 'Chicken Nuggets', price: 1.99, size: '1 ea', sku: 'n' },
+    { chain: 'wegmans', storeId: '90', name: 'Chicken Breast', price: 9.99, size: '1 ea', sku: 'b' }] });
+  const mi = R.buildMatchIndex(catalog, index);
+  const ing = { text: '1 chicken', base: 'chicken', qty: 1, unit: 'whole', k: 'chicken' };
+  const cands = new Map([['chicken', R.matchRows(mi, 'chicken', 0)]]);
+  const opts = R.lineOptions(mi, cands, ing, 1);
+  assert.deepEqual(opts.map((o) => o.it.sku), ['b', 'n']);
+});

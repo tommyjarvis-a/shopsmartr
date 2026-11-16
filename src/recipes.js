@@ -306,7 +306,7 @@ export function buildMatchIndex(cat, index) {
     const a = norm.get(n);
     if (a) a.push(k); else norm.set(n, [k]);
   });
-  return { cat, index, norm, rows: new Map(), core: new Map(), items: new Map() };
+  return { cat, index, norm, rows: new Map(), core: new Map(), items: new Map(), foods: new Map() };
 }
 function rowsWith(mi, t) {
   const hit = mi.rows.get(t);
@@ -334,13 +334,30 @@ const FORM = new Set('bulb head bunch clove stalk sprig ear bag box carton jar c
 /** Class, cut and variety words that can follow a food's name without making it another food. */
 const GENERIC = new Set(('cheese breast thigh wing drumstick drumette tender tenderloin cutlet leg quarter fillet filet loin chop '
   + 'steak strip half breast bulb clove head root stalk floret crown spear leaf hass haas roma plum vine cluster ball log '
-  + 'wedge block shred crumble round link patty piece nugget kernel ear slice').split(' '));
+  + 'wedge block shred crumble round link patty piece nugget kernel ear slice heart chunk cob').split(' '));
+/** L44: words that make a processed form of a food (still the same food, ranked below the plain one). */
+const PROCESSED = new Set('nugget patty wedge fry chip tender crisp bite popper puff tot finger strip stick breaded battered frozen'.split(' '));
 /** M9: the product words after the ingredient word are all generic or pack words. */
 function sameFoodTail(pc, w) {
   const i = pc.indexOf(w);
   if (i < 0) return false;
   for (let j = i + 1; j < pc.length; j += 1) if (!GENERIC.has(pc[j]) && !FORM.has(pc[j])) return false;
   return true;
+}
+/** The everyday form of a bare ingredient word ("cream" means heavy or whipping cream). */
+const PLAIN = Object.fromEntries(Object.entries({
+  cream: 'heavy whipping', bread: 'sandwich white wheat sliced', milk: 'whole', rice: 'white long grain', flour: 'all purpose', sugar: 'granulated white cane',
+}).map(([k, v]) => [k, new Set(v.split(' '))]));
+/** A word that is itself a food: the head noun of some product in the catalog ("ice" in Bagged Ice, "banana"). Cached. */
+function isFood(mi, t) {
+  let v = mi.foods.get(t);
+  if (v === undefined) {
+    v = false;
+    const rows = rowsWith(mi, t);
+    for (let i = 0; i < rows.length && i < 400; i += 1) if (headOf(productCore(mi, rows[i])) === t) { v = true; break; }
+    mi.foods.set(t, v);
+  }
+  return v;
 }
 /** A product's head noun: its last word that isn't a pack or form word. */
 export function headOf(pc) {
@@ -385,13 +402,22 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
     // Breast, Avocados Hass, Garlic Bulb); when they name a different food (Ice Cream, Garlic Ham)
     // it drops two levels and is never offered.
     if (conf > 1 && headOf(pc) !== head) conf -= core.length === 1 && !sameFoodTail(pc, head) ? 2 : 1;
-    out.push({ row, conf, extra });
+    else if (core.length === 1 && conf > 1) {
+      // A bare "cream" / "bread": the plain form wins (Heavy Cream, Sandwich Bread), and a product
+      // whose head is modified by another food (Ice Cream, Banana Bread) drops a level, not out.
+      if (PLAIN[head] && pc.length > 1 && pc.every((t) => t === head || PLAIN[head].has(t))) conf = CONF.EXACT;
+      else if (conf > 2 && pc.some((t) => t !== head && isFood(mi, t))) conf -= 1;
+    }
+    // L44: processed forms (nuggets, patties, wedges, fries, chips…) rank below plain ones at the
+    // same level, ahead of any name-length tiebreak; they stay in the list as Swap alternatives.
+    const proc = core.length === 1 && pc.some((t) => t !== head && PROCESSED.has(t)) ? 1 : 0;
+    out.push({ row, conf, extra, proc });
   }
-  out.sort((a, b) => b.conf - a.conf || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
+  out.sort((a, b) => b.conf - a.conf || a.proc - b.proc || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
   const best = out[0]?.conf ?? 0;
   // The shortlist: the best level and the one below it. Head-noun-only (WEAK) hits are dropped:
   // "heavy cream" must not price as ice cream; no match is better than a wrong one.
-  return out.filter((c) => c.conf >= Math.max(2, best - 1)).slice(0, limit).map(({ row, conf }) => ({ row, conf }));
+  return out.filter((c) => c.conf >= Math.max(2, best - 1)).slice(0, limit).map(({ row, conf, proc }) => ({ row, conf, proc }));
 }
 
 /**
@@ -419,11 +445,11 @@ export const swapKey = (k, store) => `${k}|${store}`;
 export function lineOptions(mi, cands, ing, factor, swapSku = null) {
   const list = cands.get(ing.k) ?? [];
   if (!list.length) return [];
-  const opts = list.map(({ row, conf }) => { const it = itemAt(mi, row); return { row, it, conf, buy: buyFor(ing, factor, it) }; });
+  const opts = list.map(({ row, conf, proc = 0 }) => { const it = itemAt(mi, row); return { row, it, conf, proc, buy: buyFor(ing, factor, it) }; });
   const price = (o) => (o.buy.total == null ? Infinity : o.buy.total);
-  opts.sort((a, b) => b.conf - a.conf || price(a) - price(b) || a.row - b.row);
+  opts.sort((a, b) => b.conf - a.conf || a.proc - b.proc || price(a) - price(b) || a.row - b.row);
   const best = opts[0].conf;
-  const tier = opts.filter((o) => o.conf === best).sort((a, b) => price(a) - price(b) || a.row - b.row);
+  const tier = opts.filter((o) => o.conf === best).sort((a, b) => a.proc - b.proc || price(a) - price(b) || a.row - b.row);
   const rest = opts.filter((o) => o.conf !== best);
   let ordered = [...tier, ...rest].slice(0, 5);
   if (swapSku) {

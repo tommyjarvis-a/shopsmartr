@@ -1,5 +1,15 @@
 // Store directory schema checks. Shared by the app, tests and the weekly CI check.
 export const CHAINS = ['tops', 'wegmans', 'aldi', 'traderjoes'];
+/**
+ * Chains to hide from pickers, the finder and links (their stores stay in data/stores.json and in
+ * saved data). Empty in v0.2.3; v0.2.4 hides the chains without price data and wires it through.
+ */
+export const HIDDEN_CHAINS = new Set([]);
+export const isShownChain = (chain) => !HIDDEN_CHAINS.has(chain);
+/** The chains offered in the app, in CHAINS order. */
+export const shownChains = () => CHAINS.filter(isShownChain);
+/** Stores the app offers (finder, pickers, ads): everything not on a hidden chain. */
+export const shownStores = (stores) => stores.filter((s) => s && isShownChain(s.chain));
 const REQUIRED = ['id', 'chain', 'name', 'address', 'city', 'state', 'zip', 'lat', 'lon', 'url', 'verified', 'source'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

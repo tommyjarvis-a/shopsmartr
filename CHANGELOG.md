@@ -2,6 +2,58 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.2.3-alpha] - 2026-11-15 (alpha)
+
+Recipes, second slice: what you already have, match review with Swap, and Add missing. Hidden
+stores without prices, the global ⋮ menu and full-restore backups follow in v0.2.4; Cook from my
+list and Import in v0.2.5.
+
+### Added
+- **Missing / Already on your list.** Recipe ingredients are split into two groups using the
+  same name matching as "Uses my list"; checked (bought) items count as on your list. The header
+  reads "Ingredients · N of M on your list", and lines you have show their store.
+- **Add missing to list** opens a match review sheet (a centered Review dialog on desktop):
+  - "Matched at" store picker (remembered on this device; it also sets the card costs).
+  - One row per missing line ("For 1½ lb green beans") with a checkbox, the product, size and
+    price; unchecked rows are skipped.
+  - **Swap**: up to 4 alternatives with size and unit price, picked with one tap (a radio
+    group, arrow keys work). Your pick is remembered per ingredient and store, and fixes both
+    ends of the recipe's cost range to that product.
+  - "No match. Add as text" for lines without a product, and "Search <store> for something
+    else", which opens Shop searching that store.
+  - "Add N to list" with the total. Adding merges into matching open lines (as in v0.2.1), the
+    toast and button say "Added N items" / "Updated N items" with Undo for 6 seconds, and a
+    double tap or a held Enter still adds once (v0.2.2).
+- **Desktop right-hand panel** on a recipe: the missing lines with checkboxes, Review and Add N,
+  plus a compact My list grouped by store with "in recipe" tags.
+- **"in recipe" badge** on list lines added from a recipe; tap it to open that recipe.
+- **Backups include saved recipes (backup/2).** Save list writes `shopsmartr.backup/2` with
+  `favorites.recipes`. Load accepts /1 and /2: Replace with a /1 file keeps this device's saved
+  recipes, Merge combines them. The Load summary counts saved recipes.
+
+### Changed
+- **Weekly ads moved to Shop.** The Ads tab is gone (tabs: List · Shop · Recipes · Favorites, on
+  mobile and in the desktop nav). A "Weekly ads" icon button at the top of Shop opens the ad
+  links in a small sheet (a popover on desktop); Esc, the backdrop or a click outside closes it
+  and focus returns to the button. Links open in a new tab. Old `#ads` links and a saved Ads tab
+  open Shop.
+- **Bare "cream" and "bread" pick the everyday product.** A one-word ingredient prefers its
+  plain form (Heavy or Whipping Cream, Sandwich or White Bread, Whole Milk, Long Grain White
+  Rice). A product whose name puts another food before the head noun (Ice Cream, Banana Bread)
+  drops a level instead of being rejected, so it is still offered when nothing better exists.
+  A bare "cream" stays off Cream Cheese.
+- **Plain forms first (L44).** A bare "chicken" or "potato" leads with the plain product, not
+  Nuggets, Patties, Wedges, Fries or Chips (ahead of the shorter-name and price tiebreaks); the
+  processed forms stay as Swap alternatives.
+
+### Fixed
+- **Celery hearts, pineapple chunks and corn on the cob are priced (L43).**
+- **No focus ring after a tap (iOS).** Opening Recipes no longer leaves a blue ring on "Browse
+  recipes" (or on a heading, tab or a sheet's opener). Rings are keyboard-only app-wide
+  (`:focus-visible`, no tap highlight; after a tap or click, programmatic focus draws none) and
+  come back on the next key press.
+- The closed match sheet no longer stays visible on desktop (found while building this slice).
+
 ## [0.2.2-alpha] - 2026-11-15 (alpha)
 
 Second Recipes hotfix (Tester gate on 24f2513). Match review, Swap, "Already on your list", Add

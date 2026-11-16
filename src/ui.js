@@ -170,7 +170,15 @@ function renderItem(it, sectionKey, { onToggle, onEdit, onRemove, chainName = (c
   li.classList.toggle('done', it.checked);
   $('[data-name]', li).textContent = it.name;
   $('[data-qty]', li).textContent = formatQty(it);
-  $('[data-notes]', li).textContent = [it.notes, it.recipe ? `for ${it.recipe.title}` : ''].filter(Boolean).join(' · ');   // v0.2.0 recipe back-link
+  $('[data-notes]', li).textContent = it.notes;
+  // v0.2.1: tappable "in recipe" badge back to the recipe the line was added from.
+  const rl = $('[data-recipe-link]', li);
+  if (it.recipe) {
+    rl.hidden = false;
+    rl.href = `#recipes/r/${encodeURIComponent(it.recipe.id)}`;
+    rl.setAttribute('aria-label', `In recipe: ${it.recipe.title}. Open the recipe`);
+    rl.title = it.recipe.title;
+  }
   $('[data-check-label]', li).textContent = `Got ${it.name}`;
   const box = $('[data-check]', li);
   box.checked = it.checked;

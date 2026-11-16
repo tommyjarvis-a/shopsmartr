@@ -149,7 +149,7 @@ const SAVE_ID = '0b7c2f0e-7d1a-4c55-9a2e-5f1d3c9b8a71';
 const doc = B.makeBackup({ state, favs, shopStore: 'wegmans:90', appVersion: '0.1.6-alpha', now: new Date('2026-11-15T16:00:00Z'), saveId: SAVE_ID });
 
 test('Save list: versioned document with list, favorites, store picks and settings', () => {
-  assert.equal(doc.schema, 'shopsmartr.backup/1');
+  assert.equal(doc.schema, 'shopsmartr.backup/2');   // v0.2.1: /2 adds favorites.recipes
   assert.equal(doc.appVersion, '0.1.6-alpha');
   assert.equal(doc.saveId, SAVE_ID);
   assert.match(B.makeBackup({ state, favs, appVersion: '0.1.6-alpha' }).saveId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, 'random UUID by default');
@@ -179,7 +179,7 @@ test('Save list: the file contains no passphrase, key or ciphertext material', (
 test('Load list: round trip, validation of schema, version and shape', () => {
   const r = B.parseBackup(B.backupJSON(doc));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, stores: 2, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
+  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, recipes: 0, stores: 2, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
   assert.equal(r.backup.saveId, SAVE_ID);
   assert.equal(B.summaryText(r.summary), '5 list items · 1 favorite · 1 meal · 2 stores');
   assert.deepEqual(r.backup.state.items, state.items);
@@ -190,7 +190,7 @@ test('Load list: round trip, validation of schema, version and shape', () => {
   assert.equal(bad('nope').error, "That file isn't a ShopSmartR list");
   assert.equal(bad({ version: 1, items: [] }).error, "That file isn't a ShopSmartR list", 'the live list format is not a saved list file');
   assert.equal(bad({ ...doc, schema: 'other/1' }).error, "That file isn't a ShopSmartR list");
-  assert.match(bad({ ...doc, schema: 'shopsmartr.backup/2' }).error, /newer ShopSmartR/);
+  assert.match(bad({ ...doc, schema: 'shopsmartr.backup/3' }).error, /newer ShopSmartR/);
   assert.match(bad({ ...doc, appVersion: undefined }).error, /app version/);
   assert.match(bad({ ...doc, createdAt: 'yesterday' }).error, /date/);
   assert.match(bad({ ...doc, list: { items: 'x' } }).error, /no list items/);

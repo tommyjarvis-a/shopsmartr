@@ -34,7 +34,7 @@ test('saved recipes: star, no duplicates, unstar, newest first, round-trip', () 
 test('Replace from a backup/1 file keeps this device\'s saved recipes', () => {
   const cur = { state: L.emptyState(), favs: F.saveRecipe(F.emptyFavorites(), { id: 'r1', title: 'Soup' }), shopStore: '', listSort: { by: 'name', dir: 'asc' } };
   const file = B.makeBackup({ state: L.emptyState(), favs: F.emptyFavorites(), appVersion: '0.2.0-alpha' });
-  const parsed = B.parseBackup(JSON.stringify(file));
+  const parsed = B.parseBackup(JSON.stringify({ ...file, schema: 'shopsmartr.backup/1', favorites: { items: [], meals: [] } }));
   assert.ok(parsed.ok);
   const out = B.applyBackup(cur, parsed.backup, 'replace');
   assert.equal(out.favs.recipes.length, 1);

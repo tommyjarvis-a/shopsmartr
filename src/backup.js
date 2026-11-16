@@ -6,7 +6,9 @@ import { serialize, deserialize } from './storage.js';
 import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favKey, dedupeFavorites } from './favorites.js';
 import { emptyState, newId, storeKeyOf, normUnit, MAX_QTY } from './list.js';
 
-export const BACKUP_SCHEMA = 'shopsmartr.backup/1';
+export const BACKUP_SCHEMA = 'shopsmartr.backup/2';
+/** v0.2.1: backup/2 adds favorites.recipes (saved recipes). backup/1 files still load. */
+export const BACKUP_SCHEMAS_READ = ['1', '2'];
 /** Copy of the list and favorites taken just before a "Load list" replace. */
 export const PRE_LOAD_BAK_KEY = 'shopsmartr:beforeLoad:v1.bak';
 /** { lastSavedAt, nudgeHiddenUntil, firstSeenAt } as ISO strings. */
@@ -51,7 +53,7 @@ export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', app
     appVersion: String(appVersion ?? ''),
     createdAt: new Date(now).toISOString(),
     list: { items: list.items },
-    favorites: { items: fav.items, meals: fav.meals },
+    favorites: { items: fav.items, meals: fav.meals, recipes: fav.recipes ?? [] },
     stores: { shopStore: SHOP_STORE_RE.test(shopStore) ? shopStore : '', selectedStoreIds: list.selectedStoreIds },
     settings: { zip: list.zip, radiusMi: list.radiusMi, chains: list.chains },
   };
@@ -76,7 +78,7 @@ export function parseBackup(text) {
   if (!isObj(raw) || typeof raw.schema !== 'string') return { ok: false, error: NOT_A_LIST };
   const m = /^shopsmartr\.backup\/(\d+)$/.exec(raw.schema);
   if (!m) return { ok: false, error: NOT_A_LIST };
-  if (m[1] !== '1') return { ok: false, error: 'This list was saved by a newer ShopSmartR. Update the app, then try again.' };
+  if (!BACKUP_SCHEMAS_READ.includes(m[1])) return { ok: false, error: 'This list was saved by a newer ShopSmartR. Update the app, then try again.' };
   if (typeof raw.appVersion !== 'string' || !/^\d+\.\d+\.\d+/.test(raw.appVersion)) return { ok: false, error: 'The saved list is missing its app version.' };
   const created = Date.parse(raw.createdAt);
   if (!Number.isFinite(created)) return { ok: false, error: 'The saved list is missing its date.' };
@@ -85,14 +87,15 @@ export function parseBackup(text) {
   const favRaw = isObj(raw.favorites) ? raw.favorites : {};
   const favN = (Array.isArray(favRaw.items) ? favRaw.items.length : 0) + (Array.isArray(favRaw.meals) ? favRaw.meals.length : 0);
   if (favN > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favN.toLocaleString('en-US')} Favorites and meals. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
-  if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals))) return { ok: false, error: 'The Favorites in this file are damaged.' };
+  if (Array.isArray(favRaw.recipes) && favRaw.recipes.length > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favRaw.recipes.length.toLocaleString('en-US')} saved recipes. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
+  if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals)) || ('recipes' in favRaw && !Array.isArray(favRaw.recipes))) return { ok: false, error: 'The Favorites in this file are damaged.' };
   const stores = isObj(raw.stores) ? raw.stores : {};
   const settings = isObj(raw.settings) ? raw.settings : {};
   const state = deserialize(JSON.stringify({
     version: 1, items: raw.list.items, selectedStoreIds: stores.selectedStoreIds,
     zip: settings.zip, radiusMi: settings.radiusMi, chains: settings.chains,
   }));
-  const favs = deserializeFavorites(JSON.stringify({ version: 1, items: favRaw.items ?? [], meals: favRaw.meals ?? [] }));
+  const favs = deserializeFavorites(JSON.stringify({ version: 1, items: favRaw.items ?? [], meals: favRaw.meals ?? [], recipes: favRaw.recipes ?? [] }));
   const shopStore = typeof stores.shopStore === 'string' && SHOP_STORE_RE.test(stores.shopStore) ? stores.shopStore : '';
   const dropped = raw.list.items.length - state.items.length;
   // L25: one id per row. Exact duplicates are dropped; a different row reusing an id gets a new one.
@@ -114,7 +117,8 @@ export function parseBackup(text) {
   favs.items = uniq(favs.items);
   favs.meals = uniq(favs.meals);
   const saveId = typeof raw.saveId === 'string' && SAVE_ID_RE.test(raw.saveId) ? raw.saveId : '';
-  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString() };
+  // hasRecipes: a backup/2 file says what the saved recipes are (even none); a /1 file doesn't.
+  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString(), schemaVersion: Number(m[1]), hasRecipes: m[1] !== '1' };
   return { ok: true, backup, summary: { ...summarize(backup, dropped), duplicates: ids.dupes, renewedIds: ids.renewed } };
 }
 function freshId(seen) {
@@ -161,6 +165,7 @@ export function summarize(b, dropped = 0) {
     // L34: count Favorites after the same-item combine that loading runs, so the pill matches what loads.
     favorites: dedupeFavorites(b.favs).favorites.items.length,
     meals: b.favs.meals.length,
+    recipes: (b.favs.recipes ?? []).length,
     stores: b.state.selectedStoreIds.length,
     dropped,
     appVersion: b.appVersion,
@@ -172,7 +177,7 @@ export function summarize(b, dropped = 0) {
 export function summaryText(s) {
   const n = (k, one, many = `${one}s`) => `${s[k]} ${s[k] === 1 ? one : many}`;
   // L33: the plural names the Favorites collection (capitalized); one item is "1 favorite".
-  return [n('items', 'list item'), n('favorites', 'favorite', 'Favorites'), n('meals', 'meal'), n('stores', 'store')].join(' · ');
+  return [n('items', 'list item'), n('favorites', 'favorite', 'Favorites'), s.recipes ? n('recipes', 'saved recipe') : '', n('meals', 'meal'), n('stores', 'store')].filter(Boolean).join(' · ');
 }
 
 /**
@@ -229,8 +234,8 @@ function mergeRows(current, incoming, keyOf, combine) {
  */
 export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
-    // v0.2.0: saved recipes aren't in a backup/1 file yet (backup/2 is v0.2.1), so Replace keeps this device's.
-    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: cur.favs.recipes ?? [] }, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
+    // A backup/2 file's saved recipes replace this device's; a backup/1 file has none, so they stay.
+    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
@@ -254,12 +259,18 @@ export function applyBackup(cur, b, mode) {
       radiusMi: s.zip ? s.radiusMi : (b.state.zip ? b.state.radiusMi : s.radiusMi ?? base.radiusMi),
       chains: [...new Set([...(s.chains ?? []), ...b.state.chains])],
     },
-    favs: { ...cur.favs, items: favItems.rows, meals },
+    favs: { ...cur.favs, items: favItems.rows, meals, recipes: mergeRecipes(cur.favs.recipes ?? [], b.favs.recipes ?? []) },
     shopStore: cur.shopStore || b.shopStore,
     listSort: cur.listSort,
     added: items.added,
     combined: items.combined,
   };
+}
+
+/** Saved recipes united by id; this device's copy wins. */
+export function mergeRecipes(cur, incoming) {
+  const ids = new Set(cur.map((r) => r.id));
+  return [...cur, ...incoming.filter((r) => !ids.has(r.id))];
 }
 
 // ---------- "Last saved N days ago — Save list" nudge ----------

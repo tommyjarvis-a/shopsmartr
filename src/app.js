@@ -16,7 +16,9 @@ import * as UI from './ui.js';
 import { initRecipes } from './rx.js';
 
 const el = (id) => document.getElementById(id);
-const SCREENS = ['list', 'shop', 'recipes', 'favorites', 'stores', 'ads'];
+const SCREENS = ['list', 'shop', 'recipes', 'favorites', 'stores'];
+/** v0.2.3: old routes that moved. #ads (the removed Ads tab) opens Shop, where the Weekly ads button is. */
+const MOVED = { ads: 'shop' };
 let rxApi = null;   // v0.2.0 Recipes tab (src/rx.js)
 const loaded = loadStateWithStatus();
 let state = loaded.state;
@@ -555,7 +557,7 @@ async function onLoadFile(file) {
   const pill = (t) => { const x = document.createElement('span'); x.textContent = t; return x; };
   const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
   el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
-    sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.meals ? n('meals', 'meal') : '',
+    sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.recipes ? n('recipes', 'saved recipe') : '', sm.meals ? n('meals', 'meal') : '',
     sm.dropped ? `${sm.dropped} unreadable skipped` : '',
     sm.duplicates ? `${sm.duplicates} duplicate${sm.duplicates === 1 ? '' : 's'} skipped` : ''].filter(Boolean).map(pill));
   const cur = state.items.length;
@@ -802,6 +804,42 @@ function syncListActions() {
   set('clear', true, done > 0);
 }
 
+// ---------- Weekly ads (button on Shop) ----------
+function openAds() {
+  const d = el('ads-sheet'); const b = el('ads-btn');
+  if (d.open) return;
+  const pop = window.matchMedia('(min-width: 1024px)').matches;
+  d.classList.toggle('pop', pop);
+  d.showModal();
+  if (pop) {
+    const r = b.getBoundingClientRect();
+    const w = d.offsetWidth; const hgt = d.offsetHeight;
+    d.style.left = `${Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8))}px`;
+    d.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - hgt - 8))}px`;
+  } else { d.style.left = ''; d.style.top = ''; }
+  b.setAttribute('aria-expanded', 'true');
+  d.querySelector('.go, a, button')?.focus();
+}
+/** v0.2.3: remember how the user is interacting so a tap never leaves a focus ring (see style.css). */
+function bindInputModality() {
+  const root = document.documentElement;
+  const set = (m) => { if (root.dataset.input !== m) root.dataset.input = m; };
+  window.addEventListener('pointerdown', () => set('pointer'), true);
+  window.addEventListener('keydown', (e) => { if (!e.metaKey && !e.ctrlKey && !e.altKey) set('key'); }, true);
+}
+function bindAds() {
+  const d = el('ads-sheet'); const b = el('ads-btn');
+  b.addEventListener('click', openAds);
+  // Outside / backdrop click closes (a click inside the panel's own box doesn't).
+  d.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { d.close(); return; }
+    const r = d.getBoundingClientRect();
+    if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close();
+  });
+  d.addEventListener('close', () => { b.setAttribute('aria-expanded', 'false'); if (location.hash.startsWith('#shop') || !location.hash) b.focus({ preventScroll: true }); });
+  window.addEventListener('resize', () => { if (d.open) d.close(); });
+}
+
 function renderAds() {
   const mine = withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
   const rows = mine.length
@@ -964,7 +1002,7 @@ function bindHousehold() {
 // ---------- Routing ----------
 function route() {
   const hash = location.hash.slice(1);
-  const want = hash.split('/')[0];
+  const want = MOVED[hash.split('/')[0]] ?? hash.split('/')[0];
   let screen = SCREENS.includes(want) ? want : (state.selectedStoreIds.length || state.items.length ? 'list' : 'stores');
   if (screen === 'shop' && feedAvailable === false) screen = 'list';
   UI.setScreen(screen);
@@ -1408,11 +1446,22 @@ async function init() {
   bindSort();
   bindConfirm();
   bindHousehold();
+  bindAds();
+  bindInputModality();
   rxApi = initRecipes({
     getState: () => state, commit, getFavs: () => favs, commitFavs: (next) => commitFavs(next),
     getFeed: () => feed, getShopStore: () => shop.store, directory: () => data.byId,
     toast: (t, undo, ms) => UI.toast(t, undo, ms), openHousehold: () => openHousehold(),
     openFavRecipes: () => setFavTab('recipes'), onChange: () => {},
+    openShopSearch: (q, storeKey) => {
+      if (!feed) { location.hash = '#shop'; return; }
+      if (storeKey && C.priceStores(feed.catalog).some((st) => st.key === storeKey)) { shop.store = storeKey; el('shop-store').value = storeKey; saveShopStore(storeKey); }
+      shop.q = q; shop.dept = ''; shop.offset = 0;
+      el('shop-q').value = q; el('shop-clear').hidden = !q;
+      location.hash = '#shop';
+      renderShop({ keepScroll: false });
+      el('shop-q').focus({ preventScroll: true });
+    },
     onRecipesUnlocked: async () => {
       if (feed || !priceEnv) return;
       try { const res = await Prices.unlockWithCache(priceEnv, undefined, undefined, timedDecode); if (res) { showShop(res); rxApi.render(); } } catch { /* prices keep their own lock */ }
