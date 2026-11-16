@@ -1176,3 +1176,72 @@ body[data-screen="recipes"] .screen-recipes { display: block; }
 .sheet.ads-sheet.pop { position: fixed; margin: 0; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border); padding: var(--space-3) var(--space-4) var(--space-4); }
 .sheet.ads-sheet.pop .grab { display: none; }
 .sheet.ads-sheet.pop::backdrop { background: transparent; }
+
+/* ============ v0.2.4: Happy Wife Helper — App icon picker (Designer v03-icons/app-icon-picker.css, tokens only) ============ */
+.menu .mi .ai-mini { width: 22px; height: 22px; border-radius: 6px; flex: none; display: block; box-shadow: 0 0 0 1px var(--color-border); }
+.menu .mi[data-action="theme"] .sub, .menu .mi[data-action="appicon"] .sub { white-space: nowrap; }
+.logo.logo-img { background: none; padding: 0; overflow: hidden; border-radius: 9px; box-shadow: 0 0 0 1px var(--color-border); }
+.logo.logo-img::after { display: none; }
+.logo.logo-img img { width: 32px; height: 32px; display: block; }
+.icon-sheet fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.icon-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.icon-opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: 14px 6px 12px; min-height: 128px;
+  border: 1.5px solid var(--color-control-border, var(--color-border-strong)); border-radius: var(--radius-lg); background: var(--color-surface); cursor: pointer; text-align: center; }
+.icon-opt:has(input:checked) { border: 2px solid var(--color-primary); background: var(--color-primary-soft); padding: 13.5px 5.5px 11.5px; }
+.icon-opt:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.icon-opt input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.icon-opt img { width: 64px; height: 64px; border-radius: 15px; display: block; box-shadow: var(--shadow-1); }
+.icon-opt .nm { font-size: var(--fs-sm); line-height: 18px; font-weight: var(--fw-semibold); color: var(--color-text); }
+.icon-opt .nm small { display: block; font-size: var(--fs-xs); font-weight: var(--fw-regular); color: var(--color-text-muted); }
+.icon-opt .ok { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--color-primary-strong); color: var(--color-on-primary); display: none; place-items: center; }
+.icon-opt:has(input:checked) .ok { display: grid; }
+.icon-note { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.icon-note .icon { flex: none; color: var(--color-text-muted); margin-top: 1px; }
+.icon-note p { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); }
+.icon-note p + p { margin-top: var(--space-2); }
+.icon-note b { color: var(--color-text); font-weight: var(--fw-semibold); }
+
+/* ============ v0.2.4: global ⋮ menu (Designer v03-themes/global-menu-v2.css) ============ */
+.menu.gmenu { width: 288px; max-height: calc(100dvh - var(--gmenu-top, 64px) - 8px); }
+body:not([data-screen="list"]) .gmenu [data-list-only] { display: none; }
+.gmenu .mi .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 156px; }
+.gmenu .mi .chev { width: 16px; height: 16px; flex: none; color: var(--color-text-faint); }
+.gmenu .mi .sub + .chev { margin-left: 0; }
+/* App icon row: current icon as a 20px square (placeholder; the default app icon is still pending) */
+.gmenu .mi .icon-sq { width: 20px; height: 20px; border-radius: 6px; flex: none; display: grid; place-items: center; background: var(--color-primary); color: var(--color-on-primary); }
+.gmenu .mi .icon-sq .icon { width: 13px; height: 13px; }
+.appbar [data-menu-toggle][aria-expanded="true"] { background: var(--color-surface-2); }
+/* desktop: "More" at the end of the side nav opens the same menu */
+.side-nav .nav.more { width: 100%; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.side-nav .nav.more[aria-expanded="true"] { background: var(--color-surface); }
+/* v0.2.4 additions (tokens only, so themes can reskin them) */
+.brand .wordmark { white-space: nowrap; }
+.side-nav .nav.more { display: flex; align-items: center; gap: var(--space-3); }
+.gmenu .msub { padding-left: var(--space-4); }
+.gmenu .mi[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.gmenu .mi img.ai-mini { width: 20px; height: 20px; }
+.icon-sheet, .about-sheet { display: none; }
+.icon-sheet[open], .about-sheet[open] { display: grid; gap: var(--space-4); align-content: start; overflow-y: auto; }
+@media (min-width: 768px) {
+  .sheet.icon-sheet, .sheet.about-sheet { max-width: 440px; margin: auto; border-radius: var(--radius-xl); }
+}
+.icon-note .icon { flex: none; color: var(--color-text-muted); margin-top: 1px; }
+.steps { margin: var(--space-2) 0 0; padding-left: 1.4em; display: grid; gap: var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); }
+.steps b { color: var(--color-text); font-weight: var(--fw-semibold); }
+.steps .btn { margin-top: var(--space-1); display: inline-flex; }
+.steps .icon { display: inline-block; vertical-align: -3px; }
+.about-id { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.about-id img { width: 48px; height: 48px; border-radius: 12px; box-shadow: 0 0 0 1px var(--color-border); flex: none; }
+.about-id h2 { margin: 0; }
+.about-id p { margin: 0; }
+.about-by { margin: 0; font-weight: var(--fw-semibold); }
+.about-link { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.about-live { font-weight: var(--fw-bold); font-size: var(--fs-lg); color: var(--color-primary-text); overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
+.about-copy { display: flex; gap: var(--space-2); align-items: center; min-width: 0; }
+.about-copy .input { flex: 1; min-width: 0; font-size: var(--fs-sm); }
+.about-steps h3 { margin: 0 0 var(--space-1); font-size: var(--fs-md, 1rem); }
+.icon-note-inline { margin: var(--space-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--color-text-muted); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-sun-soft); }
+.icon-note-inline b { color: var(--color-on-sun-soft); }
+.about-repo { margin: 0; }
+.about-repo a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-primary-text); font-weight: var(--fw-semibold); }
+.about-live:focus-visible, .about-repo a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }

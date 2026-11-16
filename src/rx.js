@@ -675,7 +675,7 @@ export function initRecipes(ctx) {
     const what = addedText(ids.length, prev.size);
     rx.lastAdd = { id: r.id, ids, prev, n, what, at: Date.now() };
     ctx.toast(`${what} from ${r.title}`, undoAdd, 6000);
-    renderKeep('.rx-cta .btn');
+    renderKeep(AFTER_ADD);
     const mine = rx.lastAdd;
     setTimeout(() => { if (rx.lastAdd === mine && rx.view === 'detail') renderKeep(null); }, 6100);
   }
@@ -688,7 +688,7 @@ export function initRecipes(ctx) {
     rx.lastAdd = null;
     rx.undoAt = Date.now();
     ctx.toast('Removed them from your list');
-    if (rx.view === 'detail') renderKeep('.rx-cta .btn');
+    if (rx.view === 'detail') renderKeep(AFTER_UNDO);
   }
 
   // ----- desktop right panel: Add missing card + compact My list -----
@@ -751,11 +751,27 @@ export function initRecipes(ctx) {
     if (keepScroll) window.scrollTo(0, y);
     renderFavGrid();
   }
+  // L48: after Add / Undo, focus goes to the first of these that is actually shown: the phone CTA
+  // (hidden at desktop widths), the side panel's Undo, its Add button, the toast's Undo, the title.
+  const AFTER_ADD = ['.rx-cta .btn', '#rx-side .rx-added button', '#rx-side #rx-side-add', '#toast-undo', '.rx-title'];
+  const AFTER_UNDO = ['.rx-cta .btn', '#rx-side #rx-side-add', '#rx-side .rx-added button', '.rx-title'];
+  const shown = (e) => Boolean(e && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden]'));
+  function focusFirst(sels) {
+    for (const q of sels) {
+      const e = root.querySelector(q) ?? document.querySelector(q);
+      if (shown(e) && !e.disabled) { e.focus({ preventScroll: true }); if (document.activeElement === e) return e; }
+    }
+    return null;
+  }
   function renderKeep(sel) {
     const y = window.scrollY;
+    const had = document.activeElement;
+    const inside = had && had !== document.body && (root.contains(had) || side?.contains(had));
     render();
     window.scrollTo(0, y);
-    if (sel) root.querySelector(sel)?.focus({ preventScroll: true });
+    if (Array.isArray(sel)) focusFirst(sel);
+    else if (sel) root.querySelector(sel)?.focus({ preventScroll: true });
+    else if (inside && !had.isConnected) focusFirst(AFTER_UNDO);   // the focused button was re-rendered away (6 s Undo timeout)
   }
   function renderFavGrid() {
     const grid = document.getElementById('fav-rx-grid');
@@ -769,6 +785,8 @@ export function initRecipes(ctx) {
   return {
     show, render: () => render({ keepScroll: true }), syncStars: () => { syncStars(); renderFavGrid(); }, retryCache: tryCache,
     setServings(n) { rx.servings = Math.max(1, Math.min(MAX_SERV, n)); saveHousehold(rx.servings); rx.costMemo.clear(); rx.detailServ = rx.servings; render({ keepScroll: true }); },
+    /** v0.2.4: re-read the device prefs a full restore may have written (household, swaps, match store). */
+    reloadPrefs() { rx.servings = loadHousehold(); rx.detailServ = rx.servings; rx.swaps = loadSwaps(); rx.matchStore = loadRxStore(); rx.swapVer = (rx.swapVer ?? 0) + 1; rx.costMemo.clear(); render({ keepScroll: true }); },
     servings: () => rx.servings, perf: rx.perf, savedCount: () => (ctx.getFavs().recipes ?? []).length,
   };
 }

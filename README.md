@@ -1,4 +1,7 @@
-# ShopSmartR
+# Happy Wife Helper
+
+*Formerly ShopSmartR. The repo, the Pages URL and the `shopsmartr:*` storage keys keep the old name.*
+Live: https://tommyjarvis-a.github.io/shopsmartr/ · current version: see `src/version.js` and `CHANGELOG.md`.
 
 Pick your nearby grocery stores in Western New York and keep one shopping list across them.
 **Version 0.1.0-alpha.** Phase 1: stores, list, and links to weekly ads.
@@ -7,7 +10,7 @@ Pick your nearby grocery stores in Western New York and keep one shopping list a
 - Your list stays in your browser (`localStorage`). Export it as CSV or text.
 - Chains: Tops Friendly Markets, Wegmans, ALDI, Trader Joe's.
 
-> ShopSmartR is not affiliated with, endorsed by, or sponsored by Tops, Wegmans, ALDI, or Trader Joe's.
+> Happy Wife Helper is not affiliated with, endorsed by, or sponsored by Tops, Wegmans, ALDI, or Trader Joe's.
 > It does not show official checkout prices. Confirm hours and prices with the store.
 
 ## Run locally

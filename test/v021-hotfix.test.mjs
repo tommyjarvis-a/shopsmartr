@@ -120,20 +120,19 @@ test('L41: one wording for the toast and the button', async () => {
   assert.equal(addedText(2, 1), 'Added 2, updated 1');
 });
 
-// ---------- v0.2.3: a different-food modifier before the head is penalized, not rejected ----------
-test('a bare "cream" prefers Heavy / Whipping Cream over Ice Cream; Ice Cream stays offered lower', () => {
+// ---------- v0.2.3 (tightened in v0.2.4, L46/M10): a different-food modifier before the head ----------
+test('a bare "cream" prefers Heavy / Whipping Cream; Ice, Sour and Whipped Cream are never offered (v0.2.4 L46)', () => {
   const m = mini('Ice Cream', 'Heavy Cream', 'Sour Cream', 'Bagged Ice');
-  assert.equal(m('cream')[0], 'Heavy Cream');
-  const n = mini('Ice Cream', 'Sour Cream', 'Bagged Ice')('cream');
-  assert.deepEqual(n, ['Sour Cream', 'Ice Cream'], 'penalized below Sour Cream, not rejected');
-  assert.deepEqual(mini('Ice Cream', 'Bagged Ice')('cream'), ['Ice Cream'], 'still offered when it is all there is');
+  assert.deepEqual(m('cream'), ['Heavy Cream']);
+  assert.deepEqual(mini('Ice Cream', 'Sour Cream', 'Bagged Ice')('cream'), [], 'v0.2.4: not offered, whatever the catalog holds');
+  assert.deepEqual(mini('Ice Cream')('cream'), [], 'v0.2.4: no plain-ice product needed to rule out Ice Cream');
   assert.equal(mini('Ice Cream', 'Heavy Whipping Cream', 'Bagged Ice')('cream')[0], 'Heavy Whipping Cream');
 });
 
-test('a bare "bread" prefers plain or sandwich bread over Banana Bread', () => {
-  assert.equal(mini('Banana Bread', 'Sandwich Bread', 'Bananas')('bread')[0], 'Sandwich Bread');
+test('a bare "bread" prefers plain or sandwich bread; Banana Bread is not bread (v0.2.4 M10 rule)', () => {
+  assert.deepEqual(mini('Banana Bread', 'Sandwich Bread', 'Bananas')('bread'), ['Sandwich Bread']);
   assert.equal(mini('Banana Bread', 'Sourdough Bread', 'Bananas')('bread')[0], 'Sourdough Bread');
-  assert.deepEqual(mini('Banana Bread', 'Bananas')('bread'), ['Banana Bread'], 'still offered when nothing better exists');
+  assert.deepEqual(mini('Banana Bread', 'Bananas')('bread'), [], 'v0.2.4: no match is better than a wrong one');
 });
 
 test('the M9 set is unchanged by the modifier penalty', () => {
@@ -151,7 +150,7 @@ test('a bare "cream" stays off Cream Cheese', () => {
   assert.equal(mini('Cream Cheese', 'Heavy Cream', 'Ice Cream', 'Bagged Ice')('cream')[0], 'Heavy Cream');
   assert.ok(!mini('Cream Cheese', 'Heavy Cream')('cream').includes('Cream Cheese'));
   assert.equal(mini('Cream Cheese', 'Heavy Whipping Cream')('cream')[0], 'Heavy Whipping Cream');
-  assert.equal(mini('Cream Cheese', 'Sour Cream')('cream')[0], 'Sour Cream');
+  assert.deepEqual(mini('Cream Cheese', 'Sour Cream')('cream'), [], 'v0.2.4 L46: neither is cream');
 });
 
 test('L43: celery hearts, pineapple chunks and corn on the cob are the same food', () => {

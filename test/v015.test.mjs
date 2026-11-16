@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { withHiddenChains } from '../src/stores.js';
 import assert from 'node:assert/strict';
 import * as L from '../src/list.js';
 import * as S from '../src/storage.js';
@@ -160,7 +161,7 @@ test('Save list: versioned document with list, favorites, store picks and settin
   assert.deepEqual(doc.favorites.meals.map((m) => m.name), ['Taco night']);
   assert.deepEqual(doc.stores, { shopStore: 'wegmans:90', selectedStoreIds: ['wegmans-90', 'tops-1'] });
   assert.deepEqual(doc.settings, { zip: '14221', radiusMi: 15, chains: ['wegmans'] }, 'L22: the sort choice is device-only and not saved');
-  assert.equal(B.backupFilename('2026-11-15'), 'shopsmartr-list-2026-11-15.json');
+  assert.equal(B.backupFilename('2026-11-15'), 'happy-wife-helper-backup-2026-11-15.json');   // v0.2.4 rename
 });
 
 test('Save list: the file contains no passphrase, key or ciphertext material', () => {
@@ -179,7 +180,7 @@ test('Save list: the file contains no passphrase, key or ciphertext material', (
 test('Load list: round trip, validation of schema, version and shape', () => {
   const r = B.parseBackup(B.backupJSON(doc));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, recipes: 0, stores: 2, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
+  assert.deepEqual(r.summary, { items: 5, listStores: 3, priced: 3, favorites: 1, meals: 1, recipes: 0, stores: 2, settings: 0, dropped: 0, appVersion: '0.1.6-alpha', createdAt: '2026-11-15T16:00:00.000Z', duplicates: 0, renewedIds: 0 });
   assert.equal(r.backup.saveId, SAVE_ID);
   assert.equal(B.summaryText(r.summary), '5 list items · 1 favorite · 1 meal · 2 stores');
   assert.deepEqual(r.backup.state.items, state.items);
@@ -187,10 +188,10 @@ test('Load list: round trip, validation of schema, version and shape', () => {
   assert.equal(r.backup.shopStore, 'wegmans:90');
   assert.equal('listSort' in r.backup, false, 'L22: a sort in the file is ignored');
   const bad = (x) => B.parseBackup(typeof x === 'string' ? x : JSON.stringify(x));
-  assert.equal(bad('nope').error, "That file isn't a ShopSmartR list");
-  assert.equal(bad({ version: 1, items: [] }).error, "That file isn't a ShopSmartR list", 'the live list format is not a saved list file');
-  assert.equal(bad({ ...doc, schema: 'other/1' }).error, "That file isn't a ShopSmartR list");
-  assert.match(bad({ ...doc, schema: 'shopsmartr.backup/3' }).error, /newer ShopSmartR/);
+  assert.equal(bad('nope').error, "That file isn't a Happy Wife Helper backup");
+  assert.equal(bad({ version: 1, items: [] }).error, "That file isn't a Happy Wife Helper backup", 'the live list format is not a saved list file');
+  assert.equal(bad({ ...doc, schema: 'other/1' }).error, "That file isn't a Happy Wife Helper backup");
+  assert.match(bad({ ...doc, schema: 'shopsmartr.backup/3' }).error, /newer Happy Wife Helper/);
   assert.match(bad({ ...doc, appVersion: undefined }).error, /app version/);
   assert.match(bad({ ...doc, createdAt: 'yesterday' }).error, /date/);
   assert.match(bad({ ...doc, list: { items: 'x' } }).error, /no list items/);
@@ -281,9 +282,21 @@ test('storeSections: follows the Stores-tab order first, then first appearance, 
     { id: 'd', name: 'IPA', qty: 1, unit: '', notes: '', storeId: '', checked: false, priced: priced({ each: 5, ...W105 }) },
   ];
   const keys = (order) => L.storeSections(rows, DIR, undefined, order).map((g) => g.key);
-  assert.deepEqual(keys(['tops-1', 'wegmans-90']), ['tops-1', 'wegmans-90', 'wegmans-105', '']);
-  assert.deepEqual(keys([]), ['wegmans-90', 'tops-1', 'wegmans-105', '']);
-  assert.deepEqual(keys(['gone-1', 'wegmans-90']), ['wegmans-90', 'tops-1', 'wegmans-105', ''], 'unknown order keys are ignored');
+  // v0.2.4: with the hidden-chains flag off, the original order rules hold exactly.
+  withHiddenChains([], () => {
+    assert.deepEqual(keys(['tops-1', 'wegmans-90']), ['tops-1', 'wegmans-90', 'wegmans-105', '']);
+    assert.deepEqual(keys([]), ['wegmans-90', 'tops-1', 'wegmans-105', '']);
+    assert.deepEqual(keys(['gone-1', 'wegmans-90']), ['wegmans-90', 'tops-1', 'wegmans-105', ''], 'unknown order keys are ignored');
+  });
+  // Flag on (Tops hidden): the Tops line keeps its own section, after the shown stores, before Any.
+  withHiddenChains(['tops', 'aldi', 'traderjoes'], () => {
+    assert.deepEqual(keys(['tops-1', 'wegmans-90']), ['wegmans-90', 'wegmans-105', 'tops-1', '']);
+    assert.deepEqual(keys([]), ['wegmans-90', 'wegmans-105', 'tops-1', '']);
+    const secs = L.storeSections(rows, DIR, undefined, []);
+    assert.equal(secs.find((g) => g.key === 'tops-1').hidden, true);
+    assert.equal(secs.find((g) => g.key === 'tops-1').items[0].name, 'Bread', 'the Tops line is still there');
+    assert.equal(secs.reduce((n, g) => n + g.items.length, 0), rows.length, 'no line is lost');
+  });
 });
 
 test('collapsed sections persist per device and ignore junk', () => {

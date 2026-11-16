@@ -5,9 +5,15 @@
 import { serialize, deserialize } from './storage.js';
 import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favKey, dedupeFavorites } from './favorites.js';
 import { emptyState, newId, storeKeyOf, normUnit, MAX_QTY } from './list.js';
+import { cleanPrefs } from './keys.js';
+import { APP_NAME, FILE_STEM } from './brand.js';
 
 export const BACKUP_SCHEMA = 'shopsmartr.backup/2';
-/** v0.2.1: backup/2 adds favorites.recipes (saved recipes). backup/1 files still load. */
+/**
+ * v0.2.1: backup/2 adds favorites.recipes (saved recipes). backup/1 files still load.
+ * v0.2.4 (full restore): backup/2 gains an optional `prefs` section (device settings from the
+ * key registry in keys.js). Additive, so the format id stays /2 and older app versions ignore it.
+ */
 export const BACKUP_SCHEMAS_READ = ['1', '2'];
 /** Copy of the list and favorites taken just before a "Load list" replace. */
 export const PRE_LOAD_BAK_KEY = 'shopsmartr:beforeLoad:v1.bak';
@@ -17,13 +23,13 @@ const DAY = 86400000;
 export const NUDGE_DAYS = 7;
 
 export function backupFilename(stamp) {
-  return `shopsmartr-list-${stamp}.json`;
+  return `${FILE_STEM}-backup-${stamp}.json`;
 }
-export const NOT_A_LIST = 'That file isn\'t a ShopSmartR list';
+export const NOT_A_LIST = `That file isn't a ${APP_NAME} backup`;
 /** Load list limits (L24): checked on the file size before reading, and on the item count. */
 export const MAX_LOAD_BYTES = 5 * 1024 * 1024;
 export const MAX_LOAD_ITEMS = 5000;
-export const TOO_LARGE = 'That file is too large to be a ShopSmartR list (over 5 MB).';
+export const TOO_LARGE = `That file is too large to be a ${APP_NAME} backup (over 5 MB).`;
 export const tooManyText = (n) => `That file has ${n.toLocaleString('en-US')} items. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.`;
 /** saveIds this device already merged, loaded with Replace, or saved (L23/L27): { [saveId]: { at, how } }. */
 export const MERGED_KEY = 'shopsmartr:mergedSaves:v1';
@@ -43,7 +49,7 @@ const SHOP_STORE_RE = /^[\w-]{1,40}:[\w-]{1,40}$/;
  * Fields are copied by name, so nothing else in memory can leak in. The sort choice is a device
  * preference and is not saved (L22). saveId is a random UUID per saved file (L23).
  */
-export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', appVersion, now = new Date(), saveId = newSaveId() }) {
+export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', appVersion, now = new Date(), saveId = newSaveId(), prefs = {} }) {
   // Round-trip through the same cleaners the app loads with: only known fields survive.
   const list = deserialize(serialize(state));
   const fav = deserializeFavorites(serializeFavorites(favs));
@@ -56,6 +62,7 @@ export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', app
     favorites: { items: fav.items, meals: fav.meals, recipes: fav.recipes ?? [] },
     stores: { shopStore: SHOP_STORE_RE.test(shopStore) ? shopStore : '', selectedStoreIds: list.selectedStoreIds },
     settings: { zip: list.zip, radiusMi: list.radiusMi, chains: list.chains },
+    prefs: cleanPrefs(prefs),
   };
 }
 
@@ -78,7 +85,7 @@ export function parseBackup(text) {
   if (!isObj(raw) || typeof raw.schema !== 'string') return { ok: false, error: NOT_A_LIST };
   const m = /^shopsmartr\.backup\/(\d+)$/.exec(raw.schema);
   if (!m) return { ok: false, error: NOT_A_LIST };
-  if (!BACKUP_SCHEMAS_READ.includes(m[1])) return { ok: false, error: 'This list was saved by a newer ShopSmartR. Update the app, then try again.' };
+  if (!BACKUP_SCHEMAS_READ.includes(m[1])) return { ok: false, error: `This backup was saved by a newer ${APP_NAME}. Update the app, then try again.` };
   if (typeof raw.appVersion !== 'string' || !/^\d+\.\d+\.\d+/.test(raw.appVersion)) return { ok: false, error: 'The saved list is missing its app version.' };
   const created = Date.parse(raw.createdAt);
   if (!Number.isFinite(created)) return { ok: false, error: 'The saved list is missing its date.' };
@@ -118,7 +125,8 @@ export function parseBackup(text) {
   favs.meals = uniq(favs.meals);
   const saveId = typeof raw.saveId === 'string' && SAVE_ID_RE.test(raw.saveId) ? raw.saveId : '';
   // hasRecipes: a backup/2 file says what the saved recipes are (even none); a /1 file doesn't.
-  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString(), schemaVersion: Number(m[1]), hasRecipes: m[1] !== '1' };
+  const prefs = cleanPrefs(raw.prefs);
+  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString(), schemaVersion: Number(m[1]), hasRecipes: m[1] !== '1', prefs };
   return { ok: true, backup, summary: { ...summarize(backup, dropped), duplicates: ids.dupes, renewedIds: ids.renewed } };
 }
 function freshId(seen) {
@@ -167,6 +175,7 @@ export function summarize(b, dropped = 0) {
     meals: b.favs.meals.length,
     recipes: (b.favs.recipes ?? []).length,
     stores: b.state.selectedStoreIds.length,
+    settings: Object.keys(b.prefs ?? {}).length,
     dropped,
     appVersion: b.appVersion,
     createdAt: b.createdAt,
@@ -230,12 +239,14 @@ function mergeRows(current, incoming, keyOf, combine) {
  * as one already there is combined into it (quantities add, the newer price wins); other lines
  * are added. Favorites with the same name + store (favKey) are skipped, meals with the same name
  * are skipped, store picks are united, and zip and distance keep the current values unless
- * unset. The sort choice is never changed by a file (device-only, L22). Returns { state, favs, shopStore, listSort, added, combined }.
+ * unset. Merge never changes the sort (L22); v0.2.4 Replace restores the file's settings (prefs), sort included,
+ * and Merge only adds settings this device lacks. Returns { state, favs, shopStore, listSort, prefs, added, combined }.
  */
 export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
     // A backup/2 file's saved recipes replace this device's; a backup/1 file has none, so they stay.
-    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: cur.listSort, added: b.state.items.length, combined: 0 };
+    // v0.2.4: the file's settings are restored too (a file without them leaves this device's alone).
+    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: b.prefs?.listSort ?? cur.listSort, prefs: { ...(b.prefs ?? {}) }, added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
@@ -262,6 +273,8 @@ export function applyBackup(cur, b, mode) {
     favs: { ...cur.favs, items: favItems.rows, meals, recipes: mergeRecipes(cur.favs.recipes ?? [], b.favs.recipes ?? []) },
     shopStore: cur.shopStore || b.shopStore,
     listSort: cur.listSort,
+    // Merge only fills in settings this device doesn't have yet.
+    prefs: Object.fromEntries(Object.entries(b.prefs ?? {}).filter(([k]) => !(k in (cur.prefs ?? {})))),
     added: items.added,
     combined: items.combined,
   };

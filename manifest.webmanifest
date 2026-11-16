@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Happy Wife Helper",
+  "short_name": "Happy Wife",
+  "description": "One shopping list for your Wegmans trip, with recipes and Favorites.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFFCF6",
+  "theme_color": "#C8321F",
+  "icons": [
+    { "src": "icons/love-basket/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/love-basket/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/love-basket/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/love-basket/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

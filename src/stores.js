@@ -1,15 +1,26 @@
 // Store directory schema checks. Shared by the app, tests and the weekly CI check.
 export const CHAINS = ['tops', 'wegmans', 'aldi', 'traderjoes'];
 /**
- * Chains to hide from pickers, the finder and links (their stores stay in data/stores.json and in
- * saved data). Empty in v0.2.3; v0.2.4 hides the chains without price data and wires it through.
+ * v0.2.4: chains hidden from every picker and price view (store dropdowns, Stores finder, Shop,
+ * Weekly ads, suggestions, recipe matching). Only Wegmans has a price feed today, so the others are
+ * hidden behind this flag. Their stores stay in data/stores.json, and the household's data that
+ * points at them (list lines, Favorites, store picks) is never changed: hidden-chain lines still show
+ * on the list under their own store, and everything comes back when the Set is emptied.
+ * It is a live Set on purpose: tests (and a future setting) clear or refill it at run time.
  */
-export const HIDDEN_CHAINS = new Set([]);
+export const HIDE_NON_WEGMANS = true;
+export const HIDDEN_CHAINS = new Set(HIDE_NON_WEGMANS ? ['tops', 'aldi', 'traderjoes'] : []);
 export const isShownChain = (chain) => !HIDDEN_CHAINS.has(chain);
 /** The chains offered in the app, in CHAINS order. */
 export const shownChains = () => CHAINS.filter(isShownChain);
 /** Stores the app offers (finder, pickers, ads): everything not on a hidden chain. */
 export const shownStores = (stores) => stores.filter((s) => s && isShownChain(s.chain));
+/** Runs fn with the hidden set temporarily replaced (tests: flag on and off). */
+export function withHiddenChains(chains, fn) {
+  const before = [...HIDDEN_CHAINS];
+  HIDDEN_CHAINS.clear(); for (const c of chains) HIDDEN_CHAINS.add(c);
+  try { return fn(); } finally { HIDDEN_CHAINS.clear(); for (const c of before) HIDDEN_CHAINS.add(c); }
+}
 const REQUIRED = ['id', 'chain', 'name', 'address', 'city', 'state', 'zip', 'lat', 'lon', 'url', 'verified', 'source'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

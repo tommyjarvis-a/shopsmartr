@@ -1,7 +1,10 @@
 // Wiring: loads data, owns state, routes between screens and connects events to the pure modules.
 import { VERSION } from './version.js';
 import { lookupZip, storesNear, normalizeZip } from './geo.js';
-import { validateStoresDoc, indexById, CHAINS } from './stores.js';
+import { validateStoresDoc, indexById, shownChains, shownStores } from './stores.js';
+import { APP_NAME, FILE_STEM, LIVE_URL, isStandalone } from './brand.js';
+import * as Icon from './appicon.js';
+import { collectPrefs, writePrefs, PREF_ENTRIES } from './keys.js';
 import * as L from './list.js';
 import { loadStateWithStatus, saveState, loadShopStore, saveShopStore, loadListSort, saveListSort, loadCollapsed, saveCollapsed, STORAGE_KEY } from './storage.js';
 import * as Bk from './backup.js';
@@ -42,7 +45,7 @@ function commit(next) {
   restoreFocus(focus);
 }
 
-const CANT_SAVE = 'This browser isn\'t letting ShopSmartR save, so your list will be lost when you close this page. Export it to keep a copy.';
+const CANT_SAVE = `This browser isn't letting ${APP_NAME} save, so your list will be lost when you close this page. Back it up to keep a copy.`;
 function warnCantSave() {
   if (saveWarned) return;
   saveWarned = true;
@@ -87,6 +90,17 @@ function listStores() {
   const ids = new Set([...state.selectedStoreIds, ...state.items.map((i) => i.storeId).filter(Boolean)]);
   return [...ids].map((id) => data.byId[id]).filter(Boolean);
 }
+/**
+ * v0.2.4: stores offered in pickers (add bar, item and favorite sheets): listStores() without hidden
+ * chains. `keepId` (the store a line or favorite already has) is always offered so editing never drops it.
+ */
+function pickerStores(keepId = '') {
+  const out = shownStores(listStores());
+  if (keepId && !out.some((x) => x.id === keepId) && data.byId[keepId]) out.push(data.byId[keepId]);
+  return out;
+}
+/** The user's picked stores that the app shows (hidden-chain picks are kept in state, untouched). */
+const shownPicks = () => shownStores(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
 
 function origin() {
   return lookupZip(state.zip, data.zips);
@@ -105,7 +119,7 @@ function renderAll() {
   renderStoreBtn();
 }
 function renderStoreBtn() {
-  const n = state.selectedStoreIds.length;
+  const n = shownPicks().length;
   el('store-btn-n').textContent = n ? String(n) : '';
   el('store-btn').setAttribute('aria-label', `My stores: ${n}`);
 }
@@ -192,8 +206,7 @@ function openFavSheet(mealId, id) {
   form.elements.qty.value = it.qty ?? '';
   form.elements.unit.value = L.UNITS.includes(it.unit) ? it.unit : '';
   form.elements.notes.value = it.notes ?? '';
-  const stores = listStores();
-  if (it.storeId && !stores.some((x) => x.id === it.storeId) && data.byId[it.storeId]) stores.push(data.byId[it.storeId]);
+  const stores = pickerStores(it.storeId);
   UI.renderRadioChips(el('ff-stores'), 'storeId', [{ value: '', label: 'Any' }, ...stores.map((x) => ({ value: x.id, label: x.name, chain: x.chain }))], it.storeId, () => {});
   UI.setStatus(el('fav-sheet-status'), '');
   el('fav-sheet').showModal();
@@ -291,22 +304,25 @@ function bindFavorites() {
 }
 
 function downloadFavs() {
-  UI.download(`shopsmartr-favorites-${stamp()}.csv`, favoritesToCSV(favs, data.byId, { bom: true }), 'text/csv;charset=utf-8');
+  UI.download(`${FILE_STEM}-favorites-${stamp()}.csv`, favoritesToCSV(favs, data.byId, { bom: true }), 'text/csv;charset=utf-8');
 }
 
 function renderStoresScreen() {
-  const chainOpts = [{ value: '', label: 'All chains' }, ...CHAINS.filter((c) => data.chains[c]).map((c) => ({ value: c, label: data.chains[c].shortName || data.chains[c].name, chain: c }))];
+  // v0.2.4: hidden chains (stores.js HIDDEN_CHAINS) are left out of the finder; one shown chain = no chips.
+  const chains = shownChains().filter((c) => data.chains[c]);
+  if (chainFilter && !chains.includes(chainFilter)) chainFilter = '';
+  const chainOpts = chains.length > 1 ? [{ value: '', label: 'All chains' }, ...chains.map((c) => ({ value: c, label: data.chains[c].shortName || data.chains[c].name, chain: c }))] : [];
   UI.renderRadioChips(el('chain-filter'), 'chain', chainOpts, chainFilter, (v) => { chainFilter = v; renderStoresScreen(); });
-  const base = nearby.length ? nearby : withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
+  el('chain-filter').hidden = chainOpts.length === 0;
+  const base = shownStores(nearby.length ? nearby : withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean)));
   const shown = chainFilter ? base.filter((s) => s.chain === chainFilter) : base;
   UI.renderStores(el('store-results'), shown, state.selectedStoreIds, data.chains, onPickStore);
-  const n = state.selectedStoreIds.length;
+  const n = shownPicks().length;
   el('picked-count').textContent = n ? `${n} selected` : '';
 }
 
 function renderListScreen() {
-  const stores = listStores();
-  UI.fillStoreSelects(stores);
+  UI.fillStoreSelects(pickerStores());
   // v0.1.5: one section per store (chain-storeId) in the Stores-tab order, Any store last,
   // each sorted by the device's sort choice. Checking an item never moves it.
   const sections = L.storeSections(state.items, data.byId, listSort, state.selectedStoreIds);
@@ -344,7 +360,7 @@ function renderListScreen() {
   UI.renderTotals(state.items);
   UI.renderTrip(sections, t, jumpToSection);
   renderNudge();
-  const mine = withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
+  const mine = withDistance(shownPicks());
   UI.renderStaticChips(el('panel-stores'), mine);
   el('panel-where').textContent = state.zip ? `${state.zip} · within ${state.radiusMi} mi` : 'No zip code yet';
 }
@@ -492,7 +508,7 @@ function renderStoreStatus() {
   const warn = saveWarned;
   el('store-status').classList.toggle('warn', warn);
   el('store-status-title').textContent = warn ? 'This browser isn\'t saving your list' : 'Kept in this browser only';
-  el('store-status-saved').textContent = warn ? 'Save list to keep a copy.' : Bk.savedLine(backupMeta, state.items.length, Date.now(), (favs.recipes ?? []).length);
+  el('store-status-saved').textContent = warn ? 'Back up to keep a copy.' : Bk.savedLine(backupMeta, state.items.length, Date.now(), (favs.recipes ?? []).length);
   el('storage-status').textContent = Bk.storageText(storagePersisted);
 }
 
@@ -509,25 +525,26 @@ async function askPersist() {
 }
 
 async function saveListNow() {
-  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION });
+  // v0.2.4 full backup: list, Favorites, saved recipes, stores and this device's settings (keys.js registry).
+  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION, prefs: collectPrefs() });
   const name = Bk.backupFilename(stamp());
   const json = Bk.backupJSON(doc);
   let shared = false;
   try {
     const file = new File([json], name, { type: 'application/json' });
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'ShopSmartR list' });
+      await navigator.share({ files: [file], title: `${APP_NAME} backup` });
       shared = true;
     }
   } catch (err) {
-    if (err?.name === 'AbortError') { UI.toast('Save list cancelled'); return null; }
+    if (err?.name === 'AbortError') { UI.toast('Backup cancelled'); return null; }
   }
   if (!shared) UI.download(name, json, 'application/json');
   setMeta(Bk.markSaved(backupMeta));
   // L23: a file saved from this list shouldn't be merged back into it (it would double everything).
   Bk.saveMerged(Bk.recordSaveId(Bk.loadMerged(), doc.saveId, 'saved'));
   if (!storagePersisted) askPersist();
-  UI.toast(`List saved · ${name}`);
+  UI.toast(`Backed up · ${name}`);
   return name;
 }
 
@@ -558,6 +575,7 @@ async function onLoadFile(file) {
   const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
   el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
     sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.recipes ? n('recipes', 'saved recipe') : '', sm.meals ? n('meals', 'meal') : '',
+    sm.settings ? n('settings', 'setting') : '',
     sm.dropped ? `${sm.dropped} unreadable skipped` : '',
     sm.duplicates ? `${sm.duplicates} duplicate${sm.duplicates === 1 ? '' : 's'} skipped` : ''].filter(Boolean).map(pill));
   const cur = state.items.length;
@@ -567,7 +585,7 @@ async function onLoadFile(file) {
   el('load-merge-d').textContent = `Keep my items and add the file's ${sm.items}. Matching items are combined.`;
   const d = el('load-replace-d');
   const b = document.createElement('b'); b.textContent = `Removes your ${cur} current item${cur === 1 ? '' : 's'}`;
-  d.replaceChildren(b, `, then loads the file's ${sm.items}. Favorites and store picks are replaced too.`);
+  d.replaceChildren(b, `, then loads the file's ${sm.items}. Favorites, store picks${sm.settings ? ' and settings' : ''} are replaced too.`);
   el('load-form').elements.mode.value = 'merge';
   pendingLoad.empty = cur === 0;
   pendingLoad.fileItems = fi;
@@ -601,12 +619,14 @@ function applyLoad(mode) {
     return;
   }
   const saveId = pendingLoad.backup.saveId;
-  const before = { state, favs, shopStore: loadShopStore(), listSort };
+  const wasEmpty = Boolean(pendingLoad.empty);
+  const before = { state, favs, shopStore: loadShopStore(), listSort, prefs: collectPrefs() };
+  const prefSnap = snapshotPrefs();
   if (mode === 'replace') {
     try {
       localStorage.setItem(Bk.PRE_LOAD_BAK_KEY, JSON.stringify({ savedAt: new Date().toISOString(), list: localStorage.getItem(STORAGE_KEY), favorites: localStorage.getItem(F.FAVORITES_KEY) }));
     } catch {
-      UI.setStatus(el('load-status'), 'Couldn\'t keep a copy of your current list on this device, so nothing was replaced. Try Merge, or Save list first.', 'error');
+      UI.setStatus(el('load-status'), 'Couldn\'t keep a copy of your current list on this device, so nothing was replaced. Try Merge, or back up first.', 'error');
       return;
     }
   }
@@ -622,14 +642,35 @@ function applyLoad(mode) {
       saveShopStore(x.shopStore);
       if (feed) { shop.store = C.pickStore(feed.catalog, x.shopStore) ?? shop.store; el('shop-store').value = shop.store; renderShop(); }
     }
-    commit(x.state);   // the sort choice stays this device's (L22)
+    commit(x.state);
   };
   restore(res);
-  if (mode === 'replace') UI.toast('List replaced', () => { restore(before); Bk.saveMerged(mergedBefore); }, 10000);
+  // v0.2.4: settings from the file (Replace: all of them; Merge: only ones this device didn't have).
+  const wrote = writePrefs(res.prefs ?? {});
+  if (wrote.length) applyPrefsLive();
+  const undo = () => { restore(before); Bk.saveMerged(mergedBefore); if (wrote.length) { restorePrefs(prefSnap); applyPrefsLive(); } };
+  const st = wrote.length ? ` and ${wrote.length} setting${wrote.length === 1 ? '' : 's'}` : '';
+  if (mode === 'replace' || wasEmpty) UI.toast(`Backup restored · ${res.added} item${res.added === 1 ? '' : 's'}${st}`, undo, 10000);
   else {
     const n = res.added; const c = res.combined;
-    UI.toast(`List merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}`, () => { restore(before); Bk.saveMerged(mergedBefore); });
+    UI.toast(`Backup merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}${st}`, undo);
   }
+}
+/** Raw values of every settings key, to put back exactly on Undo. */
+function snapshotPrefs() {
+  const out = {};
+  for (const e of PREF_ENTRIES) { try { out[e.key] = localStorage.getItem(e.key); } catch { out[e.key] = null; } }
+  return out;
+}
+function restorePrefs(snap) {
+  for (const [k, v] of Object.entries(snap)) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* blocked */ } }
+}
+/** Re-reads restored settings into the running app. */
+function applyPrefsLive() {
+  listSort = loadListSort();
+  setAppIcon(Icon.loadAppIcon(), { save: false });
+  rxApi?.reloadPrefs?.();
+  renderListScreen();
 }
 
 function bindSaveLoad() {
@@ -768,8 +809,8 @@ async function clearCheckedFlow(opener) {
     if (!n) { UI.toast('No checked items'); return; }
     const choice = await confirmDialog({
       title: `Clear ${n} checked item${n === 1 ? '' : 's'} from your list?`,
-      body: ['This can\'t be undone after you leave the page. Save list first to keep a copy as a file.', 'Favorites, meals and your stores are not changed.'],
-      actions: [{ label: 'Save list first', value: 'save', kind: 'primary' }, { label: 'Cancel', value: 'cancel', kind: 'secondary' }, { label: 'Clear', value: 'clear', kind: 'danger' }],
+      body: ['This can\'t be undone after you leave the page. Back up first to keep a copy as a file.', 'Favorites, meals and your stores are not changed.'],
+      actions: [{ label: 'Back up first', value: 'save', kind: 'primary' }, { label: 'Cancel', value: 'cancel', kind: 'secondary' }, { label: 'Clear', value: 'clear', kind: 'danger' }],
       initial: 'save',
       returnFocus: opener,
       status,
@@ -780,7 +821,7 @@ async function clearCheckedFlow(opener) {
     try {
       localStorage.setItem(CLEAR_BAK_KEY, JSON.stringify({ savedAt: new Date().toISOString(), list: localStorage.getItem(STORAGE_KEY) }));
     } catch {
-      UI.toast('Couldn\'t keep a copy of your list on this device, so nothing was cleared. Save list first.');
+      UI.toast('Couldn\'t keep a copy of your list on this device, so nothing was cleared. Back up first.');
       return;
     }
     const before = state.items;
@@ -805,19 +846,21 @@ function syncListActions() {
 }
 
 // ---------- Weekly ads (button on Shop) ----------
-function openAds() {
-  const d = el('ads-sheet'); const b = el('ads-btn');
+let adsOpener = null;
+function openAds(anchor = el('ads-btn')) {
+  const d = el('ads-sheet'); const b = anchor?.isConnected && anchor.offsetParent ? anchor : null;
   if (d.open) return;
+  adsOpener = b;
   const pop = window.matchMedia('(min-width: 1024px)').matches;
   d.classList.toggle('pop', pop);
   d.showModal();
-  if (pop) {
+  if (pop && b) {
     const r = b.getBoundingClientRect();
     const w = d.offsetWidth; const hgt = d.offsetHeight;
     d.style.left = `${Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8))}px`;
     d.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - hgt - 8))}px`;
   } else { d.style.left = ''; d.style.top = ''; }
-  b.setAttribute('aria-expanded', 'true');
+  el('ads-btn').setAttribute('aria-expanded', String(b === el('ads-btn')));
   d.querySelector('.go, a, button')?.focus();
 }
 /** v0.2.3: remember how the user is interacting so a tap never leaves a focus ring (see style.css). */
@@ -829,25 +872,25 @@ function bindInputModality() {
 }
 function bindAds() {
   const d = el('ads-sheet'); const b = el('ads-btn');
-  b.addEventListener('click', openAds);
+  b.addEventListener('click', () => openAds(b));
   // Outside / backdrop click closes (a click inside the panel's own box doesn't).
   d.addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) { d.close(); return; }
     const r = d.getBoundingClientRect();
     if (e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) d.close();
   });
-  d.addEventListener('close', () => { b.setAttribute('aria-expanded', 'false'); if (location.hash.startsWith('#shop') || !location.hash) b.focus({ preventScroll: true }); });
+  d.addEventListener('close', () => { b.setAttribute('aria-expanded', 'false'); const o = adsOpener; adsOpener = null; if (o?.isConnected && o.offsetParent) o.focus({ preventScroll: true }); });
   window.addEventListener('resize', () => { if (d.open) d.close(); });
 }
 
 function renderAds() {
-  const mine = withDistance(state.selectedStoreIds.map((id) => data.byId[id]).filter(Boolean));
+  const mine = withDistance(shownPicks());
   const rows = mine.length
     ? mine.map((s) => ({
       chain: s.chain, name: s.name, url: data.chains[s.chain].weeklyAd.url, label: data.chains[s.chain].weeklyAd.label,
       meta: [Number.isFinite(s.distanceMi) ? `${s.distanceMi.toFixed(1)} mi` : '', s.address].filter(Boolean).join(' · '),
     }))
-    : CHAINS.filter((c) => data.chains[c]).map((c) => ({ chain: c, name: data.chains[c].name, url: data.chains[c].weeklyAd.url, label: data.chains[c].weeklyAd.label, meta: data.chains[c].weeklyAd.label }));
+    : shownChains().filter((c) => data.chains[c]).map((c) => ({ chain: c, name: data.chains[c].name, url: data.chains[c].weeklyAd.url, label: data.chains[c].weeklyAd.label, meta: data.chains[c].weeklyAd.label }));
   UI.renderAdRows(rows);
 }
 
@@ -874,9 +917,9 @@ function runSearch({ quiet = false } = {}) {
   const o = lookupZip(zip, data.zips);
   if (!o) {
     nearby = [];
-    UI.setStatus(status, `Zip ${zip} isn't in ShopSmartR's Western NY list yet.`, 'error');
+    UI.setStatus(status, `Zip ${zip} isn't in ${APP_NAME}'s Western NY list yet.`, 'error');
   } else {
-    nearby = storesNear(data.stores, o, radiusMi);
+    nearby = storesNear(shownStores(data.stores), o, radiusMi);
     const n = nearby.length;
     UI.setStatus(status, n ? `${n} store${n === 1 ? '' : 's'} within ${radiusMi} mi of ${zip}. Tick the ones you shop at.`
       : `No stores within ${radiusMi} mi of ${zip}. Try a larger distance.`, n ? '' : 'error');
@@ -896,7 +939,7 @@ function openSheet(id = null) {
   form.elements.qty.value = it ? (it.qty ?? '') : 1;
   form.elements.unit.value = it && L.UNITS.includes(it.unit) ? it.unit : '';
   form.elements.notes.value = it?.notes ?? '';
-  const storeOpts = [{ value: '', label: 'Any' }, ...listStores().map((s) => ({ value: s.id, label: s.name, chain: s.chain }))];
+  const storeOpts = [{ value: '', label: 'Any' }, ...pickerStores(it?.storeId).map((s) => ({ value: s.id, label: s.name, chain: s.chain }))];
   const current = it ? it.storeId : '';
   UI.renderRadioChips(el('f-stores'), 'storeId', storeOpts, current, () => {});
   UI.setStatus(el('sheet-status'), '');
@@ -924,14 +967,34 @@ function removeWithUndo(id) {
 
 // ---------- Export menu ----------
 const menu = () => el('export-menu');
+/** Menu rows that are showing (List-only rows are hidden by CSS on other tabs, Export rows when folded). */
+const menuItems = () => [...menu().querySelectorAll('.mi')].filter((x) => !x.hidden && x.offsetParent);
+function setExportOpen(on) {
+  const b = menu().querySelector('[data-action="export"]');
+  b.setAttribute('aria-expanded', String(on));
+  el('export-sub').hidden = !on;
+}
 function openMenu(btn) {
   const m = menu();
   el('love-text').textContent = nextNote(NOTES);
   renderStoreStatus();
   syncListActions();
+  setExportOpen(false);
+  const hh = rxApi?.servings() ?? 3;
+  el('household-sub').textContent = `${hh} ${hh === 1 ? 'person' : 'people'}`;
   m.hidden = false;
   const r = btn.getBoundingClientRect();
   const w = m.offsetWidth;
+  if (btn.closest('.side-nav')) {   // desktop: the side-nav More opens it beside the nav
+    m.style.removeProperty('max-height');
+    const hh2 = Math.min(m.offsetHeight, window.innerHeight - 16);
+    if (m.offsetHeight > hh2) m.style.setProperty('max-height', `${hh2}px`);
+    m.style.setProperty('left', `${Math.round(r.right + 8)}px`);
+    m.style.setProperty('top', `${Math.round(Math.max(8, Math.min(r.top - 40, window.innerHeight - hh2 - 8)))}px`);
+    document.querySelectorAll('[data-menu-toggle]').forEach((b) => b.setAttribute('aria-expanded', String(b === btn)));
+    menuItems()[0]?.focus();
+    return;
+  }
   // v0.2.0: keep the whole menu on screen (it grew a row): shift it up, and scroll it only if it
   // is taller than the window.
   m.style.removeProperty('max-height');
@@ -940,7 +1003,7 @@ function openMenu(btn) {
   m.style.setProperty('top', `${Math.round(Math.max(8, Math.min(r.bottom + 6, window.innerHeight - hgt - 8)))}px`);
   m.style.setProperty('left', `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)))}px`);
   document.querySelectorAll('[data-menu-toggle]').forEach((b) => b.setAttribute('aria-expanded', String(b === btn)));
-  m.querySelector('.mi:not([hidden])').focus();
+  menuItems()[0]?.focus();
 }
 function closeMenu(focusBack = false) {
   if (menu().hidden) return;
@@ -956,9 +1019,9 @@ const asText = () => toText(state.items, data.byId, { date: stamp(), favorites: 
 async function menuAction(action) {
   const opener = document.querySelector('[data-menu-toggle][aria-expanded="true"]');
   closeMenu();
-  if (action === 'csv') UI.download(`shopsmartr-list-${stamp()}.csv`, toCSV(state.items, data.byId, { bom: true }), 'text/csv;charset=utf-8');
+  if (action === 'csv') UI.download(`${FILE_STEM}-list-${stamp()}.csv`, toCSV(state.items, data.byId, { bom: true }), 'text/csv;charset=utf-8');
   else if (action === 'favcsv') downloadFavs();
-  else if (action === 'txt') UI.download(`shopsmartr-list-${stamp()}.txt`, asText(), 'text/plain;charset=utf-8');
+  else if (action === 'txt') UI.download(`${FILE_STEM}-list-${stamp()}.txt`, asText(), 'text/plain;charset=utf-8');
   else if (action === 'save') saveList();
   else if (action === 'load') openLoadPicker();
   else if (action === 'copy') {
@@ -969,6 +1032,84 @@ async function menuAction(action) {
   else if (action === 'uncheck') setAllChecked(false);
   else if (action === 'clear') clearCheckedFlow(opener);
   else if (action === 'household') openHousehold(opener);
+  else if (action === 'appicon') openIconSheet(opener);
+  else if (action === 'about') openAbout(opener);
+  else if (action === 'ads') openAds(opener);
+}
+
+// ---------- App icon (v0.2.4) ----------
+let iconOpener = null;
+function setAppIcon(id, { save = true } = {}) {
+  const clean = Icon.cleanAppIcon(id);
+  Icon.applyAppIcon(clean);
+  if (save) Icon.saveAppIcon(clean);
+  el('appicon-sub').textContent = Icon.appIconName(clean);
+  for (const r of el('icon-grid').querySelectorAll('input')) r.checked = r.value === clean;
+  return clean;
+}
+function renderIconGrid() {
+  const grid = el('icon-grid');
+  const cur = Icon.loadAppIcon();
+  grid.replaceChildren(...Icon.APP_ICONS.map(([id, name, sub]) => {
+    const lab = document.createElement('label');
+    lab.className = 'icon-opt';
+    lab.innerHTML = `<input type="radio" name="appicon"><img alt="" width="64" height="64"><span class="nm"></span><span class="ok" aria-hidden="true"><svg class="icon icon-16"><use href="#i-check"/></svg></span>`;
+    const input = lab.querySelector('input'); input.value = id; input.checked = id === cur;
+    lab.querySelector('img').src = `${Icon.iconDir(id)}icon-64.png`;
+    const nm = lab.querySelector('.nm'); nm.textContent = name;
+    const sm = document.createElement('small'); sm.textContent = sub; nm.append(sm);
+    return lab;
+  }));
+}
+function openIconSheet(opener = null) {
+  iconOpener = opener;
+  renderIconGrid();
+  el('icon-sheet').showModal();
+  (el('icon-grid').querySelector('input:checked') ?? el('icon-grid').querySelector('input')).focus();
+}
+function bindIconSheet() {
+  el('icon-grid').addEventListener('change', (e) => {
+    const r = e.target.closest('input[name="appicon"]');
+    if (!r) return;
+    const id = setAppIcon(r.value);
+    UI.toast(`App icon: ${Icon.appIconName(id)}. Your home-screen icon changes only if you add the app again.`);
+  });
+  el('icon-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('icon-sheet').addEventListener('close', () => { if (iconOpener?.isConnected && iconOpener.offsetParent) iconOpener.focus({ preventScroll: true }); iconOpener = null; });
+  document.querySelectorAll('[data-backup-now]').forEach((b) => b.addEventListener('click', () => saveList()));
+}
+
+// ---------- About (v0.2.4) ----------
+let aboutOpener = null;
+function openAbout(opener = null) {
+  aboutOpener = opener;
+  UI.setStatus(el('about-copy-status'), '');
+  // Installed home-screen app: links leave the app and open in Safari.
+  const standalone = isStandalone();
+  el('about-sheet').dataset.standalone = String(standalone);
+  for (const a of el('about-sheet').querySelectorAll('a[href^="http"]')) { a.target = '_blank'; a.rel = 'noopener'; }
+  el('about-sheet').showModal();
+  el('about-copy').focus();
+}
+/** Copies text: Clipboard API, else select the read-only field and use the old copy command. */
+async function copyText(text, input) {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall back */ }
+  try {
+    input.focus(); input.select(); input.setSelectionRange?.(0, text.length);
+    return document.execCommand('copy');
+  } catch { return false; }
+}
+function bindAbout() {
+  el('about-copy').addEventListener('click', async () => {
+    const ok = await copyText(LIVE_URL, el('about-url'));
+    UI.setStatus(el('about-copy-status'), ok ? 'Link copied.' : 'Couldn\'t copy. Press and hold the link to copy it.', ok ? '' : 'error');
+    if (ok) UI.toast('Link copied');
+  });
+  el('about-url').addEventListener('focus', (e) => e.currentTarget.select());
+  el('about-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('about-sheet').addEventListener('close', () => { if (aboutOpener?.isConnected && aboutOpener.offsetParent) aboutOpener.focus({ preventScroll: true }); aboutOpener = null; });
 }
 
 // ---------- Household size (v0.2.0) ----------
@@ -1009,6 +1150,11 @@ function route() {
   if (screen === 'recipes') rxApi?.show(hash.slice(want.length + 1));
   closeMenu();
   closeSuggest();
+  // L49: an old #ads link opens the Weekly ads sheet over Shop (or the list when Shop is hidden),
+  // then the address bar is rewritten to the screen shown, so bookmarks and reloads stop saying #ads.
+  if (hash.split('/')[0] === 'ads') {
+    requestAnimationFrame(() => { openAds(); history.replaceState(history.state, '', `${location.pathname}${location.search}#${screen}`); });
+  }
 }
 
 function bind() {
@@ -1078,10 +1224,11 @@ function bind() {
     const mi = e.target.closest('[data-action]');
     if (!mi) return;
     if (mi.getAttribute('aria-disabled') === 'true') { e.stopPropagation(); return; }   // stays open; nothing to do
+    if (mi.dataset.action === 'export') { e.stopPropagation(); const on = mi.getAttribute('aria-expanded') !== 'true'; setExportOpen(on); if (on) el('export-sub').querySelector('.mi:not([hidden])')?.focus(); return; }
     menuAction(mi.dataset.action);
   });
   menu().addEventListener('keydown', (e) => {
-    const items = [...menu().querySelectorAll('.mi:not([hidden])')];
+    const items = menuItems();
     const i = items.indexOf(document.activeElement);
     if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
     if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
@@ -1439,6 +1586,8 @@ async function initPrices() {
 
 async function init() {
   document.querySelectorAll('[data-version]').forEach((n) => { n.textContent = `v${VERSION}`; });
+  document.querySelectorAll('[data-version-plain]').forEach((n) => { n.textContent = VERSION; });
+  setAppIcon(Icon.loadAppIcon(), { save: false });
   UI.fillUnitSelects();
   bind();
   bindFavorites();
@@ -1447,6 +1596,8 @@ async function init() {
   bindConfirm();
   bindHousehold();
   bindAds();
+  bindIconSheet();
+  bindAbout();
   bindInputModality();
   rxApi = initRecipes({
     getState: () => state, commit, getFavs: () => favs, commitFavs: (next) => commitFavs(next),
@@ -1487,13 +1638,13 @@ async function init() {
   if (state.zip) runSearch({ quiet: true }); else renderAll();
   initPrices();
   if (loaded.problem === 'unreadable') {
-    showNotice(`Your saved list couldn't be read, so ShopSmartR started a new one.${loaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:v1.bak).' : ''}`);
+    showNotice(`Your saved list couldn't be read, so ${APP_NAME} started a new one.${loaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:v1.bak).' : ''}`);
   }
   if (favLoaded.notice) {
     showNotice(`Combined ${favLoaded.merged === 1 ? '1 duplicate favorite' : `${favLoaded.merged} duplicate Favorites`}: the same item at the same store is now one favorite, whatever the amount. A copy of the old set was kept in this browser (${F.FAVORITES_DEDUPE_BAK_KEY}).`);
   }
   if (favLoaded.problem === 'unreadable') {
-    showNotice(`Your saved Favorites couldn't be read, so ShopSmartR started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);
+    showNotice(`Your saved Favorites couldn't be read, so ${APP_NAME} started a new set.${favLoaded.backedUp ? ' A copy of the old data was kept in this browser (shopsmartr:favorites:v1.bak).' : ''}`);
   }
   if (loaded.problem === 'unavailable' || favLoaded.problem === 'unavailable') showNotice(CANT_SAVE);
 }

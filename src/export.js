@@ -88,7 +88,7 @@ export function favoritesToCSV(fav, storesById = {}, { bom = false } = {}) {
   return (bom ? CSV_BOM : '') + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-export function toText(items, storesById = {}, { title = 'ShopSmartR shopping list', date, favorites = null, sort = null, order = [] } = {}) {
+export function toText(items, storesById = {}, { title = 'Happy Wife Helper shopping list', date, favorites = null, sort = null, order = [] } = {}) {
   const lines = [title];
   if (date) lines.push(date);
   const sections = storeSections(items, storesById, sort, order);

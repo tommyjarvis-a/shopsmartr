@@ -1,4 +1,5 @@
 // Pure shopping-list model. Every function returns a new state; nothing touches the DOM.
+import { isShownChain } from './stores.js';
 export const UNITS = ['ea', 'lb', 'oz', 'kg', 'g', 'gal', 'qt', 'L', 'ml', 'pack', 'bag', 'box', 'can', 'jar', 'bottle', 'bunch', 'dozen', 'loaf', 'tub', 'cup'];
 
 // Plural / alternate spellings accepted by the quick-add parser.
@@ -319,12 +320,18 @@ export function storeSections(items, storesById = {}, sort = null, order = []) {
   const rank = new Map(order.map((k, i) => [k, i]));
   const keys = [...map.keys()].filter((k) => k !== '').map((k, i) => [k, rank.has(k) ? rank.get(k) : order.length + i])
     .sort((a, b) => a[1] - b[1]).map(([k]) => k);
+  // v0.2.4: stores on a hidden chain (stores.js HIDDEN_CHAINS) keep their own section, after the shown ones.
+  const chainOf = (key) => storesById[key]?.chain ?? map.get(key).find((i) => i.priced?.chain)?.priced.chain ?? '';
+  const shown = keys.filter((k) => isShownChain(chainOf(k)));
+  const hiddenKeys = keys.filter((k) => !isShownChain(chainOf(k)));
+  keys.length = 0; keys.push(...shown, ...hiddenKeys);
   if (map.has('')) keys.push('');
   return keys.map((key) => {
     const s = storesById[key];
     const its = map.get(key);
     const fromPrice = its.find((i) => i.priced?.store)?.priced;
     return {
+      hidden: Boolean(key) && !isShownChain(chainOf(key)),
       key,
       name: key ? (s?.name ?? fromPrice?.store ?? 'Store no longer listed') : 'Any store',
       address: s ? [s.address, s.city].filter(Boolean).join(', ') : '',

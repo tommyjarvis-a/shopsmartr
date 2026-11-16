@@ -1,6 +1,115 @@
 # Changelog
 
-All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
+All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
+
+## [0.2.4-alpha] - 2026-11-15 (alpha)
+
+ShopSmartR is now **Happy Wife Helper**. This release also adds app icons, an About sheet, one
+global ⋮ menu on every tab, Wegmans-only store views, and full-restore backups. Themes ship in
+v0.2.5, and Cook from my list and Import in v0.2.6.
+
+### Changed
+- **New name: Happy Wife Helper.** It's used in the tab title, the top-bar wordmark, the manifest
+  (`name`), messages and download names. The name under the home-screen icon is **"Happy Wife"**
+  (`short_name` and `apple-mobile-web-app-title`). Backups are saved as
+  `happy-wife-helper-backup-YYYY-MM-DD.json`, and exports as `happy-wife-helper-list-…` and
+  `happy-wife-helper-favorites-…`.
+  These keep the old name, so no data is lost: the repo, the Pages URL, every `shopsmartr:*`
+  storage key, the feed files (`data/prices.enc`, `data/recipes.enc` and their manifests), the
+  backup format id (`shopsmartr.backup/2`), the encryption AAD strings, and the hidden
+  password-manager username ("ShopSmartR household"), so saved passphrases still autofill.
+- **One ⋮ menu on every tab** (Designer's v2 layout). The love note is on top. A **This list**
+  section shows on List only: Export… (CSV, text, copy, Favorites CSV), Check all, Uncheck all,
+  and Clear checked items. Next come **Backup** (Back up, Restore…) and **Settings** (App icon,
+  Household size, Weekly ads), then **About**. Clear list, My stores and the desktop
+  "Save & export" button are gone; on desktop the side nav's **More** opens the same menu.
+  **Weekly ads** can be opened from the menu even when Shop is hidden. The Theme row is in the
+  markup but hidden until v0.2.5.
+- **Only Wegmans is shown.** Other chains are hidden by a flag (`HIDDEN_CHAINS` in
+  `src/stores.js`). This covers the store dropdowns and chips, the Stores finder, Shop's store
+  list, all-store search, suggestions, the On-sale list, recipe matching and Weekly ads. The
+  store button counts only shown picks. Your data isn't touched: list lines, Favorites and store
+  picks tied to Tops and the others stay saved and in backups. Their list lines still show,
+  under their own store and after the Wegmans sections. Editing one keeps its store, and
+  emptying the Set brings everything back.
+
+### Added
+- **App icon picker** (⋮ › App icon) with the 5 approved icons: Love Basket (default), Happy Bag,
+  Heart Checklist, Tomato Heart and Heart Whisk.
+  - Choosing one changes the in-app logo, the favicon and the `apple-touch-icon` link right away.
+  - The choice is saved on this device (`shopsmartr:appIcon:v1`) and included in the full backup.
+  - The sheet explains that the iPhone home-screen icon only changes when the app is added
+    again. It also warns that the home-screen app keeps its own list and Favorites, so removing
+    it may erase them. Then it walks through: (1) Back up first, with a one-tap button; (2)
+    remove the icon, open the link in Safari, then Share › Add to Home Screen; (3) open the new
+    icon and Restore.
+- **Web app manifest** (`manifest.webmanifest`, `id` "./"), which `index.html` was missing before.
+  It uses the Love Basket "any" and maskable icons, and `theme_color` stays tomato (`#C8321F`).
+- **About** (⋮ › About) shows the name, the version, "Made by Steven Moran", the GitHub repo
+  and a clear link to the live app. It has **Copy link** (Clipboard API, falling back to
+  select-and-copy) and short Add to Home Screen steps, with a "Back up first" reminder. Links
+  open in Safari (`target=_blank rel=noopener`), including from the installed app.
+- **Full-restore backups.** A new registry (`src/keys.js`) sorts every `shopsmartr:*` key into
+  three groups:
+  - **backup:** the list, Favorites with saved recipes, the Shop store, and ingredient swaps.
+  - **settings:** list sort, household size, app icon, the recipe store and sort, plus theme
+    and mode placeholders for v0.2.5.
+  - **exclude:** local safety copies, bookkeeping and the love-note rotation. The derived feed
+    keys (IndexedDB `shopsmartr-keys`), decrypted data and cached feeds never go into a file.
+  Back up writes the settings into a new `prefs` section of `shopsmartr.backup/2`. This is
+  additive, so v0.2.3 can still read new files, and v1 and v2 files still load. Restore shows
+  the file's date, time and counts (including settings) before the Merge or Replace choice.
+  - Replace restores every setting in the file.
+  - Merge only fills in settings this device doesn't have yet.
+  - Undo puts the old settings back.
+  A unit test fails if code uses a `shopsmartr:*` key that isn't classified.
+
+### Fixed (Tester's v0.2.3 gate, 5c67b97 NO-GO)
+- **M10 (Medium): "Already on your list" matched too loosely.** The recipe detail's list check
+  (`onListItem`) used word containment. Peanut Butter counted as butter, Chicken Broth as
+  chicken, Cream Cheese as cream, Banana Bread as bread, Corn Tortillas as corn, Garlic Salt as
+  garlic, Pineapple Juice as pineapple and Vanilla Ice Cream as ice, so **Add missing silently
+  skipped those lines**.
+  - The list check and product matching (`matchRows`) now share one rule, `foodRelation()` in
+    `src/recipes.js`. Words after the ingredient's main word may only be a cut, class or pack word
+    (Chicken Breast, Garlic Bulb). Words in front may not name another food (Peanut Butter, Ice
+    Cream, Banana Bread, Almond Milk). Cream Cheese is never cream.
+  - True matches still count: Unsalted Butter → butter, Chicken Breast or Thighs → chicken,
+    Heavy (Whipping) Cream → cream, Russet Potatoes → potato, "Butter, unsalted" → unsalted
+    butter. A plain "butter" on the list covers "unsalted butter".
+  - Processed forms (Chicken Nuggets, Popcorn Chicken) don't cover a plain ingredient. Frozen
+    still does (Frozen Peas → peas).
+  - Under the same rule, products like Banana Bread for "bread" or Coconut Milk for "milk" are no
+    longer offered.
+- **L45: a processed word in front of the main word** (Popcorn, Rotisserie, Breaded, Buffalo…
+  Chicken) now drops a match level and sorts behind real cuts. A bare "chicken" picks Breast or
+  Thighs, not Popcorn Chicken. These stay available as lower Swap options.
+- **L46:** Ice Cream, Sour Cream and Whipped Cream are never offered for a bare "cream", whatever
+  the catalog holds (no bagged-ice product is needed any more). So they are never Swap options and
+  never set the cost range. Heavy Cream and Heavy Whipping Cream lead.
+- **L47: a count against a weight-sold pack.** "2 potato" against Russet Potatoes 5 lb used to
+  buy two 5 lb bags. It now buys **one pack**, flagged "1 pack for 2 · check the size". Per-each
+  products still buy one per piece, "12 ct" packs still divide, and "2 cans" still buys 2.
+- **L48: desktop focus after Add or Undo.** Focus used to land on the hidden phone button
+  (falling to the page body). It now goes to the first visible target: the side panel's Undo
+  after Add; its Add button (or the title) after Undo; and the title once the 6-second Undo
+  window ends. Phones keep the CTA.
+- **L49:** an old `#ads` link opens the Weekly ads sheet over Shop (or the list when Shop is
+  hidden), then rewrites the address to `#shop` with `history.replaceState`. Bookmarks and
+  reloads stop saying `#ads`.
+- About sheet: the Share icon in "Tap Share" sits inline in the text instead of on its own line.
+
+### Tests
+- `test/v024.test.mjs` adds 13 tests: rename strings, manifest, icons, picker and About copy,
+  the menu layout, the key registry (including the unclassified-key guard), the backup round
+  trip and junk prefs, and v1/v2 compatibility. Hidden chains are tested with the flag on and
+  off for the catalog, recipe matching and list grouping. The v0.1.5 store-order regression is
+  rewritten to run with the flag on and off.
+- `test/v024-matching.test.mjs` adds 37 tests for the gate fixes: each M10 false pair (14) and
+  true pair (16), the shared-rule agreement check, the qa9-style detail, L45, L46 (options and
+  cost range), L47, and code-path checks for L48/L49. The browser checks for L48/L49 and M10 are in
+  the v024 gate probe. Older tests that expected Ice/Sour Cream or Banana Bread as low-ranked
+  options were updated to the stricter rule.
 
 ## [0.2.3-alpha] - 2026-11-15 (alpha)
 

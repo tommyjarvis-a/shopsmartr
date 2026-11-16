@@ -148,7 +148,7 @@ test('L31: "Favorites" is capitalized in user-facing copy (plural); keys, ids an
       if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
       for (const m of line.matchAll(/(['`"])((?:(?!\1).)*)\1/g)) {
         const s = m[2];
-        if (/^shopsmartr[:-]|^\.\/|^#|^[a-z]+$/.test(s)) continue;   // storage keys, imports, ids/route names
+        if (/^shopsmartr[:-]|^\$\{FILE_STEM\}-|^\.\/|^#|^[a-z]+$/.test(s)) continue;   // storage keys, file names (v0.2.4), imports, ids/route names
         if (/\bfavorites\b/.test(s.replace(/shopsmartr[:-]favorites[\w:.-]*/g, '').replace(/\$\{[^}]*\}/g, ''))) offenders.push(`${f}:${i + 1}: ${s}`);
       }
     });

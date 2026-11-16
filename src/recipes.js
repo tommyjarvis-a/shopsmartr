@@ -2,7 +2,7 @@
 // fractions, whole-pack buying, catalog matching with confidence, cost ranges, sorts, search, quick
 // picks, list coverage and step splitting. No DOM, no network; safe to run in a Worker.
 // Recipe data is never shipped in this repo: it arrives encrypted in data/recipes.enc.
-import { tokenize, getItem, estimate, unitOf, storeKey, editDistance1 } from './catalog.js';
+import { tokenize, getItem, estimate, unitOf, storeKey, editDistance1, hiddenStoreIdx } from './catalog.js';
 import { convert, parsePackSize, linePrice, compareNames } from './list.js';
 
 export const RECIPES_SCHEMA = 'shopsmartr.recipes/1';
@@ -286,11 +286,17 @@ export function buyFor(ing, factor, it) {
     approx = true;   // e.g. "2 cups" of a product sold as "12 ct": one pack
   } else if (q != null && isCountish(ing.unit)) {
     const ct = /(\d+)\s*(?:ct|count|pk)\b/i.exec(it.size ?? '');
+    if (!ct && !PACKAGE.has(ing.unit) && pack && PACK_G[pack.unit]) {
+      // L47: "2 potato" against a 5 lb bag: a count can't be turned into a weight here, so it buys
+      // ONE pack (not one bag per potato) and the line says so for the shopper to check.
+      const line = linePrice({ qty: 1, unit: '', priced });
+      return { packs: 1, total: line?.total ?? null, approx: true, listQty: 1, listUnit: '', buys: `1 pack for ${formatAmount(q)} · check the size`, review: true };
+    }
     packs = Math.max(1, Math.ceil(q / (ct && !PACKAGE.has(ing.unit) ? Number(ct[1]) : 1) - 1e-9));
   }
   const line = linePrice({ qty: packs, unit: '', priced });
   const buys = packs > 1 && !(isCountish(ing.unit) && q === packs) ? `Buys ${packs}` : null;
-  return { packs, total: line?.total ?? null, approx: approx || Boolean(line?.approx), listQty: packs, listUnit: '', buys };
+  return { packs, total: line?.total ?? null, approx: approx || Boolean(line?.approx), listQty: packs, listUnit: '', buys, review: false };
 }
 
 // ---------- matching against the catalog ----------
@@ -344,6 +350,49 @@ function sameFoodTail(pc, w) {
   for (let j = i + 1; j < pc.length; j += 1) if (!GENERIC.has(pc[j]) && !FORM.has(pc[j])) return false;
   return true;
 }
+/** L45: words in FRONT of a food that make a prepared/processed product of it (Popcorn Chicken). */
+const PRE_PROCESSED = new Set('popcorn rotisserie fried breaded battered crispy crunchy general tso sesame buffalo teriyaki bbq barbecue glazed marinated stuffed smoked dino'.split(' '));
+/**
+ * M10/L46: words in front of a food that name a different product, whatever the catalog holds
+ * (Peanut Butter, Ice/Sour/Whipped Cream, Banana Bread, Almond Milk, Chicken Broth for "broth").
+ */
+const OTHER_MOD = new Set(('ice sour whipped peanut almond cashew hazelnut pistachio coconut soy oat banana pumpkin zucchini apple '
+  + 'chocolate vanilla strawberry blueberry cinnamon garlic onion corn cookie cottage cream buttermilk condensed evaporated powdered '
+  + 'confectioner chicken beef pork turkey vegetable veggie bone fish clam seafood tomato lemon lime orange').split(' '));
+/** M10: a generic-looking word after a food that still makes another product of it (Cream Cheese is not cream). */
+const OTHER_TAIL = { cream: new Set(['cheese']), butter: new Set(['cheese']) };
+/**
+ * THE shared same-food rule (M10, L45, L46), used by both product matching (matchRows) and the
+ * list check (onListItem): does a product or list name (core words `pc`) mean the ingredient
+ * (core words `ic`)? Every ingredient word must be in the name; words after the ingredient's head
+ * noun may only be cut/class/pack words (Chicken Breast, Garlic Bulb, not Chicken Broth or Garlic
+ * Salt); words in front may not name another food (Peanut Butter, Ice Cream, Banana Bread).
+ * Returns { other, processed, front, soft }: other = a different food; processed = a processed form
+ * (Chicken Nuggets, Popcorn Chicken); front = the processed word is in front; soft = the only
+ * processed word is "frozen" (same food for the list check).
+ */
+export function foodRelation(ic, pc) {
+  const out = { other: true, processed: false, front: false, soft: false };
+  if (!ic.length || !pc.length || !ic.every((t) => pc.includes(t))) return out;
+  const head = ic[ic.length - 1];
+  const at = pc.lastIndexOf(head);
+  const proc = [];
+  for (let j = at + 1; j < pc.length; j += 1) {
+    const w = pc[j];
+    if (ic.includes(w)) continue;   // "Butter, unsalted" for unsalted butter
+    if (OTHER_TAIL[head]?.has(w)) return out;
+    if (PROCESSED.has(w)) proc.push(w);
+    else if (!GENERIC.has(w) && !FORM.has(w)) return out;
+  }
+  let front = false;
+  for (let j = 0; j < at; j += 1) {
+    const w = pc[j];
+    if (ic.includes(w) || PLAIN[head]?.has(w)) continue;
+    if (OTHER_MOD.has(w)) return out;
+    if ((PROCESSED.has(w) || PRE_PROCESSED.has(w))) { proc.push(w); if (w !== 'frozen') front = true; }
+  }
+  return { other: false, processed: proc.length > 0, front, soft: proc.length > 0 && proc.every((w) => w === 'frozen') };
+}
 /** The everyday form of a bare ingredient word ("cream" means heavy or whipping cream). */
 const PLAIN = Object.fromEntries(Object.entries({
   cream: 'heavy whipping', bread: 'sandwich white wheat sliced', milk: 'whole', rice: 'white long grain', flour: 'all purpose', sugar: 'granulated white cane',
@@ -377,6 +426,7 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
   const head = core[core.length - 1];
   const want = new Set(core);
   const storeCol = mi.cat.cols.store;
+  const hid = storeIdx < 0 ? hiddenStoreIdx(mi.cat) : null;   // v0.2.4: never match at a hidden chain
   const out = [];
   // Scan the head noun's rows; when that list is long ("cheese", "sauce") and the name has other
   // words, scan the rarest of those instead (still requiring the head), which keeps it fast.
@@ -386,7 +436,7 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
     for (const t of core) { if (t === head) continue; const r = rowsWith(mi, t); if (r.length < scan.length) { scan = r; needHead = head; } }
   }
   for (const row of scan) {
-    if (storeIdx >= 0 && storeCol[row] !== storeIdx) continue;
+    if (storeIdx >= 0 ? storeCol[row] !== storeIdx : hid.has(storeCol[row])) continue;
     if (needHead && !productCore(mi, row).includes(needHead)) continue;
     const pc = productCore(mi, row);
     let hits = 0;
@@ -410,7 +460,16 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
     }
     // L44: processed forms (nuggets, patties, wedges, fries, chips…) rank below plain ones at the
     // same level, ahead of any name-length tiebreak; they stay in the list as Swap alternatives.
-    const proc = core.length === 1 && pc.some((t) => t !== head && PROCESSED.has(t)) ? 1 : 0;
+    let proc = core.length === 1 && pc.some((t) => t !== head && PROCESSED.has(t)) ? 1 : 0;
+    if (core.length === 1 && conf > 1) {
+      // M10/L46 (shared rule with the list check): a name that means another food (Ice Cream,
+      // Sour Cream, Whipped Cream, Peanut Butter, Cream Cheese for a bare "cream") is never
+      // offered, so it is no Swap option and never sets the cost range. L45: a processed word in
+      // front (Popcorn Chicken, Rotisserie Chicken) drops a level and sorts behind plain cuts.
+      const rel = foodRelation(core, pc);
+      if (rel.other) conf = CONF.WEAK;
+      else if (rel.front) { conf -= 1; proc = 1; }
+    }
     out.push({ row, conf, extra, proc });
   }
   out.sort((a, b) => b.conf - a.conf || a.proc - b.proc || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
@@ -497,19 +556,22 @@ export function costText(c, per = 1) {
 export function listIndex(items) {
   return items.map((item) => { const { core } = normName(item.name); return { item, core, set: new Set(core), head: core[core.length - 1] }; }).filter((x) => x.core.length);
 }
+/** M10: a list name covers an ingredient under the same rule as product matching (foodRelation). */
+const covers = (ic, pc) => { const r = foodRelation(ic, pc); return !r.other && (!r.processed || r.soft); };
 /**
- * The list item an ingredient is already covered by, or null: the item's name has every word of
- * the ingredient ("olive oil" in "Extra Virgin Olive Oil"), or the ingredient has every word of
- * the item name and they end in the same noun ("chicken thighs" for "bone-in chicken thighs").
+ * The list item an ingredient is already covered by, or null. M10: the same head-noun and
+ * modifier rules as product matching, through foodRelation(): "Unsalted Butter" or "Chicken
+ * Breast" covers butter / chicken, but Peanut Butter, Chicken Broth, Cream Cheese, Banana Bread,
+ * Corn Tortillas, Garlic Salt or Chicken Nuggets do not. A plainer list name covers a more exact
+ * line when the line only adds descriptors ("butter" on the list for "unsalted butter").
  */
 export function onListItem(ing, lidx) {
   const { core } = normName(ing.base);
   if (!core.length) return null;
   const head = core[core.length - 1];
-  const want = new Set(core);
   for (const x of lidx) {
-    if (core.every((t) => x.set.has(t)) && x.core.includes(head)) return x.item;
-    if (x.head === head && x.core.every((t) => want.has(t))) return x.item;
+    if (covers(core, x.core)) return x.item;
+    if (x.head === head && covers(x.core, core)) return x.item;
   }
   return null;
 }

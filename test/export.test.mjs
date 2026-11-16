@@ -33,7 +33,7 @@ test('toCSV builds header + rows with CRLF', () => {
 test('toText groups by store, marks checked, flattens newlines', () => {
   const txt = toText(items, stores, { date: '2026-11-14' });
   const lines = txt.trimEnd().split('\n');
-  assert.equal(lines[0], 'ShopSmartR shopping list');
+  assert.equal(lines[0], 'Happy Wife Helper shopping list');
   assert.equal(lines[1], '2026-11-14');
   assert.ok(lines.includes('== Wegmans Sheridan Dr. — 5275 Sheridan Drive, Williamsville =='), 'v0.1.5: section header carries the address');
   assert.ok(lines.includes('[ ] 1 gal Milk, 2% — the "good" one'));

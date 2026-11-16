@@ -84,7 +84,7 @@ test('L24: files over 5,000 items or about 5 MB are refused with a clear message
   assert.equal(many.ok, false);
   assert.equal(many.error, 'That file has 5,001 items. Load list takes up to 5,000.');
   const big = B.parseBackup(JSON.stringify({ ...doc([]), pad: 'x'.repeat(B.MAX_LOAD_BYTES) }));
-  assert.equal(big.error, 'That file is too large to be a ShopSmartR list (over 5 MB).');
+  assert.equal(big.error, 'That file is too large to be a Happy Wife Helper backup (over 5 MB).');
   assert.equal(B.MAX_LOAD_BYTES, 5 * 1024 * 1024);
 });
 

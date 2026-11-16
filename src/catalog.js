@@ -4,6 +4,14 @@
 // normalizeDoc()/buildIndex() is structured-cloneable, so both can run in a Worker.
 
 import { normUnit } from './list.js';
+import { isShownChain } from './stores.js';
+
+/** v0.2.4: indexes of the catalog's stores on hidden chains (empty when nothing is hidden). */
+export function hiddenStoreIdx(cat) {
+  const out = new Set();
+  (cat?.stores ?? []).forEach((s, i) => { if (!isShownChain(s.chain)) out.add(i); });
+  return out;
+}
 
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : (typeof x === 'string' && x.trim() !== '' && Number.isFinite(Number(x)) ? Number(x) : null));
 const str = (x, n = 200) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, n) : (typeof x === 'number' && Number.isFinite(x) ? String(x) : null));
@@ -98,7 +106,8 @@ export const storeKey = (s) => `${s.chain}:${s.storeId}`;
 /** Stores that actually have priced items, in feed order: [{ key, idx, chain, storeId, name, label, count }]. */
 export function priceStores(cat) {
   if (!cat) return [];
-  return cat.stores.map((s, idx) => ({ ...s, idx, key: storeKey(s), label: storeLabel(s) })).filter((s) => s.count > 0);
+  // v0.2.4: stores of hidden chains (stores.js HIDDEN_CHAINS) are not offered anywhere prices show.
+  return cat.stores.map((s, idx) => ({ ...s, idx, key: storeKey(s), label: storeLabel(s) })).filter((s) => s.count > 0 && isShownChain(s.chain));
 }
 
 /** The saved store key if it is still in the feed, else the first store with prices (or null). */
@@ -284,9 +293,11 @@ export function searchRows(cat, index, query, { department = '', store = '', off
   const d = department ? cat.deptNames.indexOf(department) : -1;
   const si = store ? cat.stores.findIndex((s) => storeKey(s) === store) : -1;
   if ((department && d < 0) || (store && si < 0)) return { total: 0, offset, rows: [] };
+  const hid = si < 0 ? hiddenStoreIdx(cat) : new Set();   // all-store searches skip hidden chains
   if (!qt.length) {
     let list = d >= 0 ? index.byDept[d] : index.alpha;
     if (si >= 0 && cat.stores.length > 1) list = browseList(cat, index, d, si);
+    else if (hid.size) list = list.filter((i) => !hid.has(cat.cols.store[i]));
     return { total: list.length, offset, rows: Array.from(list.subarray(offset, offset + limit)) };
   }
   // Rarest-looking (longest) token first keeps the candidate set small.
@@ -319,7 +330,7 @@ export function searchRows(cat, index, query, { department = '', store = '', off
   let m = 0;
   const { store: storeCol, dept } = cat.cols;
   for (const row of cand) {
-    const ok = hits[row] === qt.length && (d < 0 || dept[row] === d) && (si < 0 || storeCol[row] === si);
+    const ok = hits[row] === qt.length && (d < 0 || dept[row] === d) && (si < 0 ? !hid.has(storeCol[row]) : storeCol[row] === si);
     if (ok) {
       const nk = index.nameKey[row];
       const sc = score[row] + (nk.startsWith(phrase) ? 8 : 0) + (nk === phrase ? 8 : 0);
@@ -350,7 +361,8 @@ export function onSale(cat, index, store, limit = 6) {
   const si = cat.stores.findIndex((s) => storeKey(s) === store);
   const { flags, store: sc, price, regular } = cat.cols;
   const rows = [];
-  for (const i of index.alpha) if ((flags[i] & ON_SALE) && (si < 0 || sc[i] === si) && regular[i] > price[i]) rows.push(i);
+  const hid = si < 0 ? hiddenStoreIdx(cat) : null;
+  for (const i of index.alpha) if ((flags[i] & ON_SALE) && (si < 0 ? !hid.has(sc[i]) : sc[i] === si) && regular[i] > price[i]) rows.push(i);
   rows.sort((a, b) => (regular[b] - price[b]) - (regular[a] - price[a]) || a - b);
   return rows.slice(0, limit).map((i) => getItem(cat, i));
 }
