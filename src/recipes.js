@@ -576,7 +576,8 @@ export function listIndex(items) {
   return items.map((item) => { const { core } = normName(item.name); return { item, core, set: new Set(core), head: core[core.length - 1] }; }).filter((x) => x.core.length);
 }
 /** M10: a list name covers an ingredient under the same rule as product matching (foodRelation). */
-const covers = (ic, pc) => { const r = foodRelation(ic, pc); return (!r.other || r.mod) && (!r.processed || r.soft); };
+// L53: the flavoured-fallback allowance (r.mod: Coconut Oil for "oil", Apple Juice for "juice") is for product offers only, never the list check.
+const covers = (ic, pc) => { const r = foodRelation(ic, pc); return !r.other && (!r.processed || r.soft); };
 /**
  * The list item an ingredient is already covered by, or null. M10: the same head-noun and
  * modifier rules as product matching, through foodRelation(): "Unsalted Butter" or "Chicken

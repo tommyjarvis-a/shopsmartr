@@ -30,8 +30,17 @@ Recipes Phase 2: **Cook from my list** and **Import a recipe**. Everything runs 
 - **Content Security Policy** (meta): scripts only from the app (inline scripts pinned by hash, no eval),
   `connect-src 'self'`, no plugins, `base-uri`/`form-action` self. `tools/csp-hashes.mjs` prints the hashes.
 
+### Fixed
+- **L53:** a flavoured product on the list no longer counts as the bare ingredient: Coconut Oil isn't "oil",
+  Apple Juice isn't "juice", Chicken Broth isn't "broth" for **Already on your list**, Cook ranking or Add missing.
+  The L51 fallback still offers those products as picks when nothing plainer exists. (Vegetable Oil still counts
+  as oil, and Vanilla Ice Cream as ice cream.)
+- **L54:** at tablet widths (768–1200px) the Recipe detail no longer squeezes its info column next to the photo:
+  the info moves below the photo when it would get less than 20rem, the Servings label keeps its room (the
+  stepper wraps under it on a narrow card), and Missing / On your list sit side by side only from 1200px.
+
 ### Tests
-- test/v026.test.mjs: line parser, JSON-LD and text parsing, sanitising (script tags, handlers, javascript: links,
+- test/v026-lows.test.mjs (L53, L54). test/v026.test.mjs: line parser, JSON-LD and text parsing, sanitising (script tags, handlers, javascript: links,
   bidi characters, huge fields), the fragment codec (damaged, oversized, zip bomb, wrong version), the bookmarklet
   run against a fake page (no network calls), Cook ranking and sorts, the backup round trip and old files, the key
   registry and the CSP.

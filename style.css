@@ -963,6 +963,10 @@ body:not([data-screen="list"]) .tb-break { display: none; }
 
 .serv { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); }
 .serv .l { flex: 1; min-width: 0; }
+/* L54 (v0.2.6): on a narrow card (the detail column at tablet widths) the label keeps 9rem and the stepper wraps below it */
+.serv { flex-wrap: wrap; row-gap: var(--space-2); }
+.serv .l { flex: 1 1 9rem; }
+.serv .stepper { flex: none; margin-left: auto; }
 .serv .l b { display: block; font-weight: var(--fw-semibold); }
 .serv .l small { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); }
 .stepper { display: inline-flex; align-items: center; background: var(--color-surface); border: 1.5px solid var(--color-border-strong); border-radius: var(--radius-pill); }
@@ -1056,7 +1060,11 @@ body[data-screen="recipes"] .screen-recipes { display: block; }
   .desk-only { display: inline-flex !important; }
   .rx-sort .desk-only.sort-seg { display: inline-flex !important; }
   .crumb.desk-only { display: inline-flex !important; margin-top: 0; }
-  .rx-dtop { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+  /* L54 (v0.2.6): photo and info side by side only when the info column gets 20rem; otherwise the info wraps below
+     (the column is narrow at 768-1000px with the nav, and at 1024-1350px with the recipe panel) */
+  .rx-dtop { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: flex-start; }
+  .rx-dtop > .rx-hero { flex: 1 1 240px; max-width: 300px; }
+  .rx-dtop > .rx-dinfo { flex: 999 1 20rem; min-width: 0; }
   .rx-hero { height: auto; aspect-ratio: 4 / 3; border-radius: var(--radius-lg); overflow: hidden; }
   .rx-dinfo, .rx-dcols, .rx-cta, .rx-dtop ~ .rx-foot { padding-left: 0; padding-right: 0; }
   .rx-dinfo .rx-title { margin-top: 0; }
@@ -1164,6 +1172,9 @@ body[data-screen="recipes"] .screen-recipes { display: block; }
   body[data-screen="recipes"][data-rx-view="detail"] .app { grid-template-columns: 240px minmax(0, 1fr) 380px; }
   body[data-screen="recipes"][data-rx-view="detail"] .rx-side { display: flex; flex-direction: column; gap: var(--space-6); border-left: 1px solid var(--color-border); padding: var(--space-8) var(--space-5); background: var(--color-surface); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
   body[data-screen="recipes"][data-rx-view="detail"] .rx-cta { display: none; }
+}
+/* L54 (v0.2.6): Missing / On your list side by side only when the middle column is wide enough (not at 1024-1199px beside the panel) */
+@media (min-width: 1200px) {
   .rx-ingcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
 }
 @media (min-width: 768px) { .rx-ingsec, .rx-stepsec { padding-left: 0; padding-right: 0; } }

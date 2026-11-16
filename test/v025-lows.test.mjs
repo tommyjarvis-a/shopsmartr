@@ -45,7 +45,7 @@ test('L51: the M10 look-alikes stay out (no fallback for cream, butter, bread, m
   assert.deepEqual(mini(['Peanut Butter'])('butter'), []);
   assert.deepEqual(mini(['Banana Bread'])('bread'), []);
   assert.deepEqual(mini(['Almond Milk'])('milk'), []);
-  assert.equal(onList('broth', 'Chicken Broth'), 'Chicken Broth', 'list check agrees with matching');
+  assert.equal(onList('broth', 'Chicken Broth'), null, 'L53 (v0.2.6): the fallback offers Chicken Broth but the list check no longer counts it as broth');
   assert.equal(onList('chicken', 'Chicken Broth'), null, 'M10 pair unchanged');
 });
 
