@@ -1245,3 +1245,84 @@ body:not([data-screen="list"]) .gmenu [data-list-only] { display: none; }
 .about-repo { margin: 0; }
 .about-repo a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-primary-text); font-weight: var(--fw-semibold); }
 .about-live:focus-visible, .about-repo a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+
+/* ---------- v0.2.5 themes v2 (Designer: design/v03-themes; see spec-v2.md §2, §7, §8) ---------- */
+/* ShopSmartR v0.3: unselected filter chips + the desktop add-bar Qty/Unit/Store dropdowns get a ≥3:1
+   outline from the new --color-control-border token (defined in every theme block). Dividers keep the
+   light decorative --color-border. :where() keeps specificity at .chip, so .chip.on and
+   label.chip:has(input:checked) (selected = primary outline) still win. Static store chips
+   (.chip-static, non-interactive labels) keep the light border. Append after the .chip rules. */
+.chip:where(:not(.chip-static)) { border-color: var(--color-control-border, var(--color-border-strong)); }
+
+/* ShopSmartR v0.3 theme picker: ⋮ menu "Theme" row + sheet. Tokens only (swatches use per-option
+   inline custom properties --sw-bg / --sw-surface / --sw-primary / --sw-accent from the THEMES list in JS). */
+.menu .mi .sw-mini { width: 20px; height: 20px; border-radius: 6px; flex: none; position: relative; background: var(--color-surface-2); border: 1px solid var(--color-border-strong); overflow: hidden; }
+.menu .mi .sw-mini::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--color-primary-strong); }
+.theme-sheet .seg { margin-top: var(--space-2); }
+.theme-sheet fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.theme-sheet legend { font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-semibold); color: var(--color-text-muted); padding: 0; }
+.theme-list { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.theme-opt { display: flex; align-items: center; gap: var(--space-3); min-height: 60px; padding: 8px 12px 8px 8px; border: 1.5px solid var(--color-control-border, var(--color-border-strong)); border-radius: var(--radius-md); background: var(--color-surface); cursor: pointer; position: relative; }
+.theme-opt:has(input:checked) { border: 2px solid var(--color-primary); background: var(--color-primary-soft); padding: 7.5px 11.5px 7.5px 7.5px; }
+.theme-opt:has(input:focus-visible) { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.theme-opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.theme-opt .sw { width: 44px; height: 44px; border-radius: 12px; flex: none; position: relative; background: var(--sw-bg); box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); overflow: hidden; }
+.theme-opt .sw::before { content: ""; position: absolute; left: 6px; right: 6px; bottom: 6px; height: 12px; border-radius: 4px; background: var(--sw-surface); }
+.theme-opt .sw i { position: absolute; border-radius: 50%; }
+.theme-opt .sw i:nth-child(1) { width: 20px; height: 20px; left: 7px; top: 7px; background: var(--sw-primary); }
+.theme-opt .sw i:nth-child(2) { width: 12px; height: 12px; right: 7px; top: 9px; background: var(--sw-accent); }
+.theme-opt .t { flex: 1; min-width: 0; display: grid; }
+.theme-opt .t b { font-weight: var(--fw-semibold); font-size: var(--fs-md); line-height: 22px; color: var(--color-text); }
+.theme-opt .t small { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); }
+.theme-opt .tick { width: 22px; height: 22px; color: var(--color-primary-text); visibility: hidden; flex: none; }
+.theme-opt:has(input:checked) .tick { visibility: visible; }
+.theme-sheet .note { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-faint); }
+
+/* Happy Wife Helper themes v2: Theme sheet options show a mini preview of each theme's identity (page colour, header
+   type, card shape/style, button shape, accent) instead of a dot. Builds on theme-picker.css (.theme-opt, .tick, .seg).
+   Each option carries inline custom properties --pv-* from the THEMES list in JS (values for the current mode). */
+.theme-opt { min-height: 84px; }
+.theme-opt .pv { width: 104px; height: 68px; flex: none; position: relative; overflow: hidden; border-radius: var(--pv-r-xl, 12px);
+  background: var(--pv-bg); box-shadow: inset 0 0 0 1px rgba(127,127,127,.38); font-family: var(--pv-font-h); color: var(--pv-text); }
+.theme-opt .pv .bar { position: absolute; left: 0; right: 0; top: 0; height: 20px; background: var(--pv-appbar); border-bottom: var(--pv-appbar-border);
+  display: flex; align-items: center; gap: 4px; padding: 0 7px; font-size: 12px; line-height: 1; font-weight: var(--pv-h-weight); letter-spacing: var(--pv-h-track); }
+.theme-opt .pv .bar i { width: 6px; height: 6px; border-radius: 50%; background: var(--pv-accent); margin-left: auto; }
+.theme-opt .pv .card { position: absolute; left: 7px; right: 7px; top: 26px; height: 18px; border-radius: var(--pv-r-card); background: var(--pv-card); border: var(--pv-card-border); box-shadow: var(--pv-card-shadow);
+  display: flex; align-items: center; gap: 4px; padding: 0 5px; }
+.theme-opt .pv .card s { width: 8px; height: 8px; border-radius: 2px; background: var(--pv-primary); flex: none; text-decoration: none; }
+.theme-opt .pv .card u { height: 4px; flex: 1; border-radius: 2px; background: var(--pv-text); opacity: .55; }
+.theme-opt .pv .card em { width: 8px; height: 8px; flex: none; background: var(--pv-star); clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 61%, 80% 100%, 50% 78%, 20% 100%, 29% 61%, 0 38%, 37% 35%); }
+.theme-opt .pv .btn-pv { position: absolute; right: 7px; bottom: 6px; width: 46px; height: 13px; border-radius: var(--pv-r-ctl); background: var(--pv-primary-strong); }
+.theme-opt .pv .tab-pv { position: absolute; left: 7px; bottom: 6px; width: 20px; height: 13px; border-radius: var(--pv-r-ctl); background: var(--pv-tab-on); box-shadow: inset 0 -2px 0 var(--pv-tab-ul); }
+.theme-opt .t b { font-family: var(--pv-font-h); font-weight: var(--pv-h-weight); letter-spacing: var(--pv-h-track); font-size: 17px; }
+
+/* Happy Wife Helper themes v2: maps the identity tokens from themes-v2.css onto existing app classes.
+   Tokens only, no [data-theme] selectors here: every value comes from the active theme block, so adding a theme = adding
+   a block. Append after style.css (and after danger-button.css / chip-border.css). Radii reuse the existing
+   --radius-sm/md/lg/xl tokens (each theme overrides them); --radius-control is new (buttons, FAB, chips, segmented). */
+
+/* ---- type ---- */
+body { font-family: var(--font-body); }
+:where(h1, .sheet-head h2, .brand > span:last-child, .rx-title, .rx-h1) { font-family: var(--font-heading); font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking); }
+:where(.btn, .fab, .chip, .tab, .seg span, .menu .mi, .nav, .store-h .name) { font-family: var(--font-ui); }
+:where(.price, .unit-price, .was, .est, .total-split, .num, .side-price .price, .totalbar .est) { font-family: var(--font-num-family); }
+/* (--font-num stays the existing font-variant-numeric value "tabular-nums"; the family is --font-num-family) */
+
+/* ---- shape ---- */
+.btn, .fab, .chip, .seg, .seg span, .stepper, .icon-btn.ads-btn, .ads-btn { border-radius: var(--radius-control); }
+.card, .dept-card, .rx-card, .rx-row, .rx-cat, .rx-choice, .serv { background: var(--card-bg); border: var(--card-border); box-shadow: var(--card-shadow); }
+.store-h { background: var(--storeh-bg); border: var(--storeh-border); }
+
+/* ---- header ---- */
+.appbar { background: var(--appbar-bg); border-bottom: var(--appbar-border); }
+
+/* ---- tab bar: flush or floating, and the active-tab treatment ---- */
+.tabbar { background: var(--tabbar-bg); border-top: var(--tabbar-border); left: var(--tabbar-inset); right: var(--tabbar-inset);
+  bottom: calc(var(--tabbar-inset) + env(safe-area-inset-bottom)); border-radius: var(--tabbar-radius); box-shadow: var(--tabbar-shadow);
+  padding-bottom: calc(var(--tabbar-pad-b) + env(safe-area-inset-bottom)); }
+.tabbar .tab { font-family: var(--font-ui); }
+.tab[aria-current="page"] { color: var(--tab-on-label); font-weight: 800; box-shadow: inset 0 3px 0 var(--tab-on-topbar); border-radius: 0; }
+.tab[aria-current="page"] .pill { background: linear-gradient(var(--tab-on-underline), var(--tab-on-underline)) center bottom / 26px 3px no-repeat, var(--tab-on-bg); color: var(--tab-on-icon); }
+.totalbar { bottom: calc(var(--tabbar-offset) + env(safe-area-inset-bottom)); }
+.fab { bottom: calc(var(--tabbar-offset) + 12px + env(safe-area-inset-bottom)); }
+body.has-total .fab { bottom: calc(var(--tabbar-offset) + 64px + env(safe-area-inset-bottom)); }   /* v0.2.5: above the total bar on every tab-bar style */

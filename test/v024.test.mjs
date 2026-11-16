@@ -36,7 +36,7 @@ test('rename: user-facing name is Happy Wife Helper; repo, keys, feeds and forma
   assert.match(read('src/recipes.js') + read('src/rx.js'), /shopsmartr\.recipes|recipes\.enc/, 'recipe feed names unchanged');
   assert.equal(JSON.parse(read('package.json')).name, 'shopsmartr', 'package/repo name unchanged');
   assert.equal(JSON.parse(read('package.json')).version, VERSION);
-  assert.equal(VERSION, '0.2.4-alpha');
+  assert.match(VERSION, /^0\.2\.\d+-alpha$/);   // v0.2.5: exact version is checked in v025.test.mjs
 });
 
 test('manifest: Happy Wife Helper, short name, tomato theme, fixed id, Love Basket icons that exist', () => {
@@ -112,14 +112,14 @@ test('About + picker copy: links, steps, back-up-first, never promises data is s
   assert.equal(isStandalone({ navigator: {}, matchMedia: () => ({ matches: false }) }), false);
 });
 
-test('global menu: v2 layout; no Clear list, My stores or Save & export; Theme row behind a flag', () => {
+test('global menu: v2 layout; no Clear list, My stores or Save & export; Theme row present', () => {
   const html = read('index.html');
   const m = html.slice(html.indexOf('id="export-menu"'), html.indexOf('<div class="menu sort-menu" id="sort-menu"'));
   const acts = [...m.matchAll(/data-action="(\w+)"/g)].map((x) => x[1]);
   for (const a of ['save', 'load', 'household', 'ads', 'appicon', 'about', 'export', 'checkall', 'uncheck', 'clear']) assert.ok(acts.includes(a), a);
   assert.ok(m.indexOf('class="love"') < m.indexOf('data-action'), 'love note on top');
   assert.ok(!/Clear list|My stores|Save &amp; export/.test(m));
-  assert.match(m, /data-action="theme"[^>]*data-flag="themes" hidden/);
+  assert.match(m, /data-action="theme"/);   // v0.2.5: the Theme row is shown (v025.test.mjs checks it isn't hidden)
   assert.ok(!/only-list" data-menu-toggle/.test(html), 'the ⋮ button is on every tab');
   assert.match(html, /class="nav more" data-menu-toggle/, 'desktop side-nav More opens the same menu');
 });

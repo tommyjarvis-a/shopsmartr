@@ -21,12 +21,22 @@
     // v0.2.4: apply this device's App icon before first paint (favicon, apple-touch-icon); the logo follows in app.js.
     try { var i = localStorage.getItem('shopsmartr:appIcon:v1'); if (/^(happy-bag|heart-checklist|tomato-heart|heart-whisk)$/.test(i)) { var d = 'icons/' + i + '/'; document.getElementById('fav-ico').href = d + 'favicon.ico'; document.getElementById('fav-svg').href = d + 'favicon.svg'; document.getElementById('fav-32').href = d + 'favicon-32.png'; document.getElementById('fav-16').href = d + 'favicon-16.png'; document.getElementById('apple-icon').href = d + 'apple-touch-icon-180.png'; } } catch (e) { /* storage blocked */ }
   </script>
+  <script>
+    // v0.2.5: apply this device's theme and Light/Dark before first paint (no flash of the default theme), and put
+    // only that theme's @font-face rules in the page so only its font files download. Mirrors src/themes.js.
+    (function () { var F = {"tomato-parmesan":[["Nunito Variable","nunito-latin-wght-normal.woff2","200 1000"]],"blueberry-lemon":[["Inter Variable","inter-latin-wght-normal.woff2","100 900"]],"blackberry-lavender":[["Fraunces","fraunces-latin-600-normal.woff2","500 700"]],"coconut-lagoon":[["Quicksand Variable","quicksand-latin-wght-normal.woff2","300 700"]],"espresso-mango":[["DM Serif Display","dm-serif-display-latin-400-normal.woff2","400 700"],["IBM Plex Mono","ibm-plex-mono-latin-600-normal.woff2","400 700"]]}; var t = null, m = null;
+      try { t = localStorage.getItem('shopsmartr:theme:v1'); m = localStorage.getItem('shopsmartr:mode:v1'); } catch (e) { /* storage blocked */ }
+      if (!Object.prototype.hasOwnProperty.call(F, t)) t = 'tomato-parmesan';
+      var r = document.documentElement; r.setAttribute('data-theme', t); if (m === 'light' || m === 'dark') r.setAttribute('data-mode', m);
+      var c = ''; F[t].forEach(function (f) { c += '@font-face{font-family:"' + f[0] + '";src:url("fonts/' + f[1] + '") format("woff2");font-weight:' + f[2] + ';font-style:normal;font-display:swap}'; });
+      var s = document.createElement('style'); s.id = 'theme-fonts'; s.textContent = c; document.head.appendChild(s); })();
+  </script>
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="style.css">
   <script type="module" src="src/app.js"></script>
 </head>
 <body data-screen="list">
-  <svg class="sprite" aria-hidden="true" focusable="false">
+  <svg class="sprite" id="icon-sprite" aria-hidden="true" focusable="false">
     <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.4 11h10.2L20 8H6.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19.5" r="1.3" fill="currentColor"/><circle cx="17" cy="19.5" r="1.3" fill="currentColor"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor"/></symbol>
     <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
@@ -67,6 +77,14 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-json" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 11c-1 0-1 .8-1 1.5S8.5 14 8 14c.5 0 1 .8 1 1.5s0 1.5 1 1.5M14 11c1 0 1 .8 1 1.5s.5 1.5 1 1.5c-.5 0-1 .8-1 1.5s0 1.5-1 1.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   </svg>
+  <script>
+    // v0.2.5: a non-default theme's icon set from this device's local copy, so icons don't flash on reload
+    // (src/themes.js refreshes the copy when the app version changes). The default set is kept for switching back.
+    (function () { try { var sp = document.getElementById('icon-sprite'); window.HWH_SPRITE0 = sp.innerHTML;
+      var t = document.documentElement.getAttribute('data-theme'); if (t === 'tomato-parmesan') return;
+      var c = JSON.parse(localStorage.getItem('shopsmartr:spriteCache:v1') || 'null');
+      if (c && c.theme === t && typeof c.svg === 'string' && c.svg.indexOf('<symbol') === 0) { sp.innerHTML = c.svg; sp.setAttribute('data-set', t); } } catch (e) { /* storage blocked */ } })();
+  </script>
 
   <div class="app">
     <aside class="side" aria-label="Main">
@@ -371,7 +389,7 @@
     <div class="store-status" id="store-status" role="note"><svg class="icon icon-16 ico" aria-hidden="true"><use href="#i-device"/></svg><div><b id="store-status-title">Kept in this browser only</b><span id="store-status-saved"></span><span class="block" id="storage-status">Storage: checking…</span></div></div>
     <div class="sep" role="separator"></div>
     <p class="mh">Settings</p>
-    <button type="button" class="mi" role="menuitem" data-action="theme" aria-haspopup="dialog" data-flag="themes" hidden><span class="sw-mini" aria-hidden="true"></span>Theme<span class="sub">Tomato &amp; Parmesan</span><svg class="icon chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
+    <button type="button" class="mi" role="menuitem" data-action="theme" aria-haspopup="dialog"><span class="sw-mini" aria-hidden="true"></span>Theme<span class="sub" id="theme-sub">Tomato &amp; Parmesan</span><svg class="icon chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
     <button type="button" class="mi" role="menuitem" data-action="appicon" aria-haspopup="dialog"><img class="ai-mini" src="icons/love-basket/icon-64.png" alt="" data-app-icon-img>App icon<span class="sub" id="appicon-sub">Love Basket</span><svg class="icon chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
     <button type="button" class="mi" role="menuitem" data-action="household"><svg class="icon icon-20" aria-hidden="true"><use href="#i-users"/></svg>Household size<span class="sub" id="household-sub"></span></button>
     <button type="button" class="mi" role="menuitem" data-action="ads" aria-haspopup="dialog"><svg class="icon icon-20" aria-hidden="true"><use href="#i-tag"/></svg>Weekly ads<svg class="icon chev" aria-hidden="true"><use href="#i-chev-r"/></svg></button>
@@ -569,6 +587,27 @@
       </div>
       <button type="submit" value="add" class="btn btn-primary btn-block" id="ci-add">Add to list</button>
     </form>
+  </dialog>
+
+  <!-- v0.2.5: Theme picker (Designer's picker-v2) -->
+  <dialog class="sheet sheet-dialog theme-sheet" id="theme-sheet" aria-labelledby="theme-sheet-title">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="theme-sheet-title">Theme</h2>
+      <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <fieldset>
+      <legend>Appearance</legend>
+      <div class="seg" id="mode-seg">
+        <label><input type="radio" name="mode" value="auto"><span>Auto</span></label>
+        <label><input type="radio" name="mode" value="light"><span>Light</span></label>
+        <label><input type="radio" name="mode" value="dark"><span>Dark</span></label>
+      </div>
+    </fieldset>
+    <fieldset class="theme-list" id="theme-list">
+      <legend>Theme</legend>
+    </fieldset>
+    <p class="note">Changes colours, fonts and icons right away. Saved on this device and in your full backup (Back up).</p>
   </dialog>
 
   <!-- v0.2.4: App icon picker -->

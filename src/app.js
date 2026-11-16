@@ -4,6 +4,7 @@ import { lookupZip, storesNear, normalizeZip } from './geo.js';
 import { validateStoresDoc, indexById, shownChains, shownStores } from './stores.js';
 import { APP_NAME, FILE_STEM, LIVE_URL, isStandalone } from './brand.js';
 import * as Icon from './appicon.js';
+import * as Th from './themes.js';
 import { collectPrefs, writePrefs, PREF_ENTRIES } from './keys.js';
 import * as L from './list.js';
 import { loadStateWithStatus, saveState, loadShopStore, saveShopStore, loadListSort, saveListSort, loadCollapsed, saveCollapsed, STORAGE_KEY } from './storage.js';
@@ -668,6 +669,7 @@ function restorePrefs(snap) {
 /** Re-reads restored settings into the running app. */
 function applyPrefsLive() {
   listSort = loadListSort();
+  setTheme(Th.loadTheme(), Th.loadMode());
   setAppIcon(Icon.loadAppIcon(), { save: false });
   rxApi?.reloadPrefs?.();
   renderListScreen();
@@ -1032,9 +1034,71 @@ async function menuAction(action) {
   else if (action === 'uncheck') setAllChecked(false);
   else if (action === 'clear') clearCheckedFlow(opener);
   else if (action === 'household') openHousehold(opener);
+  else if (action === 'theme') openThemeSheet(opener);
   else if (action === 'appicon') openIconSheet(opener);
   else if (action === 'about') openAbout(opener);
   else if (action === 'ads') openAds(opener);
+}
+
+// ---------- Theme (v0.2.5) ----------
+let themeOpener = null;
+/** Applies a theme + mode now (no saving here: pick handlers save only what changed, so a backup merge can fill the rest). */
+function setTheme(id, mode) {
+  const t = Th.cleanTheme(id); const m = Th.cleanMode(mode);
+  Th.applyTheme(t, m, { version: VERSION });
+  el('theme-sub').textContent = Th.themeName(t);
+  syncThemeSheet();
+  return t;
+}
+function themeCard(t) {
+  const lab = document.createElement('label');
+  lab.className = 'theme-opt';
+  lab.dataset.themeId = t.id;
+  lab.innerHTML = '<input type="radio" name="theme"><span class="pv" aria-hidden="true"><span class="bar">Aa<i></i></span><span class="card"><s></s><u></u><em></em></span><span class="tab-pv"></span><span class="btn-pv"></span></span><span class="t"><b></b><small></small></span><svg class="tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  lab.querySelector('input').value = t.id;
+  lab.querySelector('b').textContent = t.name;
+  lab.querySelector('small').textContent = t.desc;
+  return lab;
+}
+/** Checked states + mini previews (drawn in the mode in effect). */
+function syncThemeSheet() {
+  const list = el('theme-list');
+  if (!list.querySelector('.theme-opt')) list.append(...Th.THEMES.map(themeCard));
+  const cur = Th.loadTheme(); const mode = Th.loadMode(); const eff = Th.effectiveMode(mode);
+  for (const lab of list.querySelectorAll('.theme-opt')) {
+    const css = Th.previewStyle(lab.dataset.themeId, eff);
+    if (lab.getAttribute('style') !== css) lab.setAttribute('style', css);
+    lab.querySelector('input').checked = lab.dataset.themeId === cur;
+  }
+  for (const r of el('mode-seg').querySelectorAll('input')) r.checked = r.value === mode;
+}
+function openThemeSheet(opener = null) {
+  themeOpener = opener;
+  // Previews show each theme's name in its own heading face: tiny subsets (~20 KB for all five), loaded once here.
+  if (!document.getElementById('pv-fonts')) {
+    const st = document.createElement('style'); st.id = 'pv-fonts'; st.textContent = Th.previewFontCSS(); document.head.append(st);
+  }
+  syncThemeSheet();
+  el('theme-sheet').showModal();
+  (el('theme-list').querySelector('input:checked') ?? el('theme-list').querySelector('input')).focus();
+}
+function bindThemeSheet() {
+  el('theme-list').addEventListener('change', (e) => {
+    const r = e.target.closest('input[name="theme"]');
+    if (!r) return;
+    Th.saveTheme(r.value);
+    setTheme(r.value, Th.loadMode());
+  });
+  el('mode-seg').addEventListener('change', (e) => {
+    const r = e.target.closest('input[name="mode"]');
+    if (!r) return;
+    Th.saveMode(r.value);
+    setTheme(Th.loadTheme(), r.value);
+  });
+  // Auto follows the OS: the CSS switches by itself; the previews are redrawn for the new mode.
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => syncThemeSheet()); } catch { /* old browser */ }
+  el('theme-sheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  el('theme-sheet').addEventListener('close', () => { if (themeOpener?.isConnected && themeOpener.offsetParent) themeOpener.focus({ preventScroll: true }); themeOpener = null; });
 }
 
 // ---------- App icon (v0.2.4) ----------
@@ -1587,6 +1651,7 @@ async function initPrices() {
 async function init() {
   document.querySelectorAll('[data-version]').forEach((n) => { n.textContent = `v${VERSION}`; });
   document.querySelectorAll('[data-version-plain]').forEach((n) => { n.textContent = VERSION; });
+  setTheme(Th.loadTheme(), Th.loadMode());
   setAppIcon(Icon.loadAppIcon(), { save: false });
   UI.fillUnitSelects();
   bind();
@@ -1596,6 +1661,7 @@ async function init() {
   bindConfirm();
   bindHousehold();
   bindAds();
+  bindThemeSheet();
   bindIconSheet();
   bindAbout();
   bindInputModality();

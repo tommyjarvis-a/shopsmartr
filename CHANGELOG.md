@@ -2,6 +2,65 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.5-alpha] - 2026-11-15 (alpha)
+
+**Themes.** Five approved themes (Designer's themes v2), each with its own colours, fonts, icon set,
+corners and tab bar, in Light, Dark or Auto. Cook from my list and Import follow in v0.2.6.
+
+### Added
+- **⋮ › Theme** (the row hidden in v0.2.4 now shows the current theme) opens the Theme sheet from
+  Designer's picker-v2: an **Auto / Light / Dark** control, then one card per theme with a mini
+  preview drawn from that theme's tokens in the current mode (page colour, header, "Aa" in its
+  heading face, card shape and style, button shape and active-tab marker).
+  - **Tomato & Parmesan** (default): the shipped colours, now in Nunito, shipped icons, pill tab.
+  - **Blueberry & Lemon**: cool white + slate, Inter, Lucide thin-line icons, 10 px corners, top
+    indicator on the active tab.
+  - **Blackberry & Lavender**: lavender surfaces, Fraunces headings, Phosphor duotone icons,
+    elevated 22 px cards, top-rounded tab bar.
+  - **Coconut & Lagoon**: sea-salt aqua, Quicksand, Phosphor fill icons, flat tinted cards, a
+    floating pill tab bar with a solid lagoon bubble.
+  - **Espresso & Mango**: greige paper + charcoal, DM Serif Display headings, IBM Plex Mono prices,
+    Phosphor light icons, 6 px corners, mango underline on the active tab.
+  - Picks apply right away. Auto follows the phone's setting, live.
+- **Saved per device** in `shopsmartr:theme:v1` and `shopsmartr:mode:v1`. Both are registered
+  as settings in the key registry, so the **full backup** carries them. Replace restores them;
+  Merge only fills in one this device doesn't have; Undo puts them back. The App icon picker stays
+  separate.
+- **No flash on load.** A small inline script in `<head>` reads the saved theme and mode and sets
+  `data-theme` / `data-mode` before first paint. A second one, straight after the icon sprite,
+  puts the theme's icons in from a local copy (`shopsmartr:spriteCache:v1`, excluded from
+  backups and refreshed when the app version changes).
+- **Only the active theme's fonts download.** The page holds only that theme's `@font-face`
+  rules (`<style id="theme-fonts">`, swapped on change), self-hosted from `fonts/` with
+  `font-display: swap`, no font CDN. Per theme: Tomato 38 KB (Nunito), Blueberry 47 KB (Inter),
+  Blackberry 18 KB (Fraunces), Lagoon 28 KB (Quicksand), Espresso 24 KB + 15 KB (DM Serif
+  Display, plus IBM Plex Mono once prices show).
+- **Theme sheet previews** show each name in its own heading face using tiny subsets
+  (`fonts/preview/`, only the glyphs of the five names and "Aa", ~20 KB for all five, loaded
+  the first time the sheet opens) instead of the ~150 KB of full faces the spec mentions. The
+  subsets carry their own family names ("HWH Preview …") because Quicksand's licence reserves
+  its name for modified versions.
+- Fonts: SIL OFL 1.1, licence files in `fonts/`. Icons: Lucide (ISC) and Phosphor (MIT), licence
+  files in `icons/sprites/`. Each theme's sprite is fetched once when picked; icons a set
+  doesn't have (the About link icon) come from the default set.
+
+### Changed
+- `tokens.css` colour blocks are replaced by Designer's `themes-v2.css`; the light/dark override
+  attribute is now `data-mode` (it was an unused `data-theme="light|dark"`).
+- `style.css` gains Designer's `chip-border.css` (unselected chips get the ≥3:1
+  `--color-control-border` outline), `theme-picker.css`, `picker-v2.css` and
+  `theme-shape-v2.css` (identity tokens mapped onto app classes). The Add item button sits
+  above the total bar for every tab-bar style.
+- Meta `theme-color` and the manifest `theme_color` stay tomato (the spec doesn't change them).
+
+### Tests
+- `test/v025.test.mjs` (9 tests): theme registry and settings classes, token blocks for every
+  theme and mode, persistence, the full backup round trip (Replace, Merge fills only a missing
+  setting, junk dropped), the early-apply script run for every theme × mode (it must write the
+  same fonts as `src/themes.js`), font loading for only the active theme, licences, sprites, and
+  the menu row + sheet markup. Two v0.2.4 tests were updated for the shown Theme row and the
+  new version.
+
 ## [0.2.4-alpha] - 2026-11-15 (alpha)
 
 ShopSmartR is now **Happy Wife Helper**. This release also adds app icons, an About sheet, one

@@ -13,9 +13,9 @@ import { cleanRxSort } from './recipes.js';
 const STORE_KEY_RE = /^[\w-]{1,40}:[\w-]{1,40}$/;
 const json = { read: (raw) => { try { return JSON.parse(raw); } catch { return undefined; } }, write: (v) => JSON.stringify(v) };
 const str = { read: (raw) => raw, write: (v) => String(v) };
-/** Theme keys are placeholders until themes ship (v0.2.5); kept only when they look like a theme id. */
-export const THEME_KEY = 'shopsmartr:theme:v1';
-export const MODE_KEY = 'shopsmartr:mode:v1';
+// v0.2.5: themes ship. The theme and Light/Dark/Auto are device settings a full backup carries.
+import { THEME_KEY, MODE_KEY, SPRITE_CACHE_KEY, THEME_IDS, MODES } from './themes.js';
+export { THEME_KEY, MODE_KEY };
 
 /**
  * Every key. `pref` entries travel in a backup file's `prefs` section: clean(value) returns the
@@ -31,8 +31,9 @@ export const KEY_REGISTRY = [
   { key: APP_ICON_KEY, cls: 'settings', pref: 'appIcon', ...str, clean: (v) => (typeof v === 'string' && cleanAppIcon(v) === v ? v : undefined), what: 'app icon' },
   { key: RX_STORE_KEY, cls: 'settings', pref: 'rxStore', ...str, clean: (v) => (typeof v === 'string' && STORE_KEY_RE.test(v) ? v : undefined), what: 'store recipes are priced at' },
   { key: RX_SORT_KEY, cls: 'settings', pref: 'rxSort', ...json, clean: (v) => (v && typeof v === 'object' ? cleanRxSort(v) : undefined), what: 'recipe sort' },
-  { key: THEME_KEY, cls: 'settings', pref: 'theme', ...str, clean: (v) => (typeof v === 'string' && /^[a-z][a-z-]{1,39}$/.test(v) ? v : undefined), what: 'theme (v0.2.5)' },
-  { key: MODE_KEY, cls: 'settings', pref: 'mode', ...str, clean: (v) => (['auto', 'light', 'dark'].includes(v) ? v : undefined), what: 'light/dark mode (v0.2.5)' },
+  { key: THEME_KEY, cls: 'settings', pref: 'theme', ...str, clean: (v) => (THEME_IDS.includes(v) ? v : undefined), what: 'theme' },
+  { key: MODE_KEY, cls: 'settings', pref: 'mode', ...str, clean: (v) => (MODES.includes(v) ? v : undefined), what: 'Light / Dark / Auto' },
+  { key: SPRITE_CACHE_KEY, cls: 'exclude', what: 'local copy of the theme\'s icon set (derived, refetched)' },
   { key: 'shopsmartr:collapsed:v1', cls: 'exclude', what: 'collapsed store sections (screen state)' },
   { key: 'shopsmartr:notes:v1', cls: 'exclude', what: 'love-note rotation' },
   { key: 'shopsmartr:backupMeta:v1', cls: 'exclude', what: 'last-saved bookkeeping for the save reminder' },

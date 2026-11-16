@@ -1,14 +1,46 @@
-/* ShopSmartR design tokens — plain CSS custom properties.
-   Light is the default; dark follows the OS unless [data-theme] forces one.
-   Colours + shadows: Tomato & Parmesan (v0.1.9; design/v018-dark-themes/final, contrast tables in its spec.md). */
+/* Happy Wife Helper design tokens: plain CSS custom properties.
+   v0.2.5: colours, shadows and identity tokens (radius, cards, header, tab bar, fonts) come from Designer's
+   themes v2 (design/v03-themes/themes-v2.css, spec-v2.md): five [data-theme] blocks, light + dark each.
+   <html data-theme="…"> picks the theme (absent = Tomato & Parmesan); data-mode="light|dark" forces a mode,
+   absent = Auto (follows the OS). Type, spacing and sizing below are shared by every theme. */
 :root {
-  /* Colour + shadow (Tomato & Parmesan, light) */
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-xs: 12px;  --lh-xs: 16px;
+  --fs-sm: 14px;  --lh-sm: 20px;
+  --fs-md: 16px;  --lh-md: 24px;
+  --fs-lg: 18px;  --lh-lg: 26px;
+  --fs-xl: 22px;  --lh-xl: 28px;
+  --fs-2xl: 28px; --lh-2xl: 34px;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+
+  /* Radii */
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-pill: 999px;
+
+  /* Sizing */
+  --tap-min: 44px;
+  --control-h: 48px;
+}
+
+/* Happy Wife Helper v0.3 themes v2: colour + identity tokens (radius, card, header, tab bar, fonts). Drop-in like themes.css.
+   Theme:      <html data-theme="tomato-parmesan|blueberry-lemon|blackberry-lavender|coconut-lagoon|espresso-mango">  (absent = Tomato & Parmesan)
+   Appearance: follows the OS; <html data-mode="light|dark"> forces one (absent = Auto).
+   Needs: theme-shape-v2.css (maps the identity tokens onto app classes) + fonts-v2.css (@font-face, lazy). Spec: spec-v2.md */
+
+/* ---------- Tomato & Parmesan (default): Friendly & homey: the shipped look ---------- */
+:root,
+:root[data-theme="tomato-parmesan"] {
   color-scheme: light;
   --color-bg: #FFFCF6;
   --color-surface: #FFFFFF;
   --color-surface-2: #FBF1DF;
   --color-border: #EEE2CE;
   --color-border-strong: #9A8775;
+  --color-control-border: #9A8775;
   --color-text: #2A1714;
   --color-text-muted: #3D2C26;
   --color-text-faint: #6B5850;
@@ -40,38 +72,47 @@
   --shadow-1: 0 1px 2px rgba(42,23,20,.06), 0 1px 3px rgba(42,23,20,.08);
   --shadow-2: 0 4px 12px rgba(42,23,20,.10), 0 2px 4px rgba(42,23,20,.06);
   --shadow-3: 0 12px 32px rgba(42,23,20,.18);
-
-  /* Type */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --fs-xs: 12px;  --lh-xs: 16px;
-  --fs-sm: 14px;  --lh-sm: 20px;
-  --fs-md: 16px;  --lh-md: 24px;
-  --fs-lg: 18px;  --lh-lg: 26px;
-  --fs-xl: 22px;  --lh-xl: 28px;
-  --fs-2xl: 28px; --lh-2xl: 34px;
-  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
-
-  /* Spacing (4px base) */
-  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
-
-  /* Radii */
-  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-pill: 999px;
-
-  /* Sizing */
-  --tap-min: 44px;
-  --control-h: 48px;
+  /* identity: shape, type, tab bar */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-control: 999px;
+  --card-bg: var(--color-surface);
+  --card-border: 1px solid var(--color-border);
+  --card-shadow: none;
+  --storeh-bg: var(--color-surface-2);
+  --storeh-border: 1px solid var(--color-border);
+  --appbar-bg: var(--color-bg);
+  --appbar-border: 0 solid transparent;
+  --tabbar-bg: var(--color-surface);
+  --tabbar-border: 1px solid var(--color-border);
+  --tabbar-inset: 0px;
+  --tabbar-radius: 0px;
+  --tabbar-shadow: none;
+  --tabbar-offset: 72px;
+  --tabbar-pad-b: 14px;
+  --tab-on-bg: var(--color-primary-soft);
+  --tab-on-icon: var(--color-primary-text);
+  --tab-on-label: var(--color-primary-text);
+  --tab-on-topbar: transparent;
+  --tab-on-underline: transparent;
+  --font-heading: "Nunito Variable", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Nunito Variable", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Nunito Variable", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num-family: "Nunito Variable", ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --heading-weight: 800;
+  --heading-tracking: -0.01em;
 }
-
-/* ---------- Dark: OS setting, unless [data-theme="light"]; and the manual override ---------- */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-mode="light"]) {
     color-scheme: dark;
     --color-bg: #121213;
     --color-surface: #1B1B1D;
     --color-surface-2: #262628;
     --color-border: #38383B;
     --color-border-strong: #7E7E84;
+    --color-control-border: #7E7E84;
     --color-text: #F8F4F1;
     --color-text-muted: #C9C5C2;
     --color-text-faint: #ADA8A5;
@@ -105,13 +146,14 @@
     --shadow-3: 0 12px 32px rgba(0,0,0,.65);
   }
 }
-:root[data-theme="dark"] {
+:root[data-mode="dark"] {
   color-scheme: dark;
   --color-bg: #121213;
   --color-surface: #1B1B1D;
   --color-surface-2: #262628;
   --color-border: #38383B;
   --color-border-strong: #7E7E84;
+  --color-control-border: #7E7E84;
   --color-text: #F8F4F1;
   --color-text-muted: #C9C5C2;
   --color-text-faint: #ADA8A5;
@@ -144,3 +186,624 @@
   --shadow-2: 0 4px 12px rgba(0,0,0,.5);
   --shadow-3: 0 12px 32px rgba(0,0,0,.65);
 }
+
+/* ---------- Blueberry & Lemon: Crisp & clear: cool white + slate, a squeeze of lemon ---------- */
+:root[data-theme="blueberry-lemon"] {
+  color-scheme: light;
+  --color-bg: #F6F8FC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EAEFF7;
+  --color-border: #DCE3EE;
+  --color-border-strong: #7A8498;
+  --color-control-border: #7A8498;
+  --color-text: #0E1626;
+  --color-text-muted: #26324A;
+  --color-text-faint: #4F5B73;
+  --color-primary: #3B4FE0;
+  --color-primary-strong: #3044D0;
+  --color-primary-text: #2A3CBA;
+  --color-primary-soft: #E3EAFD;
+  --color-on-primary: #FFFFFF;
+  --color-sun: #FACC15;
+  --color-sun-soft: #FEF6C8;
+  --color-on-sun: #3A2E00;
+  --color-orange-text: #9A6A00;
+  --color-on-sun-soft: #5A4500;
+  --color-track: rgba(255,255,255,.85);
+  --color-heart: #D81B55;
+  --color-heart-soft: #FFF0F4;
+  --color-danger: #A3124D;
+  --color-danger-soft: #FFEEF4;
+  --color-focus: #B45309;
+  --color-scrim: rgba(14,22,38,.45);
+  --store-1: #0284C7;
+  --store-1-soft: #E0F2FE;
+  --store-2: #7C3AED;
+  --store-2-soft: #EDE9FE;
+  --store-3: #DB2777;
+  --store-3-soft: #FCE7F3;
+  --store-4: #0D9488;
+  --store-4-soft: #D5F5F0;
+  --shadow-1: 0 1px 2px rgba(14,22,38,.06), 0 1px 3px rgba(14,22,38,.08);
+  --shadow-2: 0 4px 12px rgba(14,22,38,.10), 0 2px 4px rgba(14,22,38,.06);
+  --shadow-3: 0 12px 32px rgba(14,22,38,.18);
+  /* identity: shape, type, tab bar */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-control: 10px;
+  --card-bg: var(--color-surface);
+  --card-border: 1px solid var(--color-border);
+  --card-shadow: none;
+  --storeh-bg: var(--color-surface);
+  --storeh-border: 1px solid var(--color-border-strong);
+  --appbar-bg: var(--color-surface);
+  --appbar-border: 1px solid var(--color-border);
+  --tabbar-bg: var(--color-surface);
+  --tabbar-border: 1px solid var(--color-border);
+  --tabbar-inset: 0px;
+  --tabbar-radius: 0px;
+  --tabbar-shadow: none;
+  --tabbar-offset: 72px;
+  --tabbar-pad-b: 14px;
+  --tab-on-bg: transparent;
+  --tab-on-icon: var(--color-primary);
+  --tab-on-label: var(--color-primary-text);
+  --tab-on-topbar: var(--color-primary);
+  --tab-on-underline: transparent;
+  --font-heading: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num-family: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --heading-weight: 700;
+  --heading-tracking: -0.025em;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="blueberry-lemon"]:not([data-mode="light"]) {
+    color-scheme: dark;
+    --color-bg: #0B1220;
+    --color-surface: #121B2D;
+    --color-surface-2: #1A2539;
+    --color-border: #2A364D;
+    --color-border-strong: #6E7C96;
+    --color-control-border: #6E7C96;
+    --color-text: #F1F5FB;
+    --color-text-muted: #C3CCDB;
+    --color-text-faint: #A2AEC2;
+    --color-primary: #6B7BFF;
+    --color-primary-strong: #9AA6FF;
+    --color-primary-text: #B3BCFF;
+    --color-primary-soft: #1E2E5C;
+    --color-on-primary: #0A1330;
+    --color-sun: #FDE047;
+    --color-sun-soft: #33300F;
+    --color-on-sun: #2B2400;
+    --color-orange-text: #FDE047;
+    --color-on-sun-soft: #FDE68A;
+    --color-track: rgba(255,255,255,.16);
+    --color-heart: #FF85A1;
+    --color-heart-soft: #2C1B26;
+    --color-danger: #FF8DB6;
+    --color-danger-soft: #3A1530;
+    --color-focus: #FCD34D;
+    --color-scrim: rgba(0,0,0,.62);
+    --store-1: #38BDF8;
+    --store-1-soft: #0E2A3A;
+    --store-2: #A78BFA;
+    --store-2-soft: #2B2245;
+    --store-3: #F472B6;
+    --store-3-soft: #3D1A2C;
+    --store-4: #2DD4BF;
+    --store-4-soft: #0F3330;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="blueberry-lemon"][data-mode="dark"] {
+  color-scheme: dark;
+  --color-bg: #0B1220;
+  --color-surface: #121B2D;
+  --color-surface-2: #1A2539;
+  --color-border: #2A364D;
+  --color-border-strong: #6E7C96;
+  --color-control-border: #6E7C96;
+  --color-text: #F1F5FB;
+  --color-text-muted: #C3CCDB;
+  --color-text-faint: #A2AEC2;
+  --color-primary: #6B7BFF;
+  --color-primary-strong: #9AA6FF;
+  --color-primary-text: #B3BCFF;
+  --color-primary-soft: #1E2E5C;
+  --color-on-primary: #0A1330;
+  --color-sun: #FDE047;
+  --color-sun-soft: #33300F;
+  --color-on-sun: #2B2400;
+  --color-orange-text: #FDE047;
+  --color-on-sun-soft: #FDE68A;
+  --color-track: rgba(255,255,255,.16);
+  --color-heart: #FF85A1;
+  --color-heart-soft: #2C1B26;
+  --color-danger: #FF8DB6;
+  --color-danger-soft: #3A1530;
+  --color-focus: #FCD34D;
+  --color-scrim: rgba(0,0,0,.62);
+  --store-1: #38BDF8;
+  --store-1-soft: #0E2A3A;
+  --store-2: #A78BFA;
+  --store-2-soft: #2B2245;
+  --store-3: #F472B6;
+  --store-3-soft: #3D1A2C;
+  --store-4: #2DD4BF;
+  --store-4-soft: #0F3330;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+}
+
+/* ---------- Blackberry & Lavender: Moody & soft: lavender haze, plush rounded cards ---------- */
+:root[data-theme="blackberry-lavender"] {
+  color-scheme: light;
+  --color-bg: #FBF8FE;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1EAFA;
+  --color-border: #E5DCF2;
+  --color-border-strong: #887C9B;
+  --color-control-border: #887C9B;
+  --color-text: #23162F;
+  --color-text-muted: #3A2A4A;
+  --color-text-faint: #605370;
+  --color-primary: #7B2E91;
+  --color-primary-strong: #6A2580;
+  --color-primary-text: #6A2580;
+  --color-primary-soft: #F0E2F7;
+  --color-on-primary: #FFFFFF;
+  --color-sun: #E8A33A;
+  --color-sun-soft: #FCEFD8;
+  --color-on-sun: #3D2604;
+  --color-orange-text: #9C6206;
+  --color-on-sun-soft: #5A3A00;
+  --color-track: rgba(255,255,255,.85);
+  --color-heart: #C2185B;
+  --color-heart-soft: #FDEFF6;
+  --color-danger: #B42318;
+  --color-danger-soft: #FEF0EE;
+  --color-focus: #2563EB;
+  --color-scrim: rgba(35,22,47,.45);
+  --store-1: #0284C7;
+  --store-1-soft: #E0F2FE;
+  --store-2: #7C3AED;
+  --store-2-soft: #EDE9FE;
+  --store-3: #DB2777;
+  --store-3-soft: #FCE7F3;
+  --store-4: #0D9488;
+  --store-4-soft: #D5F5F0;
+  --shadow-1: 0 1px 2px rgba(70,40,110,.06), 0 1px 3px rgba(70,40,110,.08);
+  --shadow-2: 0 4px 12px rgba(70,40,110,.10), 0 2px 4px rgba(70,40,110,.06);
+  --shadow-3: 0 12px 32px rgba(70,40,110,.18);
+  /* identity: shape, type, tab bar */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+  --radius-control: 999px;
+  --card-bg: var(--color-surface);
+  --card-border: 1px solid transparent;
+  --card-shadow: var(--shadow-2);
+  --storeh-bg: var(--color-surface-2);
+  --storeh-border: 1px solid transparent;
+  --appbar-bg: var(--color-surface-2);
+  --appbar-border: 0 solid transparent;
+  --tabbar-bg: var(--color-surface-2);
+  --tabbar-border: 0 solid transparent;
+  --tabbar-inset: 0px;
+  --tabbar-radius: 26px 26px 0 0;
+  --tabbar-shadow: var(--shadow-2);
+  --tabbar-offset: 72px;
+  --tabbar-pad-b: 14px;
+  --tab-on-bg: var(--color-surface);
+  --tab-on-icon: var(--color-primary);
+  --tab-on-label: var(--color-primary-text);
+  --tab-on-topbar: transparent;
+  --tab-on-underline: transparent;
+  --font-heading: Fraunces, Georgia, "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --heading-weight: 600;
+  --heading-tracking: 0;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="blackberry-lavender"]:not([data-mode="light"]) {
+    color-scheme: dark;
+    --color-bg: #150F1D;
+    --color-surface: #1E1729;
+    --color-surface-2: #2A2136;
+    --color-border: #3D3150;
+    --color-border-strong: #8D7FA3;
+    --color-control-border: #8D7FA3;
+    --color-text: #F7F1FC;
+    --color-text-muted: #D3C7E0;
+    --color-text-faint: #B4A6C6;
+    --color-primary: #A46BD6;
+    --color-primary-strong: #C9A2F0;
+    --color-primary-text: #D7B8F5;
+    --color-primary-soft: #3A2752;
+    --color-on-primary: #1E0B2E;
+    --color-sun: #F2C14E;
+    --color-sun-soft: #382A12;
+    --color-on-sun: #2B1A03;
+    --color-orange-text: #F2C14E;
+    --color-on-sun-soft: #FFD98A;
+    --color-track: rgba(255,255,255,.16);
+    --color-heart: #FF85A1;
+    --color-heart-soft: #2F1B2A;
+    --color-danger: #FF9C85;
+    --color-danger-soft: #3F1913;
+    --color-focus: #93C5FD;
+    --color-scrim: rgba(0,0,0,.62);
+    --store-1: #38BDF8;
+    --store-1-soft: #0E2A3A;
+    --store-2: #A78BFA;
+    --store-2-soft: #2B2245;
+    --store-3: #F472B6;
+    --store-3-soft: #3D1A2C;
+    --store-4: #2DD4BF;
+    --store-4-soft: #0F3330;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="blackberry-lavender"][data-mode="dark"] {
+  color-scheme: dark;
+  --color-bg: #150F1D;
+  --color-surface: #1E1729;
+  --color-surface-2: #2A2136;
+  --color-border: #3D3150;
+  --color-border-strong: #8D7FA3;
+  --color-control-border: #8D7FA3;
+  --color-text: #F7F1FC;
+  --color-text-muted: #D3C7E0;
+  --color-text-faint: #B4A6C6;
+  --color-primary: #A46BD6;
+  --color-primary-strong: #C9A2F0;
+  --color-primary-text: #D7B8F5;
+  --color-primary-soft: #3A2752;
+  --color-on-primary: #1E0B2E;
+  --color-sun: #F2C14E;
+  --color-sun-soft: #382A12;
+  --color-on-sun: #2B1A03;
+  --color-orange-text: #F2C14E;
+  --color-on-sun-soft: #FFD98A;
+  --color-track: rgba(255,255,255,.16);
+  --color-heart: #FF85A1;
+  --color-heart-soft: #2F1B2A;
+  --color-danger: #FF9C85;
+  --color-danger-soft: #3F1913;
+  --color-focus: #93C5FD;
+  --color-scrim: rgba(0,0,0,.62);
+  --store-1: #38BDF8;
+  --store-1-soft: #0E2A3A;
+  --store-2: #A78BFA;
+  --store-2-soft: #2B2245;
+  --store-3: #F472B6;
+  --store-3-soft: #3D1A2C;
+  --store-4: #2DD4BF;
+  --store-4-soft: #0F3330;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+}
+
+/* ---------- Coconut & Lagoon: Airy & playful: sea-salt aqua, coral pops, floating tab bar ---------- */
+:root[data-theme="coconut-lagoon"] {
+  color-scheme: light;
+  --color-bg: #F3FBFD;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #DDF2F7;
+  --color-border: #C9E6EE;
+  --color-border-strong: #6A8892;
+  --color-control-border: #6A8892;
+  --color-text: #0B2530;
+  --color-text-muted: #163440;
+  --color-text-faint: #425F6B;
+  --color-primary: #0B86AB;
+  --color-primary-strong: #067696;
+  --color-primary-text: #056A87;
+  --color-primary-soft: #D3ECF8;
+  --color-on-primary: #FFFFFF;
+  --color-sun: #FF7A66;
+  --color-sun-soft: #FFE5DF;
+  --color-on-sun: #3D1208;
+  --color-orange-text: #C2381F;
+  --color-on-sun-soft: #8A2513;
+  --color-track: rgba(255,255,255,.85);
+  --color-heart: #E0245E;
+  --color-heart-soft: #FFEFF3;
+  --color-danger: #A3124D;
+  --color-danger-soft: #FFEEF4;
+  --color-focus: #7C3AED;
+  --color-scrim: rgba(11,37,48,.45);
+  --store-1: #0284C7;
+  --store-1-soft: #E0F2FE;
+  --store-2: #7C3AED;
+  --store-2-soft: #EDE9FE;
+  --store-3: #DB2777;
+  --store-3-soft: #FCE7F3;
+  --store-4: #0D9488;
+  --store-4-soft: #D5F5F0;
+  --shadow-1: 0 1px 2px rgba(11,70,95,.06), 0 1px 3px rgba(11,70,95,.08);
+  --shadow-2: 0 4px 12px rgba(11,70,95,.10), 0 2px 4px rgba(11,70,95,.06);
+  --shadow-3: 0 12px 32px rgba(11,70,95,.18);
+  /* identity: shape, type, tab bar */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-control: 999px;
+  --card-bg: var(--color-surface-2);
+  --card-border: 1px solid transparent;
+  --card-shadow: none;
+  --storeh-bg: var(--color-surface-2);
+  --storeh-border: 1px solid transparent;
+  --appbar-bg: var(--color-bg);
+  --appbar-border: 0 solid transparent;
+  --tabbar-bg: var(--color-surface);
+  --tabbar-border: 0 solid transparent;
+  --tabbar-inset: 10px;
+  --tabbar-radius: 28px;
+  --tabbar-shadow: var(--shadow-3);
+  --tabbar-offset: 82px;
+  --tabbar-pad-b: 8px;
+  --tab-on-bg: var(--color-primary-strong);
+  --tab-on-icon: var(--color-on-primary);
+  --tab-on-label: var(--color-primary-text);
+  --tab-on-topbar: transparent;
+  --tab-on-underline: transparent;
+  --font-heading: "Quicksand Variable", Quicksand, ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Quicksand Variable", Quicksand, ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num-family: "Quicksand Variable", Quicksand, ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --heading-weight: 700;
+  --heading-tracking: 0;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="coconut-lagoon"]:not([data-mode="light"]) {
+    color-scheme: dark;
+    --color-bg: #06161D;
+    --color-surface: #0C2029;
+    --color-surface-2: #132B36;
+    --color-border: #1F3E4B;
+    --color-border-strong: #5F8796;
+    --color-control-border: #5F8796;
+    --color-text: #EEF9FC;
+    --color-text-muted: #BFD8E0;
+    --color-text-faint: #9CBAC4;
+    --color-primary: #1D9FC6;
+    --color-primary-strong: #5DD0EE;
+    --color-primary-text: #7FDAF2;
+    --color-primary-soft: #0F3A4D;
+    --color-on-primary: #042030;
+    --color-sun: #FF8F7A;
+    --color-sun-soft: #3A1E19;
+    --color-on-sun: #2B0D06;
+    --color-orange-text: #FF9A87;
+    --color-on-sun-soft: #FFB4A6;
+    --color-track: rgba(255,255,255,.16);
+    --color-heart: #FF85A1;
+    --color-heart-soft: #2E1A22;
+    --color-danger: #FF8DB6;
+    --color-danger-soft: #3A1527;
+    --color-focus: #C4B5FD;
+    --color-scrim: rgba(0,0,0,.62);
+    --store-1: #38BDF8;
+    --store-1-soft: #0E2A3A;
+    --store-2: #A78BFA;
+    --store-2-soft: #2B2245;
+    --store-3: #F472B6;
+    --store-3-soft: #3D1A2C;
+    --store-4: #2DD4BF;
+    --store-4-soft: #0F3330;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="coconut-lagoon"][data-mode="dark"] {
+  color-scheme: dark;
+  --color-bg: #06161D;
+  --color-surface: #0C2029;
+  --color-surface-2: #132B36;
+  --color-border: #1F3E4B;
+  --color-border-strong: #5F8796;
+  --color-control-border: #5F8796;
+  --color-text: #EEF9FC;
+  --color-text-muted: #BFD8E0;
+  --color-text-faint: #9CBAC4;
+  --color-primary: #1D9FC6;
+  --color-primary-strong: #5DD0EE;
+  --color-primary-text: #7FDAF2;
+  --color-primary-soft: #0F3A4D;
+  --color-on-primary: #042030;
+  --color-sun: #FF8F7A;
+  --color-sun-soft: #3A1E19;
+  --color-on-sun: #2B0D06;
+  --color-orange-text: #FF9A87;
+  --color-on-sun-soft: #FFB4A6;
+  --color-track: rgba(255,255,255,.16);
+  --color-heart: #FF85A1;
+  --color-heart-soft: #2E1A22;
+  --color-danger: #FF8DB6;
+  --color-danger-soft: #3A1527;
+  --color-focus: #C4B5FD;
+  --color-scrim: rgba(0,0,0,.62);
+  --store-1: #38BDF8;
+  --store-1-soft: #0E2A3A;
+  --store-2: #A78BFA;
+  --store-2-soft: #2B2245;
+  --store-3: #F472B6;
+  --store-3-soft: #3D1A2C;
+  --store-4: #2DD4BF;
+  --store-4-soft: #0F3330;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+}
+
+/* ---------- Espresso & Mango: Editorial & minimal: greige paper, charcoal ink, one mango pop ---------- */
+:root[data-theme="espresso-mango"] {
+  color-scheme: light;
+  --color-bg: #F4F1EC;
+  --color-surface: #FFFEFB;
+  --color-surface-2: #ECE8E1;
+  --color-border: #D6CFC4;
+  --color-border-strong: #837A6E;
+  --color-control-border: #837A6E;
+  --color-text: #1C1916;
+  --color-text-muted: #2D2924;
+  --color-text-faint: #5C554D;
+  --color-primary: #2B2622;
+  --color-primary-strong: #2B2622;
+  --color-primary-text: #8A4800;
+  --color-primary-soft: #FFEDC7;
+  --color-on-primary: #FFFFFF;
+  --color-sun: #FFB01F;
+  --color-sun-soft: #FFEFCC;
+  --color-on-sun: #2B1A00;
+  --color-orange-text: #A35F00;
+  --color-on-sun-soft: #5C3600;
+  --color-track: rgba(255,255,255,.85);
+  --color-heart: #D81B55;
+  --color-heart-soft: #FFF0F4;
+  --color-danger: #B0162E;
+  --color-danger-soft: #FFEFF0;
+  --color-focus: #2563EB;
+  --color-scrim: rgba(28,25,22,.5);
+  --store-1: #0284C7;
+  --store-1-soft: #E0F2FE;
+  --store-2: #7C3AED;
+  --store-2-soft: #EDE9FE;
+  --store-3: #DB2777;
+  --store-3-soft: #FCE7F3;
+  --store-4: #0D9488;
+  --store-4-soft: #D5F5F0;
+  --shadow-1: 0 1px 2px rgba(28,25,22,.06), 0 1px 3px rgba(28,25,22,.08);
+  --shadow-2: 0 4px 12px rgba(28,25,22,.10), 0 2px 4px rgba(28,25,22,.06);
+  --shadow-3: 0 12px 32px rgba(28,25,22,.18);
+  /* identity: shape, type, tab bar */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 10px;
+  --radius-control: 6px;
+  --card-bg: var(--color-surface);
+  --card-border: 1px solid var(--color-border);
+  --card-shadow: none;
+  --storeh-bg: var(--color-surface-2);
+  --storeh-border: 1px solid var(--color-border);
+  --appbar-bg: var(--color-bg);
+  --appbar-border: 2px solid var(--color-text);
+  --tabbar-bg: var(--color-bg);
+  --tabbar-border: 2px solid var(--color-text);
+  --tabbar-inset: 0px;
+  --tabbar-radius: 0px;
+  --tabbar-shadow: none;
+  --tabbar-offset: 72px;
+  --tabbar-pad-b: 14px;
+  --tab-on-bg: transparent;
+  --tab-on-icon: var(--color-text);
+  --tab-on-label: var(--color-text);
+  --tab-on-topbar: transparent;
+  --tab-on-underline: var(--color-orange-text);
+  --font-heading: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --heading-weight: 400;
+  --heading-tracking: 0;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="espresso-mango"]:not([data-mode="light"]) {
+    color-scheme: dark;
+    --color-bg: #12110F;
+    --color-surface: #1B1917;
+    --color-surface-2: #25221F;
+    --color-border: #36322D;
+    --color-border-strong: #7D756B;
+    --color-control-border: #7D756B;
+    --color-text: #F5F0E8;
+    --color-text-muted: #CFC7BB;
+    --color-text-faint: #ADA497;
+    --color-primary: #8F877C;
+    --color-primary-strong: #EFE7DA;
+    --color-primary-text: #FFB547;
+    --color-primary-soft: #3A2C12;
+    --color-on-primary: #15120F;
+    --color-sun: #FFB547;
+    --color-sun-soft: #3A2C12;
+    --color-on-sun: #241500;
+    --color-orange-text: #FFB547;
+    --color-on-sun-soft: #FFD08A;
+    --color-track: rgba(255,255,255,.16);
+    --color-heart: #FF85A1;
+    --color-heart-soft: #2E1C21;
+    --color-danger: #FF8E9A;
+    --color-danger-soft: #42181D;
+    --color-focus: #93C5FD;
+    --color-scrim: rgba(0,0,0,.62);
+    --store-1: #38BDF8;
+    --store-1-soft: #0E2A3A;
+    --store-2: #A78BFA;
+    --store-2-soft: #2B2245;
+    --store-3: #F472B6;
+    --store-3-soft: #3D1A2C;
+    --store-4: #2DD4BF;
+    --store-4-soft: #0F3330;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+    --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="espresso-mango"][data-mode="dark"] {
+  color-scheme: dark;
+  --color-bg: #12110F;
+  --color-surface: #1B1917;
+  --color-surface-2: #25221F;
+  --color-border: #36322D;
+  --color-border-strong: #7D756B;
+  --color-control-border: #7D756B;
+  --color-text: #F5F0E8;
+  --color-text-muted: #CFC7BB;
+  --color-text-faint: #ADA497;
+  --color-primary: #8F877C;
+  --color-primary-strong: #EFE7DA;
+  --color-primary-text: #FFB547;
+  --color-primary-soft: #3A2C12;
+  --color-on-primary: #15120F;
+  --color-sun: #FFB547;
+  --color-sun-soft: #3A2C12;
+  --color-on-sun: #241500;
+  --color-orange-text: #FFB547;
+  --color-on-sun-soft: #FFD08A;
+  --color-track: rgba(255,255,255,.16);
+  --color-heart: #FF85A1;
+  --color-heart-soft: #2E1C21;
+  --color-danger: #FF8E9A;
+  --color-danger-soft: #42181D;
+  --color-focus: #93C5FD;
+  --color-scrim: rgba(0,0,0,.62);
+  --store-1: #38BDF8;
+  --store-1-soft: #0E2A3A;
+  --store-2: #A78BFA;
+  --store-2-soft: #2B2245;
+  --store-3: #F472B6;
+  --store-3-soft: #3D1A2C;
+  --store-4: #2DD4BF;
+  --store-4-soft: #0F3330;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.65);
+}
+
