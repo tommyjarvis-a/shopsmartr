@@ -597,7 +597,7 @@ export function initRecipes(ctx) {
     let tooBig = '';
     try { d = Imp.parseRecipeText(text, Imp.cleanUrl(rx.imp.link.trim())); } catch (e) { d = null; if (e instanceof Imp.ImportError) tooBig = e.message; }
     if (!d || !d.lines.length) {
-      rx.imp.error = tooBig || String(text ?? '').trim() ? 'Couldn\'t find ingredients in that text. Put each ingredient on its own line, under an "Ingredients" heading.' : 'Paste the recipe text first.';
+      rx.imp.error = tooBig || (String(text ?? '').trim() ? 'Couldn\'t find ingredients in that text. Put each ingredient on its own line, under an "Ingredients" heading.' : 'Paste the recipe text first.');
       render(); root.querySelector('#rx-imp-text')?.focus();
       return;
     }

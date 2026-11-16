@@ -155,5 +155,5 @@ test('L58: a paste over the cap is refused as too large, not cut mid-JSON', () =
   assert.equal(I.parseRecipeText(`Ingredients\n1 egg\n${'a'.repeat(I.CAPS.text - 20)}`.slice(0, I.CAPS.text))?.lines[0], '1 egg', 'exactly at the cap still parses');
   const rx = read('src/rx.js');
   assert.match(rx, /maxlength: String\(Imp\.CAPS\.text \+ 1\)/, 'the textarea lets one extra character through so the cap is detected');
-  assert.match(rx, /rx\.imp\.error = tooBig \|\|/);
+  assert.match(rx, /rx\.imp\.error = tooBig \|\| \(String\(text/, 'the too-large message wins over the generic one (parenthesised)');
 });
