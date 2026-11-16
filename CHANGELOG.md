@@ -2,7 +2,7 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
-## [0.2.6-alpha] - 2026-11-15 (alpha)
+## [0.2.6-alpha] - 2026-11-16 (alpha)
 
 Recipes Phase 2: **Cook from my list** and **Import a recipe**. Everything runs on the device; nothing is sent anywhere.
 
