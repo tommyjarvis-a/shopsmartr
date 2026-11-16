@@ -557,6 +557,7 @@
   --tabbar-shadow: var(--shadow-3);
   --tabbar-offset: 82px;
   --tabbar-pad-b: 8px;
+  --tabbar-float: 1;   /* floating pill: it sits above the home indicator instead of padding down over it */
   --tab-on-bg: var(--color-primary-strong);
   --tab-on-icon: var(--color-on-primary);
   --tab-on-label: var(--color-primary-text);

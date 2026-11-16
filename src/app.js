@@ -18,6 +18,7 @@ import * as C from './catalog.js';
 import { makeDecoder } from './pricefeed.js';
 import * as UI from './ui.js';
 import { initRecipes } from './rx.js';
+import { watchTabbar } from './layout.js';
 
 const el = (id) => document.getElementById(id);
 const SCREENS = ['list', 'shop', 'recipes', 'favorites', 'stores'];
@@ -1700,6 +1701,7 @@ async function init() {
   el('zip').value = state.zip;
   const r = document.querySelector(`#radius input[value="${state.radiusMi}"]`) || document.querySelector('#radius input[value="10"]');
   r.checked = true;
+  watchTabbar();
   route();
   if (state.zip) runSearch({ quiet: true }); else renderAll();
   initPrices();

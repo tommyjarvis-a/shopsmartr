@@ -245,7 +245,7 @@ label.chip:has(input:focus-visible) { outline: 3px solid var(--color-focus); out
 .danger { color: var(--color-danger); }
 
 /* Sheet (mobile bottom sheet; centred dialog on wider screens) */
-.sheet { border: 0; background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-3); width: 100%; max-width: 100%; margin: auto 0 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: var(--space-2) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); max-height: 92vh; }
+.sheet { border: 0; background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-3); width: 100%; max-width: 100%; margin: auto 0 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: var(--space-2) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom)); max-height: 92vh; max-height: 92dvh; }
 .sheet::backdrop { background: var(--color-scrim); }
 .sheet form { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .sheet .field { min-width: 0; }
@@ -1120,7 +1120,7 @@ body[data-screen="recipes"] .screen-recipes { display: block; }
 .mini-store { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--fw-semibold); font-size: var(--fs-sm); margin: var(--space-4) 0 2px; }
 .mini-store .s { margin-left: auto; color: var(--color-text-muted); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums; }
 /* v0.2.1 wiring */
-.rx-sheet .rx-sheet-body { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 64px); }
+.rx-sheet .rx-sheet-body { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
 .rx-sheet .scroll { overflow-y: auto; }
 .rx-sheet .at label { white-space: nowrap; }
 .rx-sheet .at .rx-store-sel { height: 40px; min-height: 40px; flex: 1; min-width: 0; font-size: var(--fs-sm); }
@@ -1173,7 +1173,7 @@ body[data-screen="recipes"] .screen-recipes { display: block; }
 .ads-sheet .ads-note { margin: var(--space-3) 0 0; }
 .ads-sheet .ads-note a { display: inline-flex; align-items: center; min-height: var(--tap-min); color: var(--color-primary-text); font-weight: var(--fw-semibold); }
 .ads-sheet .go { min-height: var(--tap-min); display: inline-flex; align-items: center; gap: 4px; }
-.sheet.ads-sheet.pop { position: fixed; margin: 0; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border); padding: var(--space-3) var(--space-4) var(--space-4); }
+.sheet.ads-sheet.pop { position: fixed; margin: 0; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; border-radius: var(--radius-lg); border: 1px solid var(--color-border); padding: var(--space-3) var(--space-4) var(--space-4); }
 .sheet.ads-sheet.pop .grab { display: none; }
 .sheet.ads-sheet.pop::backdrop { background: transparent; }
 
@@ -1326,3 +1326,26 @@ body { font-family: var(--font-body); }
 .totalbar { bottom: calc(var(--tabbar-offset) + env(safe-area-inset-bottom)); }
 .fab { bottom: calc(var(--tabbar-offset) + 12px + env(safe-area-inset-bottom)); }
 body.has-total .fab { bottom: calc(var(--tabbar-offset) + 64px + env(safe-area-inset-bottom)); }   /* v0.2.5: above the total bar on every tab-bar style */
+
+/* ---- Bottom bars (hotfix, Steven's iPhone): the home-indicator safe area is applied exactly once ----
+   v0.2.5 added env(safe-area-inset-bottom) to the tab bar's bottom AND its padding, so in the home-screen app
+   (inset ≈ 34px) the bar floated above the screen edge with content showing beneath it, and the sticky bars
+   (hard-coded 72px + inset) ended up half behind it. Now: a flush bar sits at bottom:0 and pads the inset once;
+   a floating bar (--tabbar-float: 1) lifts by the inset and does not pad. Everything that stacks on the tab bar
+   uses --tabbar-h, which app.js measures with a ResizeObserver (CSS fallback below). --sab is overridable in tests. */
+:root { --sab: env(safe-area-inset-bottom, 0px); --tabbar-float: 0; --tabbar-h: calc(var(--tabbar-offset) + var(--sab)); }
+body, .app { min-height: 100vh; min-height: 100dvh; }
+.tabbar { bottom: calc(var(--tabbar-inset) + var(--sab) * var(--tabbar-float));
+  height: calc(72px + var(--sab) * (1 - var(--tabbar-float)));
+  padding-bottom: calc(var(--tabbar-pad-b) + var(--sab) * (1 - var(--tabbar-float))); }
+@media (max-width: 767px) {
+  .totalbar { bottom: var(--tabbar-h); }
+  .tb-break { bottom: calc(var(--tabbar-h) + 52px); }
+  .rx-cta, .setup-actions { bottom: var(--tabbar-h); }
+  .fab { bottom: calc(var(--tabbar-h) + 12px); }
+  body.has-total .fab { bottom: calc(var(--tabbar-h) + 64px); }
+  .toast { bottom: calc(var(--tabbar-h) + 88px); }
+  body.has-total .toast { bottom: calc(var(--tabbar-h) + 140px); }
+  .main { padding-bottom: calc(var(--tabbar-h) + 98px); }
+  body.has-total .main { padding-bottom: calc(var(--tabbar-h) + 158px); }
+}

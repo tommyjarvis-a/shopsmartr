@@ -4,10 +4,19 @@ All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps th
 
 ## [0.2.5-alpha.1] - 2026-11-15 (alpha)
 
-Tester's Lows from the v0.2.4 gate (26ec923), on top of themes v2. The v0.2.5-alpha tag was already
+The iPhone home-screen bottom-bar fix and Tester's Lows from the v0.2.4 gate (26ec923), on top of themes v2. The v0.2.5-alpha tag was already
 pushed before these landed, so they ship as 0.2.5-alpha.1 (tags are never moved).
 
 ### Fixed
+- **Home-screen app on iPhone: tab bar floating above the screen edge.** v0.2.5's theme rules added the
+  home-indicator safe area to the tab bar's `bottom` *and* its `padding-bottom`, so in the home-screen app
+  (inset about 34px) the bar sat 34px up with page content showing beneath it, and the sticky
+  **Add missing to list** bar and the running-total bar (still placed at a fixed 72px + inset) were half
+  hidden behind it. Safari with its toolbar has no inset, so it looked fine there. The inset is now applied
+  once (a flush bar sits at `bottom: 0` and pads it; Coconut & Lagoon's floating bar lifts by it instead),
+  and everything that stacks on the tab bar (Add bar, total bar, store breakdown, Add item button, toasts,
+  page bottom padding) follows the bar's measured height (`--tabbar-h`, ResizeObserver), so a theme's
+  taller or floating bar can't overlap them. Full-height layouts use `100dvh` with a `100vh` fallback.
 - **L50:** the Replace description in Load now reads "Favorites and store picks are replaced too" for a
   file without settings (and "Favorites, store picks and settings" with them).
 - **L51:** bare broth, stock, jam, jelly, preserves, sausage, oil and juice no longer match nothing when every
@@ -20,7 +29,7 @@ pushed before these landed, so they ship as 0.2.5-alpha.1 (tags are never moved)
   counts for "ice cream" and Add missing no longer bumps that line.
 
 ### Tests
-- New test/v025-lows.test.mjs (7 tests: L50, L51 ×4, L52 ×2). 248 tests in total.
+- New test/v025-lows.test.mjs (7 tests: L50, L51 ×4, L52 ×2) and test/bottom-bars.test.mjs (3 tests, bottom-bar regression). 251 tests in total.
 
 ## [0.2.5-alpha] - 2026-11-15 (alpha)
 
