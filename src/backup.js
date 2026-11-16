@@ -203,16 +203,20 @@ export function replaceText(sm) {
 export function mergeText(sm) {
   return `Keep my items and add the file's ${sm.items}. Matching items are combined.${sm.userRecipes ? ` Its ${plural(sm.userRecipes, 'imported recipe')} ${sm.userRecipes === 1 ? 'is' : 'are'} added too (yours are kept).` : ''}`;
 }
-/** L56: the toast after Replace or Merge, with item, imported-recipe and settings counts. */
+/** "a", "a and b", "a, b and c" */
+const andList = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0] ?? '');
+/** L56: the toast after Replace or Merge, with item, imported-recipe and settings counts (same form as before when there are none). */
 export function restoreToast(mode, res, settings = 0) {
-  const st = settings ? `, ${plural(settings, 'setting')}` : '';
-  const items = plural(res.added, 'item');
+  const st = settings ? ` and ${plural(settings, 'setting')}` : '';
   if (mode === 'replace') {
-    const rx = res.rxIn || res.rxOut ? `, ${plural(res.rxIn ?? 0, 'imported recipe')}` : '';
-    return `Backup restored · ${items}${rx}${st}`;
+    const parts = [plural(res.added, 'item')];
+    if (res.rxIn || res.rxOut) parts.push(plural(res.rxIn ?? 0, 'imported recipe'));
+    if (settings) parts.push(plural(settings, 'setting'));
+    return `Backup restored · ${andList(parts)}`;
   }
-  const rx = res.rxIn ? `, ${plural(res.rxIn, 'imported recipe')}` : '';
-  return `Backup merged · ${items}${rx} added${res.combined ? `, ${res.combined} combined` : ''}${st}`;
+  const parts = [plural(res.added, 'item')];
+  if (res.rxIn) parts.push(plural(res.rxIn, 'imported recipe'));
+  return `Backup merged · ${andList(parts)} added${res.combined ? `, ${res.combined} combined` : ''}${st}`;
 }
 
 /** "12 list items · 4 Favorites · 2 meals · 3 stores" */

@@ -35,8 +35,8 @@ Hotfix for Tester's v0.2.6-alpha gate (566ff52): one High (M11, privacy) and fou
   isn't "oil" and Apple Juice isn't "juice". A bare list name still doesn't cover a flavoured line.
 - **L56:** the Restore sheet names the file's imported recipes ("Favorites, store picks, 2 imported recipes and
   settings are replaced too. Your current imported recipes are removed." / Merge: "Its 2 imported recipes are
-  added too (yours are kept)."), and the toasts count them: "Backup restored · 1 item, 2 imported recipes,
-  2 settings", "Backup merged · 1 item, 1 imported recipe added".
+  added too (yours are kept)."), and the toasts count them: "Backup restored · 1 item, 2 imported recipes and
+  2 settings", "Backup merged · 1 item and 1 imported recipe added". Without imported recipes the wording is unchanged.
 - **L57:** Cook "Missing N:" uses a new `--color-miss-text` token, at least 4.5:1 on both the surface and the page
   background in all 5 themes, light and dark (Tomato light #8F5C00, 5.7:1; Blueberry and Espresso light darkened
   too). `--color-orange-text` stays as the non-text star colour.
