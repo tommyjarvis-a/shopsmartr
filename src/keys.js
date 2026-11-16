@@ -7,8 +7,9 @@
 // test/v024.test.mjs fails if code uses a shopsmartr:* key that isn't classified here.
 import { cleanSort } from './list.js';
 import { APP_ICON_KEY, cleanAppIcon } from './appicon.js';
-import { cleanSwaps, HOUSEHOLD_KEY, RX_SORT_KEY, RX_SWAPS_KEY, RX_STORE_KEY } from './rx.js';
-import { cleanRxSort } from './recipes.js';
+import { cleanSwaps, HOUSEHOLD_KEY, RX_SORT_KEY, RX_SWAPS_KEY, RX_STORE_KEY, RX_COOK_SORT_KEY } from './rx.js';
+import { cleanRxSort, cleanCookSort } from './recipes.js';
+import { USER_RECIPES_KEY } from './importer.js';
 
 const STORE_KEY_RE = /^[\w-]{1,40}:[\w-]{1,40}$/;
 const json = { read: (raw) => { try { return JSON.parse(raw); } catch { return undefined; } }, write: (v) => JSON.stringify(v) };
@@ -25,12 +26,14 @@ export const KEY_REGISTRY = [
   { key: 'shopsmartr:v1', cls: 'backup', section: 'list, stores, settings', what: 'shopping list, store picks, zip and distance' },
   { key: 'shopsmartr:favorites:v1', cls: 'backup', section: 'favorites', what: 'Favorites, meals and saved recipes' },
   { key: 'shopsmartr:shopStore:v1', cls: 'backup', section: 'stores.shopStore', what: 'store chosen on Shop' },
+  { key: USER_RECIPES_KEY, cls: 'backup', section: 'userRecipes', what: 'imported recipes (v0.2.6)' },
   { key: RX_SWAPS_KEY, cls: 'backup', pref: 'rxSwaps', ...json, clean: (v) => { const c = cleanSwaps(v); return Object.keys(c).length ? c : undefined; }, what: 'ingredient swaps on recipes' },
   { key: 'shopsmartr:listSort:v1', cls: 'settings', pref: 'listSort', ...json, clean: (v) => (v && typeof v === 'object' ? cleanSort(v) : undefined), what: 'List sort' },
   { key: HOUSEHOLD_KEY, cls: 'settings', pref: 'household', ...str, clean: (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 24 ? n : undefined; }, what: 'household size' },
   { key: APP_ICON_KEY, cls: 'settings', pref: 'appIcon', ...str, clean: (v) => (typeof v === 'string' && cleanAppIcon(v) === v ? v : undefined), what: 'app icon' },
   { key: RX_STORE_KEY, cls: 'settings', pref: 'rxStore', ...str, clean: (v) => (typeof v === 'string' && STORE_KEY_RE.test(v) ? v : undefined), what: 'store recipes are priced at' },
   { key: RX_SORT_KEY, cls: 'settings', pref: 'rxSort', ...json, clean: (v) => (v && typeof v === 'object' ? cleanRxSort(v) : undefined), what: 'recipe sort' },
+  { key: RX_COOK_SORT_KEY, cls: 'settings', pref: 'rxCookSort', ...json, clean: (v) => (v && typeof v === 'object' ? cleanCookSort(v) : undefined), what: 'Cook from my list sort' },
   { key: THEME_KEY, cls: 'settings', pref: 'theme', ...str, clean: (v) => (THEME_IDS.includes(v) ? v : undefined), what: 'theme' },
   { key: MODE_KEY, cls: 'settings', pref: 'mode', ...str, clean: (v) => (MODES.includes(v) ? v : undefined), what: 'Light / Dark / Auto' },
   { key: SPRITE_CACHE_KEY, cls: 'exclude', what: 'local copy of the theme\'s icon set (derived, refetched)' },

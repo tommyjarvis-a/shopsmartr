@@ -1246,6 +1246,75 @@ body:not([data-screen="list"]) .gmenu [data-list-only] { display: none; }
 .about-repo a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--color-primary-text); font-weight: var(--fw-semibold); }
 .about-live:focus-visible, .about-repo a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 
+/* ============ v0.2.6: Cook from my list + Import (design/v02-recipes/recipes.css §6 and §8, tokens only) ============ */
+.rx-choice .txt { display: grid; min-width: 0; }
+.rx-choice .rx-pill { justify-self: start; margin-top: var(--space-2); }
+.rx-rows { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+.rx-row { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: var(--space-3); align-items: start; padding: var(--space-3); border-radius: var(--radius-lg); }
+.rx-row .th { width: 88px; height: 88px; border-radius: var(--radius-md); overflow: hidden; position: relative; background: var(--color-surface-2); }
+.rx-row .th .ph { width: 100%; height: 100%; }
+.rx-row .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rx-row .th .rx-tag { left: 4px; bottom: 4px; height: 20px; padding: 0 6px; }
+.rx-row .bd { display: grid; min-width: 0; }
+.rx-row .ttl { font-weight: var(--fw-semibold); line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cov { display: flex; align-items: center; gap: var(--space-2); margin: 6px 0 4px; }
+.cov .lbl { font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-semibold); color: var(--color-primary-text); white-space: nowrap; }
+.cov .bar { flex: 1; height: 8px; background: var(--color-primary-soft); border-radius: var(--radius-pill); overflow: hidden; min-width: 40px; }
+.cov .bar i { display: block; height: 100%; width: 0; background: var(--color-primary); border-radius: inherit; }
+.rx-row .miss { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.rx-row .miss b { color: var(--color-orange-text); font-weight: var(--fw-semibold); }
+.rx-row .miss.ok b { color: var(--color-primary-text); }
+.rx-row:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.rx-import-row .ico { flex: none; }
+.rx-import-row:focus-visible, .rx-choice:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+/* Import */
+.imp-card { margin-top: var(--space-4); padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface-2); border: 1px solid var(--color-border); }
+.imp-card h2 { margin: 0; font-size: var(--fs-md, 1rem); line-height: var(--lh-md, 1.5); font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--space-2); }
+.imp-card p { margin: 0 0 var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.imp-steps { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; padding: 0; counter-reset: s; }
+.imp-steps li { counter-increment: s; background: var(--color-surface); border-radius: var(--radius-md); padding: var(--space-2); font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text); border: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.imp-steps li::before { content: counter(s); display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-primary-strong); color: var(--color-on-primary); font-weight: var(--fw-bold); margin-bottom: 6px; }
+.imp-note { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); margin: var(--space-2) 0 0; }
+.imp-field { margin-top: var(--space-5); display: grid; }
+.imp-field .label { display: block; margin-bottom: 6px; }
+.imp-row { display: flex; gap: var(--space-2); align-items: center; }
+.imp-row .input { flex: 1; min-width: 0; }
+.imp-text { width: 100%; min-height: 132px; resize: vertical; font: inherit; padding: var(--space-3) var(--space-4); line-height: var(--lh-sm); }
+.imp-or { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-5) 0 0; color: var(--color-text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.imp-or::before, .imp-or::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+.imp-ok { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-primary-text); font-size: var(--fs-sm); font-weight: var(--fw-semibold); margin: var(--space-3) 0 0; }
+.prev { margin-top: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; background: var(--color-surface); }
+.prev .top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-3); align-items: center; }
+.prev .top .ph { width: 96px; height: 72px; border-radius: var(--radius-sm); overflow: hidden; background: var(--color-surface-2); }
+.prev .top img { width: 96px; height: 72px; object-fit: cover; display: block; }
+.prev .top .input { font-weight: var(--fw-bold); }
+.prev .top .src { display: flex; align-items: center; gap: 4px; font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); margin: 4px 0 0; overflow-wrap: anywhere; }
+.prev .sec { border-top: 1px solid var(--color-border); padding: var(--space-2) var(--space-3) var(--space-3); }
+.prev .sec h3 { margin: 0 0 var(--space-1); font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-bold); display: flex; justify-content: space-between; align-items: center; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-muted); }
+.prev .rx-link { min-height: var(--tap-min); padding: 0 var(--space-2); font-weight: var(--fw-semibold); color: var(--color-primary-text); background: none; border: 0; text-transform: uppercase; letter-spacing: .04em; font-size: var(--fs-sm); }
+.prev .rx-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.pi-list { list-style: none; margin: 0; padding: 0; }
+.pi { display: flex; gap: var(--space-2); font-size: var(--fs-sm); line-height: 22px; color: var(--color-text); }
+.pi .q { min-width: 64px; flex: none; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; }
+.pi.warn { background: var(--color-sun-soft); color: var(--color-on-sun-soft); border-radius: var(--radius-sm); padding: 4px 6px; margin: 2px -6px; }
+.pi.warn .q { color: var(--color-on-sun-soft); }
+.pi.warn small { display: block; font-size: var(--fs-xs); line-height: var(--lh-xs); }
+.prev-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.prev-fields .f { display: grid; gap: 2px; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--color-surface-2); font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); }
+.prev-fields .f .input { height: 40px; min-height: 40px; padding: 0 var(--space-2); font-weight: var(--fw-semibold); color: var(--color-text); }
+.imp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-4); }
+.imp-actions .btn { min-height: 48px; justify-content: center; }
+.imp-foot { text-align: center; font-size: var(--fs-xs); margin: var(--space-2) 0 0; }
+.imp-handoff .btn { display: inline-flex; }
+.rx-imp-foot .btn { display: inline-flex; vertical-align: middle; }
+/* About › Import recipes */
+.about-import h4 { margin: var(--space-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); font-weight: var(--fw-bold); color: var(--color-text); }
+.about-import > p.faint { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); }
+.bm-desk { margin: var(--space-2) 0 0; font-size: var(--fs-sm); }
+.bm-link { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-pill); border: 1.5px dashed var(--color-border-strong); color: var(--color-primary-text); font-weight: var(--fw-semibold); text-decoration: none; }
+.bm-code { width: 100%; margin-top: var(--space-2); font-size: var(--fs-xs); font-family: ui-monospace, monospace; }
+@media (hover: none) { .bm-desk { display: none; } }
+
 /* ---------- v0.2.5 themes v2 (Designer: design/v03-themes; see spec-v2.md §2, §7, §8) ---------- */
 /* ShopSmartR v0.3: unselected filter chips + the desktop add-bar Qty/Unit/Store dropdowns get a ≥3:1
    outline from the new --color-control-border token (defined in every theme block). Dividers keep the

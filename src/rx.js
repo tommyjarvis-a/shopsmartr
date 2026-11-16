@@ -6,11 +6,15 @@ import * as C from './catalog.js';
 import * as F from './favorites.js';
 import * as L from './list.js';
 import { makeDecoder } from './pricefeed.js';
+import * as Imp from './importer.js';
+import { isStandalone, LIVE_URL } from './brand.js';
 
 export const RX_MANIFEST_URL = 'data/recipes.json';
 export const RX_SLOT = 'aes-recipes';
 export const HOUSEHOLD_KEY = 'shopsmartr:household:v1';
 export const RX_SORT_KEY = 'shopsmartr:rxSort:browse:v1';
+/** v0.2.6: Cook from my list remembers its own sort (spec §3.2: separately for Browse and Cook). */
+export const RX_COOK_SORT_KEY = 'shopsmartr:rxSort:cook:v1';
 /** v0.2.1: remembered swaps { "<ingredient key>|<store key>": sku } and the "Matched at" store. Device-only. */
 export const RX_SWAPS_KEY = 'shopsmartr:rxSwaps:v1';
 export const RX_STORE_KEY = 'shopsmartr:rxStore:v1';
@@ -32,6 +36,8 @@ export function loadHousehold(storage = globalThis.localStorage) {
 function saveHousehold(n) { try { localStorage.setItem(HOUSEHOLD_KEY, String(n)); } catch { /* device-only */ } }
 function loadRxSort() { try { return R.cleanRxSort(JSON.parse(localStorage.getItem(RX_SORT_KEY))); } catch { return R.cleanRxSort(null); } }
 function saveRxSort(s) { try { localStorage.setItem(RX_SORT_KEY, JSON.stringify(s)); } catch { /* device-only */ } }
+function loadCookSort() { try { return R.cleanCookSort(JSON.parse(localStorage.getItem(RX_COOK_SORT_KEY))); } catch { return R.cleanCookSort(null); } }
+function saveCookSort(s) { try { localStorage.setItem(RX_COOK_SORT_KEY, JSON.stringify(s)); } catch { /* device-only */ } }
 
 // ---------- tiny DOM helper ----------
 function h(tag, attrs = {}, ...kids) {
@@ -94,13 +100,23 @@ export function initRecipes(ctx) {
     view: 'landing', id: null, browse: { cat: '', q: '', quick: '', shown: PAGE }, sort: loadRxSort(),
     servings: loadHousehold(), detailServ: null, lastAdd: null, undoAt: 0, perf: {},
     swaps: loadSwaps(), matchStore: loadRxStore(), off: new Set(), open: null, sheetOpener: null,
+    // v0.2.6: imported recipes (device store, in the full backup), Cook from my list, Import
+    userRows: [], user: [], cookSort: loadCookSort(), cookShown: PAGE, cov: { sig: null, lidx: [], memo: new Map(), byId: new Map() },
+    imp: { draft: null, error: '', note: '', busy: false, fromLink: false, editing: '', more: false, link: '', text: '' },
   };
+  const allRecipes = () => (rx.data ? (rx.user.length ? [...rx.data.recipes, ...rx.user] : rx.data.recipes) : rx.user);
+  function reindex() { rx.byId = new Map(allRecipes().map((r) => [r.id, r])); rx.cov.sig = null; rx.costMemo.clear(); }
+  function loadUser() {
+    rx.userRows = Imp.loadUserRecipes();
+    try { rx.user = Imp.prepareUserRecipes(rx.userRows); } catch { rx.user = []; }
+    reindex();
+  }
   globalThis.__shopsmartrRx = rx.perf;
 
   // ----- prices / matching -----
   function priceCtx() {
     const feed = ctx.getFeed();
-    if (!feed || !rx.data) return null;
+    if (!feed || (!rx.data && !rx.user.length)) return null;
     if (rx.miFeed !== feed) {
       const t0 = performance.now();
       rx.mi = R.buildMatchIndex(feed.catalog, feed.index); rx.miFeed = feed; rx.cands = new Map(); rx.costMemo.clear(); rx.pricing = null;
@@ -112,6 +128,8 @@ export function initRecipes(ctx) {
     const key = st.key;
     const done = rx.cands.get(key);
     if (!done) { startPricing(key, st.idx); return { st, cands: null }; }
+    // v0.2.6: an imported recipe saved after matching ran gets its few ingredients matched now
+    for (const r of rx.user) for (const ing of r.ing) if (!ing.pantry && ing.k && !done.has(ing.k)) done.set(ing.k, R.matchRows(rx.mi, ing.base, st.idx));
     return { st, cands: done };
   }
   /** Precomputes ingredient matches at one store in small slices so the page never freezes. */
@@ -120,7 +138,7 @@ export function initRecipes(ctx) {
     rx.pricing = key;
     const keys = [];
     const seen = new Set();
-    for (const r of rx.data.recipes) for (const ing of r.ing) if (!ing.pantry && ing.k && !seen.has(ing.k)) { seen.add(ing.k); keys.push([ing.k, ing.base]); }
+    for (const r of allRecipes()) for (const ing of r.ing) if (!ing.pantry && ing.k && !seen.has(ing.k)) { seen.add(ing.k); keys.push([ing.k, ing.base]); }
     const cands = new Map();
     const t0 = performance.now();
     let i = 0;
@@ -143,6 +161,17 @@ export function initRecipes(ctx) {
     let m = rx.costMemo.get(mk);
     if (!m) { m = new Map(); rx.costMemo.set(mk, m); }
     if (!m.has(r.id)) m.set(r.id, R.recipeCost(r, { mi: rx.mi, cands: pc.cands, factor: R.scaleFactor(r, servings), swapOf: swapOfAt(pc.st.key) }));
+    return m.get(r.id);
+  }
+  /** v0.2.6 Cook: the low-to-high range for just the lines that aren't on the list yet. */
+  function buyCostOf(r, servings = rx.servings) {
+    const pc = priceCtx();
+    const c = covOf(r);
+    if (!pc?.cands || !c.missing.length) return null;
+    const mk = `buy|${pc.st.key}|${servings}|${rx.swapVer ?? 0}|${rx.cov.sig}`;
+    let m = rx.costMemo.get(mk);
+    if (!m) { for (const k of rx.costMemo.keys()) if (k.startsWith('buy|')) rx.costMemo.delete(k); m = new Map(); rx.costMemo.set(mk, m); }
+    if (!m.has(r.id)) m.set(r.id, R.recipeCost(r, { mi: rx.mi, cands: pc.cands, factor: R.scaleFactor(r, servings), swapOf: swapOfAt(pc.st.key), only: new Set(c.missing) }));
     return m.get(r.id);
   }
   const swapOfAt = (store) => (k) => rx.swaps[R.swapKey(k, store)] ?? null;
@@ -176,7 +205,7 @@ export function initRecipes(ctx) {
   }
   const decode = (env, key) => rx.decoder(env, key);
   function accept(res) {
-    rx.data = res.recipes; rx.byId = new Map(res.recipes.recipes.map((r) => [r.id, r]));
+    rx.data = res.recipes; reindex();
     rx.status = 'ready'; Object.assign(rx.perf, res.ms ?? {}, { where: res.where, recipes: res.recipes.count });
     render(); ctx.onChange();
   }
@@ -199,10 +228,21 @@ export function initRecipes(ctx) {
 
   // ----- navigation -----
   function show(sub) {
-    const [view, id] = String(sub || '').split('/');
+    const parts = String(sub || '').split('/');
+    const [view, id] = parts;
     const prev = `${rx.view}/${rx.id}`;
-    rx.view = view === 'browse' ? 'browse' : view === 'r' && id ? 'detail' : 'landing';
+    // v0.2.6: "#recipes/import/<payload>" from the bookmarklet or Shortcut. The payload is taken off
+    // the address bar at once (history.replaceState), before it is read, so it isn't kept in history,
+    // bookmarks or a reload, then decoded and checked on this device.
+    if (view === 'import' && parts.length > 1) {
+      const payload = parts.slice(1).join('/');
+      try { history.replaceState(history.state, '', `${location.pathname}${location.search}#recipes/import`); } catch { /* sandboxed */ }
+      if (payload) readPayload(payload, true);
+    }
+    rx.view = ['browse', 'cook', 'import'].includes(view) ? view : view === 'r' && id ? 'detail' : 'landing';
     rx.id = rx.view === 'detail' ? decodeURIComponent(id) : null;
+    if (rx.view === 'cook' && prev !== 'cook/null') rx.cookShown = PAGE;
+    if (rx.view === 'import' && prev !== 'import/null' && !(parts.length > 1 && parts[1]) && !rx.imp.busy) resetImport();
     if (rx.view === 'detail' && prev !== `detail/${rx.id}`) { rx.detailServ = rx.servings; rx.lastAdd = null; rx.off.clear(); rx.open = null; }
     render();
     if (prev !== `${rx.view}/${rx.id}`) { window.scrollTo(0, 0); root.querySelector('h1')?.focus({ preventScroll: true }); }
@@ -224,7 +264,7 @@ export function initRecipes(ctx) {
       ctx.commitFavs(F.unsaveRecipe(favs, r.id));
       ctx.toast(`Removed ${r.title} from Favorites`, () => { const f = ctx.getFavs(); if (!F.isRecipeSaved(f, r.id)) ctx.commitFavs({ ...f, recipes: [row, ...f.recipes] }); });
     } else {
-      ctx.commitFavs(F.saveRecipe(favs, { id: r.id, title: r.title, image: r.image }));
+      ctx.commitFavs(F.saveRecipe(favs, { id: r.id, title: r.title, image: r.image, source: r.imported ? 'import' : 'wegmans' }));
       ctx.toast(`Saved ${r.title} to Favorites › Recipes`);
     }
   }
@@ -244,12 +284,18 @@ export function initRecipes(ctx) {
     const t = R.timeText(r.time);
     return h('li', { class: `rx-card${small ? ' sm' : ''}` },
       h('a', { class: 'rx-card-link', href: `#recipes/r/${encodeURIComponent(r.id)}` },
-        photo(r.image),
+        withTag(photo(r.image), r),
         h('span', { class: 'bd' },
           h('span', { class: 'ttl', text: r.title }),
           small ? null : h('span', { class: 'rx-meta' }, t ? h('span', { class: 'm' }, icon('i-clock', 'icon icon-14'), t) : null, ratingSlot(r)),
           small ? null : costSlot(costOf(r)))),
       rxStar(r));
+  }
+
+  /** "Imported" pill on the photo of a recipe the user imported (spec §3.3). */
+  function withTag(ph, r) {
+    if (r.imported || r.source === 'import') ph.append(h('span', { class: 'rx-tag' }, icon('i-link', 'icon icon-14'), 'Imported'));
+    return ph;
   }
 
   // ----- views -----
@@ -292,18 +338,38 @@ export function initRecipes(ctx) {
     ];
     const sb = stateBox();
     if (sb) kids.push(sb);
+    const choices = [];
+    if (rx.status === 'ready' || rx.user.length) {
+      const near = nearCount();
+      choices.push(h('a', { class: 'rx-choice', href: '#recipes/cook' },
+        h('span', { class: 'ico', 'aria-hidden': 'true' }, icon('i-list', 'icon')),
+        h('span', { class: 'txt' }, h('span', { class: 'ttl', text: 'Cook from my list' }),
+          h('span', { class: 'd', text: 'Recipes that use what\'s already on your list' }),
+          near ? h('span', { class: 'rx-pill mt-1', text: `${fmt(near)} ${near === 1 ? 'is' : 'are'} 1–2 items away` }) : null),
+        h('span', { class: 'go' }, icon('i-chev-r', 'icon'))));
+    }
     if (rx.status === 'ready' || rx.status === 'locked') {
-      kids.push(h('div', { class: 'rx-choices' },
+      choices.push(
         h('a', { class: 'rx-choice photo', href: '#recipes/browse' },
           h('span', { class: 'strip', 'aria-hidden': 'true' }, ...[0, 1, 2].map((i) => (pics[i] ? photo(pics[i].image, { eager: true }) : h('span', { class: 'ph' })))),
           h('span', { class: 'txt' }, h('span', { class: 'ttl', text: 'Browse recipes' }),
             h('span', { class: 'd', text: `${fmt(count())} Wegmans recipes in ${nCats()} categories` })),
-          h('span', { class: 'go' }, icon('i-chev-r', 'icon')))));
+          h('span', { class: 'go' }, icon('i-chev-r', 'icon'))));
     }
+    if (choices.length) kids.push(h('div', { class: 'rx-choices' }, ...choices));
     if (saved.length) {
       kids.push(h('div', { class: 'rx-sec-h' }, h('h2', { text: 'Saved recipes' }), h('a', { class: 'rx-link', href: '#favorites', onclick: () => ctx.openFavRecipes(), text: `See all ${saved.length} ›` })));
       kids.push(h('ul', { class: 'rx-scroller', 'aria-label': 'Saved recipes' }, ...saved.slice(0, 12).map((s) => card(rx.byId.get(s.id) ?? { ...s, ing: [], time: null }, { small: true }))));
     }
+    if (rx.user.length) {
+      const mine = [...rx.user].sort((a, b) => (rowOf(b.id)?.importedAt ?? '').localeCompare(rowOf(a.id)?.importedAt ?? ''));
+      kids.push(h('div', { class: 'rx-sec-h' }, h('h2', { text: 'My recipes' }), h('span', { class: 'faint', text: `${mine.length} imported` })));
+      kids.push(h('ul', { class: 'rx-scroller', 'aria-label': 'My recipes' }, ...mine.slice(0, 24).map((r) => card(r, { small: true }))));
+    }
+    kids.push(h('a', { class: 'rx-import-row', href: '#recipes/import' },
+      h('span', { class: 'ico', 'aria-hidden': 'true' }, icon('i-link', 'icon icon-20')),
+      h('span', { class: 't' }, 'Import a recipe', h('small', { text: 'From a recipe site, or paste the recipe' })),
+      icon('i-chev-r', 'icon icon-20')));
     kids.push(h('p', { class: 'faint rx-foot' }, `Servings start at your household size (${rx.servings}). `,
       h('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => ctx.openHousehold(), text: 'Change' })));
     return kids;
@@ -389,22 +455,269 @@ export function initRecipes(ctx) {
     rx.perf.browseRender = performance.now() - t0;
   }
 
+
+  // ----- v0.2.6: Cook from my list -----
+  /** Coverage of a recipe by the current list (memoized per list: each distinct ingredient is checked once). */
+  function covOf(r) {
+    const items = ctx.getState().items;
+    const sig = items.map((i) => i.name).join('\u0001');
+    if (rx.cov.sig !== sig) rx.cov = { sig, lidx: R.listIndex(items), memo: new Map(), byId: new Map() };
+    let c = rx.cov.byId.get(r.id);
+    if (!c) { c = R.coverageDetail(r, rx.cov.lidx, rx.cov.memo); rx.cov.byId.set(r.id, c); }
+    return c;
+  }
+  const cookable = () => allRecipes().filter((r) => R.usesList(covOf(r)));
+  /** Landing pill: recipes that use the list and are only 1-2 items short. */
+  function nearCount() {
+    if (ctx.getState().items.length < 3) return 0;
+    let n = 0;
+    for (const r of allRecipes()) { const c = covOf(r); if (R.usesList(c) && c.missing.length >= 1 && c.missing.length <= 2) n += 1; }
+    return n;
+  }
+  function cookRow(r) {
+    const c = covOf(r);
+    const pct = c.total ? Math.round(c.share * 100) : 0;
+    const bar = h('span', { class: 'bar', role: 'img', 'aria-label': `${pct}% of the ingredients` }, h('i'));
+    bar.firstChild.style.width = `${pct}%`;
+    const t = R.timeText(r.time);
+    const miss = c.missing.length;
+    return h('li', {},
+      h('a', { class: 'rx-row', href: `#recipes/r/${encodeURIComponent(r.id)}` },
+        h('span', { class: 'th' }, withTag(photo(r.image), r)),
+        h('span', { class: 'bd' },
+          h('span', { class: 'ttl', text: r.title }),
+          h('span', { class: 'cov' }, h('span', { class: 'lbl', text: `${c.have} of ${c.total} on your list` }), bar),
+          miss ? h('span', { class: `miss${miss === 1 ? ' ok' : ''}` }, h('b', { text: `Missing ${miss}:` }), ` ${R.missingNames(c.missing)}`) : h('span', { class: 'miss ok' }, h('b', { text: 'Everything\'s on your list' })),
+          h('span', { class: 'rx-meta' }, t ? h('span', { class: 'm' }, icon('i-clock', 'icon icon-14'), t) : null, ratingSlot(r), costSlot(buyCostOf(r))))));
+  }
+  function cook() {
+    const items = ctx.getState().items;
+    const kids = [h('div', { class: 'rx-top' }, back('#recipes'), h('div', { class: 't' }, h('h1', { tabindex: '-1', text: 'Cook from my list' }),
+      h('div', { class: 's', text: `Using the ${fmt(items.length)} item${items.length === 1 ? '' : 's'} on your list` })))];
+    const sb = rx.status === 'ready' ? null : stateBox();
+    if (sb && !rx.user.length) { kids.push(sb); return kids; }
+    if (sb) kids.push(sb);
+    if (items.length < 3) {
+      kids.push(h('div', { class: 'empty rx-state' }, h('p', { text: 'Add a few items to your list and we\'ll find recipes that use them.' }),
+        h('a', { class: 'btn btn-secondary mt-2', href: '#recipes/browse', text: 'Browse recipes' })));
+      return kids;
+    }
+    const t0 = performance.now();
+    const list = cookable();
+    const ps = pricesState();
+    const sort = { ...rx.cookSort };
+    if (sort.by === 'price' && ps !== 'ready') sort.by = 'coverage';
+    const sorted = R.sortCook(list, sort, { covOf, costOf: (r) => (covOf(r).missing.length ? buyCostOf(r) : { low: 0, high: 0 }) });
+    rx.perf.cookRank = performance.now() - t0;
+    const shownSort = sort.by === 'rating' && !list.some(R.hasRating) ? { ...sort, by: 'coverage' } : sort;
+    kids.push(h('div', { class: 'rx-toolbar' },
+      h('span', { class: 'cnt', role: 'status', 'aria-live': 'polite', text: `${fmt(list.length)} recipe${list.length === 1 ? ' uses' : 's use'} your list${ps === 'pricing' ? ' · pricing…' : ''}` }),
+      list.length ? sortControl(shownSort, list.some(R.hasRating), ps === 'ready') : null));
+    if (!list.length) {
+      kids.push(h('div', { class: 'empty' }, h('p', { text: 'No recipe uses 3 or more of your items yet. Add a few more, or browse.' }), h('a', { class: 'btn btn-secondary mt-2', href: '#recipes/browse', text: 'Browse recipes' })));
+      return kids;
+    }
+    kids.push(h('ul', { class: 'rx-rows', 'aria-label': 'Recipes that use your list' }, ...sorted.slice(0, rx.cookShown).map(cookRow)));
+    if (sorted.length > rx.cookShown) {
+      const left = sorted.length - rx.cookShown;
+      kids.push(h('button', { type: 'button', class: 'btn btn-secondary btn-block show-more', onclick: () => { rx.cookShown += PAGE; render({ keepScroll: true }); root.querySelectorAll('.rx-rows .rx-row')[rx.cookShown - PAGE]?.focus({ preventScroll: true }); }, text: `Show more (${fmt(left)} more)` }));
+    }
+    kids.push(h('p', { class: 'faint rx-foot', text: `Pantry basics (salt, pepper, water) don't count. ${ps === 'ready' ? `Costs are whole packs at ${priceCtx()?.st?.label ?? 'your store'} for ${rx.servings} serving${rx.servings === 1 ? '' : 's'}, to buy everything.` : ''}`.trim() }));
+    return kids;
+  }
+
+  // ----- v0.2.6: Import (paste, bookmarklet / Shortcut hand-off) -----
+  const rowOf = (id) => rx.userRows.find((r) => r.id === id);
+  function resetImport() { rx.imp = { draft: null, error: '', note: '', busy: false, fromLink: false, editing: '', more: false, link: '', text: '' }; }
+  async function readPayload(payload, fromLink) {
+    resetImport();
+    rx.imp.busy = true; rx.imp.fromLink = fromLink;
+    try { rx.imp.draft = await Imp.decodePayload(payload); rx.imp.came = 'link'; } catch (e) { rx.imp.error = e instanceof Imp.ImportError ? e.message : 'Couldn\'t read that recipe. Paste the text instead.'; }
+    rx.imp.busy = false;
+    if (rx.view === 'import') { render(); focusImport(); }
+  }
+  function focusImport() {
+    const t = rx.imp.draft ? root.querySelector('#rx-imp-ok') : rx.imp.error ? root.querySelector('#rx-imp-text') : null;
+    (t ?? root.querySelector('h1'))?.focus({ preventScroll: !rx.imp.draft });
+  }
+  function importView() {
+    const kids = [h('div', { class: 'rx-top' }, back('#recipes'), h('div', { class: 't' }, h('h1', { tabindex: '-1', text: 'Import a recipe' })))];
+    if (rx.imp.busy) { kids.push(h('p', { class: 'muted rx-state', role: 'status', text: 'Reading the recipe…' })); return kids; }
+    if (rx.imp.draft) return kids.concat(previewView());
+    kids.push(h('section', { class: 'imp-card', 'aria-labelledby': 'rx-imp-share-h' },
+      h('h2', { id: 'rx-imp-share-h' }, icon('i-share', 'icon icon-20'), 'From any recipe site'),
+      h('ol', { class: 'imp-steps' }, h('li', { text: 'Open the recipe in Safari' }), h('li', { text: 'Tap the Happy Wife bookmark, or Share › Happy Wife Import' }), h('li', { text: 'Check it and tap Save' })),
+      h('p', { class: 'imp-note' }, 'Set it up once from ⋮ › About. The recipe goes straight from the page to this app; nothing is sent anywhere. ',
+        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: (e) => ctx.openAbout(e.currentTarget), text: 'How to set it up' }))));
+    const status = h('p', { class: 'status', id: 'rx-imp-status', role: 'status', 'aria-live': 'polite' });
+    if (rx.imp.error) { status.textContent = rx.imp.error; status.dataset.kind = 'error'; }
+    else if (rx.imp.note) status.textContent = rx.imp.note;
+    const link = h('input', { class: 'input', id: 'rx-imp-link', type: 'url', inputmode: 'url', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', maxlength: String(Imp.MAX_FRAGMENT + 200), placeholder: 'https://…', value: rx.imp.link });
+    link.addEventListener('input', () => { rx.imp.link = link.value; });
+    const paste = navigator.clipboard?.readText ? h('button', { type: 'button', class: 'btn btn-secondary btn-sm', onclick: async () => { try { link.value = (await navigator.clipboard.readText()).slice(0, Imp.MAX_FRAGMENT + 200); rx.imp.link = link.value; link.focus(); } catch { link.focus(); } }, text: 'Paste' }) : null;
+    const linkForm = h('form', { class: 'imp-field', novalidate: true, onsubmit: (e) => { e.preventDefault(); importLink(link.value); } },
+      h('label', { class: 'label', for: 'rx-imp-link', text: 'Paste a link' }),
+      h('div', { class: 'imp-row' }, link, paste),
+      h('button', { type: 'submit', class: 'btn btn-primary btn-block mt-2', id: 'rx-imp-link-btn', text: 'Import from link' }));
+    const ta = h('textarea', { class: 'input imp-text', id: 'rx-imp-text', rows: '6', maxlength: String(Imp.CAPS.text), placeholder: 'Paste the title, ingredients and steps', 'aria-describedby': 'rx-imp-status' });
+    ta.value = rx.imp.text;
+    ta.addEventListener('input', () => { rx.imp.text = ta.value; });
+    const textForm = h('form', { class: 'imp-field', novalidate: true, onsubmit: (e) => { e.preventDefault(); importText(ta.value); } },
+      h('label', { class: 'label', for: 'rx-imp-text', text: 'Paste the recipe text' }), ta,
+      h('button', { type: 'submit', class: 'btn btn-secondary btn-block mt-2', id: 'rx-imp-text-btn', text: 'Read pasted text' }));
+    kids.push(linkForm, h('p', { class: 'imp-or', text: 'or' }), textForm, status);
+    return kids;
+  }
+  function importLink(value) {
+    const v = String(value ?? '').trim();
+    rx.imp.error = ''; rx.imp.note = '';
+    const payload = Imp.payloadFromLink(v);
+    if (payload) { rx.imp.link = ''; readPayload(payload, false); render(); return; }
+    if (Imp.cleanUrl(v)) {
+      // No proxy and no fetch: the app can't read another site. Keep the link as the source for pasted text.
+      rx.imp.note = `This app doesn't open other websites, so nothing leaves your phone. On that page, tap the Happy Wife bookmark (or Share › Happy Wife Import). Or copy the recipe's text and paste it below; we'll keep ${Imp.sourceDomain(v)} as the source.`;
+      render(); root.querySelector('#rx-imp-text')?.focus();
+      return;
+    }
+    rx.imp.error = v ? 'That isn\'t a web link. Paste a link that starts with https://, or paste the recipe text below.' : 'Paste a link first.';
+    render(); root.querySelector('#rx-imp-link')?.focus();
+  }
+  function importText(text) {
+    rx.imp.error = ''; rx.imp.note = '';
+    const payload = Imp.payloadFromLink(text);
+    if (payload) { readPayload(payload, false); render(); return; }
+    let d = null;
+    try { d = Imp.parseRecipeText(text, Imp.cleanUrl(rx.imp.link.trim())); } catch { d = null; }
+    if (!d || !d.lines.length) {
+      rx.imp.error = String(text ?? '').trim() ? 'Couldn\'t find ingredients in that text. Put each ingredient on its own line, under an "Ingredients" heading.' : 'Paste the recipe text first.';
+      render(); root.querySelector('#rx-imp-text')?.focus();
+      return;
+    }
+    rx.imp.draft = d; rx.imp.came = 'paste';
+    render(); focusImport();
+  }
+  function previewView() {
+    const d = rx.imp.draft;
+    const pv = Imp.previewOf(d);
+    const kids = [];
+    kids.push(h('p', { class: 'imp-ok', id: 'rx-imp-ok', role: 'status', tabindex: '-1' }, icon('i-check', 'icon icon-18'), `Found ${pv.ings.length} ingredient${pv.ings.length === 1 ? '' : 's'} and ${d.steps.length} step${d.steps.length === 1 ? '' : 's'}`));
+    const dom = Imp.sourceDomain(d.url);
+    const title = h('input', { class: 'input', id: 'rx-imp-title', maxlength: String(Imp.CAPS.title), value: d.title, autocomplete: 'off' });
+    title.addEventListener('input', () => { d.title = title.value.slice(0, Imp.CAPS.title); });
+    const serv = h('input', { class: 'input', id: 'rx-imp-serv', type: 'number', inputmode: 'numeric', min: '1', max: '100', value: d.servings ?? '', placeholder: String(rx.servings) });
+    serv.addEventListener('input', () => { const n = Number(serv.value); d.servings = Number.isInteger(n) && n >= 1 && n <= 100 ? n : null; });
+    const tm = R.recipeTime({ times: d.times });
+    const time = h('input', { class: 'input', id: 'rx-imp-time', type: 'number', inputmode: 'numeric', min: '0', max: '6000', value: tm ?? '', placeholder: 'min' });
+    time.addEventListener('input', () => { const n = Number(time.value); d.times = { prep: null, cook: null, total: time.value !== '' && Number.isInteger(n) && n >= 0 && n < 100000 ? n : null }; });
+    const top = h('div', { class: 'top' }, photo(d.image, { eager: true }),
+      h('div', {}, h('label', { class: 'sr-only', for: 'rx-imp-title', text: 'Recipe name' }), title,
+        dom ? h('p', { class: 'src' }, icon('i-link', 'icon icon-14'), dom) : h('p', { class: 'src', text: 'Pasted text' })));
+    const fields = h('div', { class: 'prev-fields' },
+      h('label', { class: 'f', for: 'rx-imp-serv' }, 'Serves', serv), h('label', { class: 'f', for: 'rx-imp-time' }, 'Time (min)', time));
+    const editBtn = (which, label) => h('button', { type: 'button', class: 'rx-link', id: `rx-imp-${which}-btn`, 'aria-expanded': String(rx.imp.editing === which), onclick: () => toggleEdit(which), text: rx.imp.editing === which ? 'Done' : label });
+    let ingBody;
+    if (rx.imp.editing === 'ing') {
+      const ta = h('textarea', { class: 'input imp-text', id: 'rx-imp-edit-ing', rows: String(Math.min(14, d.lines.length + 2)), 'aria-label': 'Ingredients, one per line', maxlength: String(Imp.CAPS.lines * Imp.CAPS.line) });
+      ta.value = d.lines.join('\n');
+      ta.addEventListener('input', () => { d.lines = Imp.sanitizeDraft({ lines: ta.value.split('\n') }).lines; });
+      ingBody = [h('p', { class: 'faint', text: 'One ingredient per line, amount first.' }), ta];
+    } else {
+      const max = rx.imp.more ? pv.ings.length : 8;
+      ingBody = [h('ul', { class: 'pi-list' }, ...pv.ings.slice(0, max).map((ing) => {
+        const amt = R.amountText(ing);
+        const nm = [ing.base, ing.prep].filter(Boolean).join(', ');
+        if (ing.qty == null && !/\bto taste\b/i.test(ing.text)) return h('li', { class: 'pi warn' }, h('span', { class: 'q' }, icon('i-info', 'icon icon-16')), h('span', {}, ing.text, h('small', { text: 'No amount found. It\'s added as written.' })));
+        return h('li', { class: 'pi' }, h('span', { class: 'q', text: amt }), h('span', { text: amt ? nm : ing.text }));
+      }))];
+      if (pv.ings.length > max) ingBody.push(h('button', { type: 'button', class: 'rx-link', onclick: () => { rx.imp.more = true; render({ keepScroll: true }); }, text: `+ ${pv.ings.length - max} more` }));
+    }
+    let stepBody = [];
+    if (rx.imp.editing === 'steps') {
+      const ta = h('textarea', { class: 'input imp-text', id: 'rx-imp-edit-steps', rows: '8', 'aria-label': 'Steps, one per line', maxlength: String(Imp.CAPS.stepsTotal) });
+      ta.value = d.steps.join('\n');
+      ta.addEventListener('input', () => { d.steps = Imp.sanitizeDraft({ steps: ta.value.split('\n') }).steps; });
+      stepBody = [ta];
+    } else if (d.steps.length) stepBody = [h('p', { class: 'faint', text: d.steps[0].length > 120 ? `${d.steps[0].slice(0, 117)}…` : d.steps[0] })];
+    kids.push(h('div', { class: 'prev' }, top, h('div', { class: 'sec' }, fields),
+      h('section', { class: 'sec', 'aria-labelledby': 'rx-imp-ing-h' }, h('h3', {}, h('span', { id: 'rx-imp-ing-h', text: `Ingredients · ${pv.ings.length}` }), editBtn('ing', 'Edit')), ...ingBody),
+      h('section', { class: 'sec', 'aria-labelledby': 'rx-imp-steps-h' }, h('h3', {}, h('span', { id: 'rx-imp-steps-h', text: `Steps · ${d.steps.length}` }), editBtn('steps', d.steps.length ? 'Edit' : 'Add')), ...stepBody)));
+    const status = h('p', { class: 'status', id: 'rx-imp-status', role: 'status', 'aria-live': 'polite' });
+    if (rx.imp.error) { status.textContent = rx.imp.error; status.dataset.kind = 'error'; }
+    kids.push(h('div', { class: 'imp-actions' },
+      h('button', { type: 'button', class: 'btn btn-secondary', id: 'rx-imp-cancel', onclick: () => { resetImport(); render(); root.querySelector('h1')?.focus(); }, text: 'Cancel' }),
+      h('button', { type: 'button', class: 'btn btn-primary', id: 'rx-imp-save', onclick: saveImport }, icon('i-star-fill', 'icon icon-20'), 'Save recipe')),
+    h('p', { class: 'faint imp-foot', text: 'Saves to Favorites › Recipes and My recipes, on this device and in your backup.' }), status);
+    if (!isStandalone() && rx.imp.came === 'link') {
+      kids.push(h('div', { class: 'imp-card imp-handoff' }, h('p', { text: 'Using the home-screen app? It keeps its own recipes. Copy this recipe, open the app, then Recipes › Import a recipe › Paste a link.' }),
+        h('button', { type: 'button', class: 'btn btn-secondary btn-sm', id: 'rx-imp-copy', onclick: copyHandoff }, icon('i-copy', 'icon icon-18'), 'Copy for the home-screen app')));
+    }
+    return kids;
+  }
+  function toggleEdit(which) {
+    rx.imp.editing = rx.imp.editing === which ? '' : which;
+    render({ keepScroll: true });
+    root.querySelector(rx.imp.editing ? `#rx-imp-edit-${which}` : `#rx-imp-${which}-btn`)?.focus({ preventScroll: true });
+  }
+  async function copyHandoff() {
+    const btn = root.querySelector('#rx-imp-copy');
+    try {
+      const link = `${LIVE_URL}#${Imp.FRAGMENT_PREFIX}${await Imp.encodePayload(rx.imp.draft)}`;
+      await navigator.clipboard.writeText(link);
+      ctx.toast('Copied. Paste it in Import in the home-screen app.');
+    } catch { ctx.toast('Couldn\'t copy. Save it here, or paste the recipe text in the home-screen app.'); }
+    btn?.focus();
+  }
+  function saveImport() {
+    const d = rx.imp.draft;
+    if (!d) return;
+    if (rx.userRows.length >= Imp.CAPS.recipes) { rx.imp.error = `You have ${Imp.CAPS.recipes} imported recipes, the most this app keeps. Delete one first.`; render({ keepScroll: true }); return; }
+    let row;
+    try { row = Imp.makeUserRecipe(d); } catch { rx.imp.error = 'There are no ingredients to save. Tap Edit to add some.'; render({ keepScroll: true }); return; }
+    const rows = [row, ...rx.userRows];
+    if (!Imp.saveUserRecipes(rows)) { rx.imp.error = 'Couldn\'t save: this device\'s storage is full. Back up, then delete something you don\'t need.'; render({ keepScroll: true }); return; }
+    loadUser();
+    try { ctx.commitFavs(F.saveRecipe(ctx.getFavs(), { id: row.id, title: row.title, image: row.image || null, source: 'import' })); } catch { /* still in My recipes */ }
+    resetImport();
+    ctx.toast(`Saved ${row.title} to Favorites › Recipes`);
+    location.hash = `#recipes/r/${encodeURIComponent(row.id)}`;
+  }
+  function deleteImported(r) {
+    const row = rowOf(r.id);
+    if (!row) return;
+    const favs = ctx.getFavs();
+    const favRow = (favs.recipes ?? []).find((x) => x.id === r.id);
+    if (!Imp.saveUserRecipes(rx.userRows.filter((x) => x.id !== r.id))) { ctx.toast('Couldn\'t delete it. Try again.'); return; }
+    loadUser();
+    if (favRow) ctx.commitFavs(F.unsaveRecipe(favs, r.id));
+    location.hash = '#recipes';
+    ctx.toast(`Deleted ${r.title}`, () => {
+      if (!rowOf(row.id)) { Imp.saveUserRecipes([row, ...rx.userRows]); loadUser(); }
+      const f = ctx.getFavs(); if (favRow && !F.isRecipeSaved(f, row.id)) ctx.commitFavs({ ...f, recipes: [favRow, ...f.recipes] });
+      render({ keepScroll: true });
+    }, 8000);
+  }
+
   // ----- sort (mirrors the v0.1.5 List sort: chip + menu on phones, segmented control on desktop) -----
   const sortMenu = document.getElementById('rx-sort-menu');
-  function spoken(s) { return s.by === 'price' ? `Price, ${s.dir === 'desc' ? 'high to low' : 'low to high'}` : R.RX_SORT_LABEL[s.by]; }
-  function setSort(next) { rx.sort = R.cleanRxSort(next); saveRxSort(rx.sort); renderResults(); }
+  function spoken(s) { return s.by === 'price' ? `Price, ${s.dir === 'desc' ? 'high to low' : 'low to high'}` : R.COOK_SORT_LABEL[s.by]; }
+  /** v0.2.6: the same chip + menu (phones) and segmented control (desktop) serve Browse and Cook; each keeps its own sort. */
+  const curSort = () => (rx.view === 'cook' ? rx.cookSort : rx.sort);
+  function setSort(next) {
+    if (rx.view === 'cook') { rx.cookSort = R.cleanCookSort(next); saveCookSort(rx.cookSort); rx.cookShown = PAGE; render({ keepScroll: true }); return; }
+    rx.sort = R.cleanRxSort(next); saveRxSort(rx.sort); renderResults();
+  }
   function sortControl(sort, hasRatings, pricesOn) {
-    const opts = R.RX_SORTS.filter((k) => (k !== 'rating' || hasRatings) && (k !== 'price' || pricesOn));
+    const opts = (rx.view === 'cook' ? R.COOK_SORTS : R.RX_SORTS).filter((k) => (k !== 'rating' || hasRatings) && (k !== 'price' || pricesOn));
     const btn = h('button', { type: 'button', class: 'sort-btn mob-only', id: 'rx-sort-btn', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-controls': 'rx-sort-menu', 'aria-label': `Sort recipes: ${spoken(sort)}` },
-      icon('i-sort', 'icon icon-18 ico'), h('span', {}, h('span', { class: 'k', text: 'Sort:' }), ` ${R.RX_SORT_LABEL[sort.by]}${sort.by === 'price' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}`), icon('i-chev'));
+      icon('i-sort', 'icon icon-18 ico'), h('span', {}, h('span', { class: 'k', text: 'Sort:' }), ` ${R.COOK_SORT_LABEL[sort.by]}${sort.by === 'price' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}`), icon('i-chev'));
     btn.addEventListener('click', (e) => { e.stopPropagation(); if (sortMenu.hidden) openSortMenu(btn, sort, opts); else closeSortMenu(true); });
     const seg = h('div', { class: 'sort-seg desk-only', role: 'radiogroup', 'aria-label': 'Sort recipes' },
-      ...opts.map((k) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(sort.by === k), tabindex: sort.by === k ? '0' : '-1', onclick: () => { if (k === 'price' && sort.by === 'price') setSort({ by: 'price', dir: sort.dir === 'desc' ? 'asc' : 'desc' }); else setSort({ by: k, dir: rx.sort.dir }); root.querySelector('.sort-seg [aria-checked="true"]')?.focus(); } }, k === 'rating' ? '★ Rating' : R.RX_SORT_LABEL[k])));
+      ...opts.map((k) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(sort.by === k), tabindex: sort.by === k ? '0' : '-1', onclick: () => { if (k === 'price' && sort.by === 'price') setSort({ by: 'price', dir: sort.dir === 'desc' ? 'asc' : 'desc' }); else setSort({ by: k, dir: curSort().dir }); root.querySelector('.sort-seg [aria-checked="true"]')?.focus(); } }, k === 'rating' ? '★ Rating' : R.COOK_SORT_LABEL[k])));
     seg.addEventListener('keydown', (e) => {
       if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
       e.preventDefault();
       const i = opts.indexOf(sort.by); const k = opts[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length];
-      setSort({ by: k, dir: rx.sort.dir }); root.querySelector('.sort-seg [aria-checked="true"]')?.focus();
+      setSort({ by: k, dir: curSort().dir }); root.querySelector('.sort-seg [aria-checked="true"]')?.focus();
     });
     const dir = sort.by === 'price' ? h('button', { type: 'button', class: 'dir-btn desk-only', 'aria-label': `Price order: ${sort.dir === 'desc' ? 'high to low' : 'low to high'}. Activate to reverse.`, onclick: () => { setSort({ by: 'price', dir: sort.dir === 'desc' ? 'asc' : 'desc' }); root.querySelector('.dir-btn')?.focus(); } },
       icon(sort.dir === 'desc' ? 'i-down' : 'i-up', 'icon icon-16'), h('span', { text: sort.dir === 'desc' ? 'High to low' : 'Low to high' })) : null;
@@ -431,12 +744,12 @@ export function initRecipes(ctx) {
   sortMenu.addEventListener('click', (e) => {
     e.stopPropagation();
     const d = e.target.closest('[data-rx-dir]');
-    if (d) { setSort({ by: 'price', dir: d.dataset.rxDir }); openSortMenu(root.querySelector('#rx-sort-btn'), rx.sort, [...sortMenu.querySelectorAll('[data-rx-sort]:not([hidden])')].map((x) => x.dataset.rxSort)); sortMenu.querySelector(`[data-rx-dir="${rx.sort.dir}"]`)?.focus(); return; }
+    if (d) { setSort({ by: 'price', dir: d.dataset.rxDir }); openSortMenu(root.querySelector('#rx-sort-btn'), curSort(), [...sortMenu.querySelectorAll('[data-rx-sort]:not([hidden])')].map((x) => x.dataset.rxSort)); sortMenu.querySelector(`[data-rx-dir="${curSort().dir}"]`)?.focus(); return; }
     const mi = e.target.closest('[data-rx-sort]');
     if (!mi) return;
     const opts = [...sortMenu.querySelectorAll('[data-rx-sort]:not([hidden])')].map((x) => x.dataset.rxSort);
-    setSort({ by: mi.dataset.rxSort, dir: rx.sort.dir });
-    if (mi.dataset.rxSort === 'price') { openSortMenu(root.querySelector('#rx-sort-btn'), rx.sort, opts); sortMenu.querySelector(`[data-rx-dir="${rx.sort.dir}"]`)?.focus(); return; }
+    setSort({ by: mi.dataset.rxSort, dir: curSort().dir });
+    if (mi.dataset.rxSort === 'price') { openSortMenu(root.querySelector('#rx-sort-btn'), curSort(), opts); sortMenu.querySelector(`[data-rx-dir="${curSort().dir}"]`)?.focus(); return; }
     closeSortMenu(true);
   });
   sortMenu.addEventListener('keydown', (e) => {
@@ -494,8 +807,9 @@ export function initRecipes(ctx) {
     }
     const { m, pc, serv } = model(r);
     const t = R.timeText(r.time);
-    const crumb = h('a', { class: 'crumb desk-only', href: '#recipes/browse', onclick: () => { rx.browse.cat = r.cat; rx.browse.shown = PAGE; } }, icon('i-back', 'icon icon-16'), R.categoryLabel(r.cat));
-    const hero = h('div', { class: 'rx-hero' }, photo(r.image, { eager: true }), h('span', { class: 'mob-only' }, back('#recipes/browse')), rxStar(r));
+    const crumb = r.imported ? h('a', { class: 'crumb desk-only', href: '#recipes' }, icon('i-back', 'icon icon-16'), 'My recipes')
+      : h('a', { class: 'crumb desk-only', href: '#recipes/browse', onclick: () => { rx.browse.cat = r.cat; rx.browse.shown = PAGE; } }, icon('i-back', 'icon icon-16'), R.categoryLabel(r.cat));
+    const hero = h('div', { class: 'rx-hero' }, withTag(photo(r.image, { eager: true }), r), h('span', { class: 'mob-only' }, back(r.imported ? '#recipes' : '#recipes/browse')), rxStar(r));
     hero.querySelector('.back')?.classList.add('ovl', 'l');
     const stepper = h('div', { class: 'stepper' },
       h('button', { type: 'button', 'aria-label': 'Fewer servings', 'aria-disabled': String(serv <= 1), onclick: () => { if (serv > 1) { rx.detailServ = serv - 1; renderKeep('[aria-label="Fewer servings"]'); } } }, icon('i-minus', 'icon icon-20')),
@@ -515,7 +829,10 @@ export function initRecipes(ctx) {
     const pantry = m.pantry.length ? h('p', { class: 'pantry', text: `Pantry basics, not added: ${m.pantry.join(', ')}` }) : null;
     const steps = R.splitSteps(r.steps);
     const stepsEl = steps.length ? h('ol', { class: 'rx-steps' }, ...steps.map((s) => { const tm = R.stepTimer(s); return h('li', {}, h('div', {}, h('p', { text: s }), tm ? h('span', { class: 'tm' }, icon('i-clock', 'icon icon-14'), tm) : null)); })) : h('p', { class: 'muted', text: 'No steps in the snapshot.' });
-    const source = r.url ? h('p', { class: 'faint rx-foot' }, 'Recipe from ', h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer', text: 'wegmans.com' }), '. Prices are a saved snapshot, not checkout prices.') : null;
+    const source = r.imported
+      ? h('div', { class: 'faint rx-foot rx-imp-foot' }, r.url ? h('span', {}, 'Imported from ', h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer', text: Imp.sourceDomain(r.url) || 'the recipe page' }), '. ') : 'Imported by you. ',
+        'Prices are a saved snapshot, not checkout prices. ', h('button', { type: 'button', class: 'btn btn-ghost btn-sm', id: 'rx-imp-delete', onclick: () => deleteImported(r) }, icon('i-trash', 'icon icon-18'), 'Delete recipe'))
+      : r.url ? h('p', { class: 'faint rx-foot' }, 'Recipe from ', h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer', text: 'wegmans.com' }), '. Prices are a saved snapshot, not checkout prices.') : null;
     renderSide(r, m, pc);
     return [crumb, h('div', { class: 'rx-dtop' }, hero, info),
       h('section', { class: 'rx-ingsec', 'aria-labelledby': 'rx-ing-h' },
@@ -746,6 +1063,8 @@ export function initRecipes(ctx) {
     if (rx.status === 'ready') priceCtx();   // start matching as soon as both snapshots are open
     document.body.dataset.rxView = rx.view;
     if (rx.view === 'browse') { root.replaceChildren(...browse()); if (rx.data && rx.status === 'ready') renderResults(); } else if (rx.view === 'detail') root.replaceChildren(...detail());
+    else if (rx.view === 'cook') root.replaceChildren(...cook());
+    else if (rx.view === 'import') root.replaceChildren(...importView());
     else root.replaceChildren(...landing());
     if (rx.view !== 'detail') { side?.replaceChildren(); if (sheet.open) sheet.close(); }
     if (keepScroll) window.scrollTo(0, y);
@@ -781,6 +1100,7 @@ export function initRecipes(ctx) {
     document.getElementById('fav-rx-empty').hidden = saved.length > 0;
   }
 
+  loadUser();
   load();
   return {
     show, render: () => render({ keepScroll: true }), syncStars: () => { syncStars(); renderFavGrid(); }, retryCache: tryCache,
@@ -788,5 +1108,8 @@ export function initRecipes(ctx) {
     /** v0.2.4: re-read the device prefs a full restore may have written (household, swaps, match store). */
     reloadPrefs() { rx.servings = loadHousehold(); rx.detailServ = rx.servings; rx.swaps = loadSwaps(); rx.matchStore = loadRxStore(); rx.swapVer = (rx.swapVer ?? 0) + 1; rx.costMemo.clear(); render({ keepScroll: true }); },
     servings: () => rx.servings, perf: rx.perf, savedCount: () => (ctx.getFavs().recipes ?? []).length,
+    /** v0.2.6: re-read imported recipes after a backup restore (or its Undo). */
+    reloadUser() { loadUser(); rx.cands.clear(); render({ keepScroll: true }); },
+    userCount: () => rx.userRows.length,
   };
 }

@@ -543,10 +543,10 @@ export function lineOptions(mi, cands, ing, factor, swapSku = null) {
  * Returns { low, high, unpriced, priced } with low floored and high ceiled to whole dollars, or
  * null when no line could be priced.
  */
-export function recipeCost(recipe, { mi, cands, factor = 1, swapOf = () => null }) {
+export function recipeCost(recipe, { mi, cands, factor = 1, swapOf = () => null, only = null }) {
   let low = 0; let high = 0; let unpriced = 0; let priced = 0;
   for (const ing of recipe.ing) {
-    if (ing.pantry) continue;
+    if (ing.pantry || (only && !only.has(ing))) continue;
     const opts = lineOptions(mi, cands, ing, factor, null).filter((o) => o.buy.total != null);
     if (!opts.length) { unpriced += 1; continue; }
     priced += 1;
@@ -728,3 +728,52 @@ export function detailModel(recipe, { servings, listItems = [], mi = null, cands
   return { factor, lines, missing, have, pantry: pantryLabels(pantry), cost, missingCost: { total: Math.round(total * 100) / 100, unpriced, approx } };
 }
 export { storeKey };
+
+// ---------- v0.2.6: Cook from my list ----------
+/**
+ * Coverage of one recipe by the list, with the missing lines: { have, total, missing: [ing], share }.
+ * Same rule as Detail and Add missing (onListItem -> foodRelation); pantry basics never count.
+ * memo (ingredient key -> covered?) is shared across recipes for one list, so ranking 1,300+
+ * recipes checks each distinct ingredient once.
+ */
+export function coverageDetail(recipe, lidx, memo = new Map()) {
+  let have = 0; let total = 0; const missing = [];
+  for (const ing of recipe.ing) {
+    if (ing.pantry) continue;
+    total += 1;
+    const k = ing.k ? `${ing.k}` : '';
+    let on;
+    if (k && memo.has(k)) on = memo.get(k);
+    else { on = Boolean(onListItem(ing, lidx)); if (k) memo.set(k, on); }
+    if (on) have += 1; else missing.push(ing);
+  }
+  return { have, total, missing, share: total ? have / total : 0 };
+}
+export const COOK_SORTS = ['coverage', 'time', 'price', 'name', 'rating'];
+export const COOK_SORT_LABEL = { coverage: 'Coverage', ...RX_SORT_LABEL };
+/** Saved Cook sort -> { by, dir }; Coverage is the default (spec §3.6). */
+export function cleanCookSort(x) {
+  return { by: COOK_SORTS.includes(x?.by) ? x.by : 'coverage', dir: x?.dir === 'desc' ? 'desc' : 'asc' };
+}
+/**
+ * Cook from my list order. coverage: share of non-pantry lines on the list, highest first; ties go
+ * to fewer missing, then shorter time (unknown last), then A-Z. Other sorts are Browse's; a saved
+ * Rating with no rated recipe in the set falls back to Coverage.
+ */
+export function sortCook(list, sort, { covOf, costOf = () => null }) {
+  let s = cleanCookSort(sort);
+  if (s.by === 'rating' && !list.some(hasRating)) s = { ...s, by: 'coverage' };
+  if (s.by !== 'coverage') return sortRecipes(list, s, { costOf });
+  const c = new Map(list.map((r) => [r, covOf(r)]));
+  const t = (r) => (r.time == null ? Infinity : r.time);
+  return [...list].sort((a, b) => {
+    const x = c.get(a); const y = c.get(b);
+    return (y.share - x.share) || (x.missing.length - y.missing.length) || (t(a) - t(b)) || compareNames(a.title, b.title) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  });
+}
+/** "green beans, lemons, thyme" for the coverage row (names as the recipe writes them). */
+export function missingNames(missing, max = 6) {
+  const names = [];
+  for (const ing of missing) { const n = String(ing.base || ing.text).toLowerCase(); if (!names.includes(n)) names.push(n); if (names.length >= max) break; }
+  return names.join(', ');
+}

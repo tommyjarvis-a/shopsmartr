@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- v0.2.6: no third-party scripts or connections: the app only talks to its own site (imports never fetch the recipe page). Inline boot scripts are pinned by hash (tools/csp-hashes.mjs). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-06qbX/Zv2aDkgWBGgndVEBg8q/SCqI4HwrUdFMgq1Ls=' 'sha256-9qxW81StKZumPLf9BKkJyJlwEvDhbYnIcHb+1j26bk8=' 'sha256-jb5raWqqftkHAjFDFUk/eOuRPpS0k0z+XJycEzKW+qQ='; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Happy Wife Helper</title>
   <meta name="description" content="One shopping list for your Wegmans trip, with recipes and Favorites.">
@@ -360,6 +362,7 @@
 
   <div class="menu sort-menu" id="rx-sort-menu" role="menu" aria-labelledby="rx-sort-h" hidden>
     <p class="mh" id="rx-sort-h">Sort recipes</p>
+    <button type="button" class="mi" role="menuitemradio" data-rx-sort="coverage" aria-checked="false" hidden>Coverage<span class="hint">most on your list</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
     <button type="button" class="mi" role="menuitemradio" data-rx-sort="time" aria-checked="true">Time<span class="hint">quickest first</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
     <button type="button" class="mi" role="menuitemradio" data-rx-sort="price" aria-checked="false">Price<span class="hint">cost to buy</span><svg class="icon icon-18 tick" aria-hidden="true"><use href="#i-check"/></svg></button>
     <div class="sort-dir" id="rx-sort-dir" hidden><div class="seg" role="group" aria-label="Price order"><button type="button" data-rx-dir="asc" aria-pressed="true"><svg class="icon icon-16" aria-hidden="true"><use href="#i-up"/></svg>Low to high</button><button type="button" data-rx-dir="desc" aria-pressed="false"><svg class="icon icon-16" aria-hidden="true"><use href="#i-down"/></svg>High to low</button></div></div>
@@ -661,6 +664,28 @@
         <li>Tap <b>Add to Home Screen</b>.</li>
       </ol>
       <p class="icon-note-inline"><b>Back up first</b> if you're re-adding it: the home-screen app keeps its own list, and removing it may erase that list. <button type="button" class="btn btn-ghost btn-sm" data-backup-now>Back up now</button></p>
+    </div>
+    <div class="about-steps about-import" id="about-import">
+      <h3>Import recipes from any site</h3>
+      <p class="faint">Send a recipe page straight to the app. It's read on your phone; nothing goes through a server.</p>
+      <h4>Bookmark (Safari, or any browser)</h4>
+      <ol class="steps">
+        <li>Tap <b>Copy bookmark code</b>. <button type="button" class="btn btn-secondary btn-sm" id="about-bm-copy"><svg class="icon icon-18" aria-hidden="true"><use href="#i-copy"/></svg>Copy bookmark code</button></li>
+        <li>In Safari, bookmark any page (<b>Share</b> › <b>Add Bookmark</b>) and name it <b>Happy Wife</b>.</li>
+        <li>Open <b>Bookmarks</b>, tap <b>Edit</b>, open the new bookmark and replace its address with the copied code.</li>
+        <li>On a recipe page, tap the address bar, then the <b>Happy Wife</b> bookmark.</li>
+      </ol>
+      <p class="faint bm-desk">On a computer, drag this to your bookmarks bar: <a class="bm-link" id="about-bm" href="#recipes/import">Happy Wife</a></p>
+      <label class="sr-only" for="about-bm-code">Bookmark code</label>
+      <textarea class="input bm-code" id="about-bm-code" rows="2" readonly hidden></textarea>
+      <p class="status" id="about-bm-status" role="status" aria-live="polite"></p>
+      <h4>iPhone Shortcut</h4>
+      <ol class="steps">
+        <li><span id="about-sc-get">Add the <b>Happy Wife Import</b> shortcut from the link Steven sends.</span></li>
+        <li>On a recipe page in Safari, tap <b>Share</b> › <b>Happy Wife Import</b>.</li>
+        <li>It opens the recipe here and copies it. In the home-screen app, go to <b>Recipes</b> › <b>Import a recipe</b> and tap <b>Paste</b>.</li>
+      </ol>
+      <p class="icon-note-inline">The home-screen app keeps its own recipes, separate from Safari. A recipe opened in Safari can be copied over with <b>Copy for the home-screen app</b>.</p>
     </div>
     <p class="about-repo"><a href="https://github.com/tommyjarvis-a/shopsmartr" target="_blank" rel="noopener">Source code on GitHub<svg class="icon icon-16" aria-hidden="true"><use href="#i-ext"/></svg></a></p>
   </dialog>

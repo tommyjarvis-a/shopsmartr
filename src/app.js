@@ -18,6 +18,7 @@ import * as C from './catalog.js';
 import { makeDecoder } from './pricefeed.js';
 import * as UI from './ui.js';
 import { initRecipes } from './rx.js';
+import * as Imp from './importer.js';
 import { watchTabbar } from './layout.js';
 
 const el = (id) => document.getElementById(id);
@@ -528,7 +529,8 @@ async function askPersist() {
 
 async function saveListNow() {
   // v0.2.4 full backup: list, Favorites, saved recipes, stores and this device's settings (keys.js registry).
-  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION, prefs: collectPrefs() });
+  // v0.2.6: imported recipes (shopsmartr:userRecipes:v1) ride along in the backup's userRecipes section.
+  const doc = Bk.makeBackup({ state, favs, shopStore: loadShopStore(), appVersion: VERSION, prefs: collectPrefs(), userRecipes: Imp.loadUserRecipes() });
   const name = Bk.backupFilename(stamp());
   const json = Bk.backupJSON(doc);
   let shared = false;
@@ -576,7 +578,7 @@ async function onLoadFile(file) {
   const pill = (t) => { const x = document.createElement('span'); x.textContent = t; return x; };
   const n = (k, one, v = sm[k]) => `${v} ${one}${v === 1 ? '' : 's'}`;
   el('load-stats').replaceChildren(...[n('items', 'item'), n('listStores', 'store'), `${sm.priced} priced`,
-    sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.recipes ? n('recipes', 'saved recipe') : '', sm.meals ? n('meals', 'meal') : '',
+    sm.favorites ? (sm.favorites === 1 ? '1 favorite' : `${sm.favorites} Favorites`) : '', sm.recipes ? n('recipes', 'saved recipe') : '', sm.userRecipes ? n('userRecipes', 'imported recipe') : '', sm.meals ? n('meals', 'meal') : '',
     sm.settings ? n('settings', 'setting') : '',
     sm.dropped ? `${sm.dropped} unreadable skipped` : '',
     sm.duplicates ? `${sm.duplicates} duplicate${sm.duplicates === 1 ? '' : 's'} skipped` : ''].filter(Boolean).map(pill));
@@ -622,7 +624,7 @@ function applyLoad(mode) {
   }
   const saveId = pendingLoad.backup.saveId;
   const wasEmpty = Boolean(pendingLoad.empty);
-  const before = { state, favs, shopStore: loadShopStore(), listSort, prefs: collectPrefs() };
+  const before = { state, favs, shopStore: loadShopStore(), listSort, prefs: collectPrefs(), userRecipes: Imp.loadUserRecipes() };
   const prefSnap = snapshotPrefs();
   if (mode === 'replace') {
     try {
@@ -639,6 +641,8 @@ function applyLoad(mode) {
   Bk.saveMerged(Bk.recordSaveId(mergedBefore, saveId, mode === 'replace' ? 'replaced' : 'merged'));
   el('load-sheet').close();
   const restore = (x) => {
+    // v0.2.6: imported recipes first, so saved-recipe cards that point at them resolve
+    if (x.userRecipes) { Imp.saveUserRecipes(x.userRecipes); rxApi?.reloadUser?.(); }
     commitFavs(x.favs);
     if (x.shopStore) {
       saveShopStore(x.shopStore);
@@ -1166,7 +1170,21 @@ async function copyText(text, input) {
     return document.execCommand('copy');
   } catch { return false; }
 }
+/** v0.2.6: the bookmarklet always opens the live app (Safari and the home-screen app share its address). */
+function bookmarklet() { return Imp.bookmarkletSource(LIVE_URL); }
 function bindAbout() {
+  const bm = el('about-bm');
+  bm.setAttribute('href', bookmarklet());
+  // Inside the app it's only for dragging to the bookmarks bar; a tap here does nothing (and a CSP would block it).
+  bm.addEventListener('click', (e) => { e.preventDefault(); UI.setStatus(el('about-bm-status'), 'Drag it to your bookmarks bar, or use Copy bookmark code.'); });
+  el('about-bm-copy').addEventListener('click', async () => {
+    const code = el('about-bm-code');
+    code.value = bookmarklet();
+    code.hidden = false;
+    const ok = await copyText(code.value, code);
+    UI.setStatus(el('about-bm-status'), ok ? 'Bookmark code copied. Paste it as the bookmark\'s address.' : 'Couldn\'t copy. Select the code above and copy it.', ok ? '' : 'error');
+    if (!ok) code.hidden = false;
+  });
   el('about-copy').addEventListener('click', async () => {
     const ok = await copyText(LIVE_URL, el('about-url'));
     UI.setStatus(el('about-copy-status'), ok ? 'Link copied.' : 'Couldn\'t copy. Press and hold the link to copy it.', ok ? '' : 'error');
@@ -1671,6 +1689,7 @@ async function init() {
     getFeed: () => feed, getShopStore: () => shop.store, directory: () => data.byId,
     toast: (t, undo, ms) => UI.toast(t, undo, ms), openHousehold: () => openHousehold(),
     openFavRecipes: () => setFavTab('recipes'), onChange: () => {},
+    openAbout: (opener) => { openAbout(opener); requestAnimationFrame(() => el('about-import')?.scrollIntoView({ block: 'start' })); },
     openShopSearch: (q, storeKey) => {
       if (!feed) { location.hash = '#shop'; return; }
       if (storeKey && C.priceStores(feed.catalog).some((st) => st.key === storeKey)) { shop.store = storeKey; el('shop-store').value = storeKey; saveShopStore(storeKey); }

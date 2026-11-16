@@ -7,12 +7,15 @@ import { serializeFavorites, deserializeFavorites, emptyFavorites, nameKey, favK
 import { emptyState, newId, storeKeyOf, normUnit, MAX_QTY } from './list.js';
 import { cleanPrefs } from './keys.js';
 import { APP_NAME, FILE_STEM } from './brand.js';
+import { cleanUserRecipes, CAPS as IMPORT_CAPS } from './importer.js';
 
 export const BACKUP_SCHEMA = 'shopsmartr.backup/2';
 /**
  * v0.2.1: backup/2 adds favorites.recipes (saved recipes). backup/1 files still load.
  * v0.2.4 (full restore): backup/2 gains an optional `prefs` section (device settings from the
  * key registry in keys.js). Additive, so the format id stays /2 and older app versions ignore it.
+ * v0.2.6: backup/2 gains an optional top-level `userRecipes` array (imported recipes, the
+ * shopsmartr:userRecipes:v1 store). Also additive: files without it still load, and keep this device's.
  */
 export const BACKUP_SCHEMAS_READ = ['1', '2'];
 /** Copy of the list and favorites taken just before a "Load list" replace. */
@@ -49,7 +52,7 @@ const SHOP_STORE_RE = /^[\w-]{1,40}:[\w-]{1,40}$/;
  * Fields are copied by name, so nothing else in memory can leak in. The sort choice is a device
  * preference and is not saved (L22). saveId is a random UUID per saved file (L23).
  */
-export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', appVersion, now = new Date(), saveId = newSaveId(), prefs = {} }) {
+export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', appVersion, now = new Date(), saveId = newSaveId(), prefs = {}, userRecipes = [] }) {
   // Round-trip through the same cleaners the app loads with: only known fields survive.
   const list = deserialize(serialize(state));
   const fav = deserializeFavorites(serializeFavorites(favs));
@@ -63,6 +66,7 @@ export function makeBackup({ state, favs = emptyFavorites(), shopStore = '', app
     stores: { shopStore: SHOP_STORE_RE.test(shopStore) ? shopStore : '', selectedStoreIds: list.selectedStoreIds },
     settings: { zip: list.zip, radiusMi: list.radiusMi, chains: list.chains },
     prefs: cleanPrefs(prefs),
+    userRecipes: cleanUserRecipes(userRecipes),
   };
 }
 
@@ -96,6 +100,8 @@ export function parseBackup(text) {
   if (favN > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favN.toLocaleString('en-US')} Favorites and meals. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
   if (Array.isArray(favRaw.recipes) && favRaw.recipes.length > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${favRaw.recipes.length.toLocaleString('en-US')} saved recipes. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
   if (('items' in favRaw && !Array.isArray(favRaw.items)) || ('meals' in favRaw && !Array.isArray(favRaw.meals)) || ('recipes' in favRaw && !Array.isArray(favRaw.recipes))) return { ok: false, error: 'The Favorites in this file are damaged.' };
+  if ('userRecipes' in raw && !Array.isArray(raw.userRecipes)) return { ok: false, error: 'The imported recipes in this file are damaged.' };
+  if (Array.isArray(raw.userRecipes) && raw.userRecipes.length > MAX_LOAD_ITEMS) return { ok: false, error: `That file has ${raw.userRecipes.length.toLocaleString('en-US')} imported recipes. Load list takes up to ${MAX_LOAD_ITEMS.toLocaleString('en-US')}.` };
   const stores = isObj(raw.stores) ? raw.stores : {};
   const settings = isObj(raw.settings) ? raw.settings : {};
   const state = deserialize(JSON.stringify({
@@ -126,7 +132,9 @@ export function parseBackup(text) {
   const saveId = typeof raw.saveId === 'string' && SAVE_ID_RE.test(raw.saveId) ? raw.saveId : '';
   // hasRecipes: a backup/2 file says what the saved recipes are (even none); a /1 file doesn't.
   const prefs = cleanPrefs(raw.prefs);
-  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString(), schemaVersion: Number(m[1]), hasRecipes: m[1] !== '1', prefs };
+  const hasUserRecipes = Array.isArray(raw.userRecipes);
+  const userRecipes = hasUserRecipes ? cleanUserRecipes(raw.userRecipes) : [];
+  const backup = { state, favs, shopStore, saveId, appVersion: raw.appVersion, createdAt: new Date(created).toISOString(), schemaVersion: Number(m[1]), hasRecipes: m[1] !== '1', prefs, hasUserRecipes, userRecipes };
   return { ok: true, backup, summary: { ...summarize(backup, dropped), duplicates: ids.dupes, renewedIds: ids.renewed } };
 }
 function freshId(seen) {
@@ -174,6 +182,7 @@ export function summarize(b, dropped = 0) {
     favorites: dedupeFavorites(b.favs).favorites.items.length,
     meals: b.favs.meals.length,
     recipes: (b.favs.recipes ?? []).length,
+    ...((b.userRecipes ?? []).length ? { userRecipes: b.userRecipes.length } : {}),   // v0.2.6, only when the file has some
     stores: b.state.selectedStoreIds.length,
     settings: Object.keys(b.prefs ?? {}).length,
     dropped,
@@ -246,7 +255,8 @@ export function applyBackup(cur, b, mode) {
   if (mode === 'replace') {
     // A backup/2 file's saved recipes replace this device's; a backup/1 file has none, so they stay.
     // v0.2.4: the file's settings are restored too (a file without them leaves this device's alone).
-    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: b.prefs?.listSort ?? cur.listSort, prefs: { ...(b.prefs ?? {}) }, added: b.state.items.length, combined: 0 };
+    // v0.2.6: a file with a userRecipes section replaces the imported recipes; one without keeps this device's.
+    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: b.prefs?.listSort ?? cur.listSort, prefs: { ...(b.prefs ?? {}) }, userRecipes: b.hasUserRecipes ? (b.userRecipes ?? []) : (cur.userRecipes ?? []), added: b.state.items.length, combined: 0 };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
@@ -273,6 +283,7 @@ export function applyBackup(cur, b, mode) {
     favs: { ...cur.favs, items: favItems.rows, meals, recipes: mergeRecipes(cur.favs.recipes ?? [], b.favs.recipes ?? []) },
     shopStore: cur.shopStore || b.shopStore,
     listSort: cur.listSort,
+    userRecipes: mergeUserRecipes(cur.userRecipes ?? [], b.userRecipes ?? []),
     // Merge only fills in settings this device doesn't have yet.
     prefs: Object.fromEntries(Object.entries(b.prefs ?? {}).filter(([k]) => !(k in (cur.prefs ?? {})))),
     added: items.added,
@@ -280,6 +291,11 @@ export function applyBackup(cur, b, mode) {
   };
 }
 
+/** Imported recipes united by id (this device's copy wins), newest first, within the app's cap. */
+export function mergeUserRecipes(cur, incoming) {
+  const ids = new Set(cur.map((r) => r.id));
+  return [...cur, ...incoming.filter((r) => !ids.has(r.id))].slice(0, IMPORT_CAPS.recipes);
+}
 /** Saved recipes united by id; this device's copy wins. */
 export function mergeRecipes(cur, incoming) {
   const ids = new Set(cur.map((r) => r.id));

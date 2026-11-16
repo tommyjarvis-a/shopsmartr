@@ -2,6 +2,40 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.6-alpha] - 2026-11-15 (alpha)
+
+Recipes Phase 2: **Cook from my list** and **Import a recipe**. Everything runs on the device; nothing is sent anywhere.
+
+### Added
+- **Cook from my list** (Recipes › Cook from my list): recipes ranked by how much of them is already on your list,
+  using the same foodRelation rules as matching (a recipe shows when 3+ of its ingredients, or half, are on the
+  list). Each row shows "N of M on your list" with a bar, what's still missing, and a low-to-high **to buy** range
+  for just the missing lines. Sorts: Coverage (default), Time, Price, A–Z, Rating; the Cook sort is saved apart
+  from Browse. The landing card says how many recipes are 1–2 items away. Detail's **Add missing to list** works
+  as before (merge, "Added N, updated M", Undo, 500 ms guards).
+- **Import a recipe** (Recipes › Import): paste the recipe text (ingredient and step headings are found, or
+  guessed), a page's JSON-LD, or an import link. A preview shows the title, servings and time (editable), every
+  ingredient line as parsed (lines without an amount are flagged and added as written), and the steps, with Edit
+  for both lists. Pasting a plain web link explains that the app doesn't open other websites.
+- **Bookmarklet** "Happy Wife" and an **iOS Shortcut** "Happy Wife Import" (docs/import-shortcut.md) read the
+  schema.org Recipe on the page you're on (or its text) and open the app with it in the link's #fragment
+  (compressed, size-capped, never sent to a server). The app clears the fragment on arrival, validates and
+  sanitizes it, and shows the preview. In Safari a "Copy for the home-screen app" button hands it to the
+  home-screen app, which keeps separate storage. About › Import a recipe has short steps for both.
+- **My recipes**: imported recipes are saved on this device, starred in Favorites › Recipes with an Imported tag,
+  listed on the Recipes page, and work with list matching, Cook ranking, prices, Add missing and the cost range.
+  Detail shows "Imported from <site>" and **Delete recipe** (with Undo).
+- **Backup**: the full backup includes imported recipes (`userRecipes`, additive to backup/2; Replace takes the
+  file's, Merge keeps this device's copy of any duplicate) and the Cook sort. v1 and older v2 files still load.
+- **Content Security Policy** (meta): scripts only from the app (inline scripts pinned by hash, no eval),
+  `connect-src 'self'`, no plugins, `base-uri`/`form-action` self. `tools/csp-hashes.mjs` prints the hashes.
+
+### Tests
+- test/v026.test.mjs: line parser, JSON-LD and text parsing, sanitising (script tags, handlers, javascript: links,
+  bidi characters, huge fields), the fragment codec (damaged, oversized, zip bomb, wrong version), the bookmarklet
+  run against a fake page (no network calls), Cook ranking and sorts, the backup round trip and old files, the key
+  registry and the CSP.
+
 ## [0.2.5-alpha.1] - 2026-11-15 (alpha)
 
 The iPhone home-screen bottom-bar fix and Tester's Lows from the v0.2.4 gate (26ec923), on top of themes v2. The v0.2.5-alpha tag was already
