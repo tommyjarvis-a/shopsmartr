@@ -522,7 +522,7 @@ export function initRecipes(ctx) {
       const left = sorted.length - rx.cookShown;
       kids.push(h('button', { type: 'button', class: 'btn btn-secondary btn-block show-more', onclick: () => { rx.cookShown += PAGE; render({ keepScroll: true }); root.querySelectorAll('.rx-rows .rx-row')[rx.cookShown - PAGE]?.focus({ preventScroll: true }); }, text: `Show more (${fmt(left)} more)` }));
     }
-    kids.push(h('p', { class: 'faint rx-foot', text: `Pantry basics (salt, pepper, water) don't count. ${ps === 'ready' ? `Costs are whole packs at ${priceCtx()?.st?.label ?? 'your store'} for ${rx.servings} serving${rx.servings === 1 ? '' : 's'}, to buy everything.` : ''}`.trim() }));
+    kids.push(h('p', { class: 'faint rx-foot', text: `Pantry basics (salt, pepper, water) don't count. ${ps === 'ready' ? `Costs are whole packs at ${priceCtx()?.st?.label ?? 'your store'} for ${rx.servings} serving${rx.servings === 1 ? '' : 's'}, for just what's missing.` : ''}`.trim() }));
     return kids;
   }
 
@@ -637,7 +637,7 @@ export function initRecipes(ctx) {
       ta.value = d.steps.join('\n');
       ta.addEventListener('input', () => { d.steps = Imp.sanitizeDraft({ steps: ta.value.split('\n') }).steps; });
       stepBody = [ta];
-    } else if (d.steps.length) stepBody = [h('p', { class: 'faint', text: d.steps[0].length > 120 ? `${d.steps[0].slice(0, 117)}…` : d.steps[0] })];
+    } else if (d.steps.length) stepBody = [h('p', { class: 'faint', text: `${d.steps[0].length > 120 ? `${d.steps[0].slice(0, 117)}…` : d.steps[0]}${d.steps.length > 1 ? ` (+ ${d.steps.length - 1} more)` : ''}` })];
     kids.push(h('div', { class: 'prev' }, top, h('div', { class: 'sec' }, fields),
       h('section', { class: 'sec', 'aria-labelledby': 'rx-imp-ing-h' }, h('h3', {}, h('span', { id: 'rx-imp-ing-h', text: `Ingredients · ${pv.ings.length}` }), editBtn('ing', 'Edit')), ...ingBody),
       h('section', { class: 'sec', 'aria-labelledby': 'rx-imp-steps-h' }, h('h3', {}, h('span', { id: 'rx-imp-steps-h', text: `Steps · ${d.steps.length}` }), editBtn('steps', d.steps.length ? 'Edit' : 'Add')), ...stepBody)));
