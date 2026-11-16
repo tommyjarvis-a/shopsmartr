@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- v0.2.6: no third-party scripts or connections: the app only talks to its own site (imports never fetch the recipe page). Inline boot scripts are pinned by hash (tools/csp-hashes.mjs). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-06qbX/Zv2aDkgWBGgndVEBg8q/SCqI4HwrUdFMgq1Ls=' 'sha256-9qxW81StKZumPLf9BKkJyJlwEvDhbYnIcHb+1j26bk8=' 'sha256-jb5raWqqftkHAjFDFUk/eOuRPpS0k0z+XJycEzKW+qQ='; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <!-- v0.2.6: no third-party scripts or connections: the app only talks to its own site (imports never fetch the recipe page). Inline boot scripts are pinned by hash (tools/csp-hashes.mjs). v0.2.6-alpha.1 (M11): the only remote images are Wegmans recipe photos from images.wegmans.com (src/imghost.js); imported recipes never load a remote image. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-06qbX/Zv2aDkgWBGgndVEBg8q/SCqI4HwrUdFMgq1Ls=' 'sha256-9qxW81StKZumPLf9BKkJyJlwEvDhbYnIcHb+1j26bk8=' 'sha256-jb5raWqqftkHAjFDFUk/eOuRPpS0k0z+XJycEzKW+qQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images.wegmans.com; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Happy Wife Helper</title>
   <meta name="description" content="One shopping list for your Wegmans trip, with recipes and Favorites.">

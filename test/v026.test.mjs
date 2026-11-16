@@ -20,7 +20,7 @@ const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const NOW = new Date('2026-11-16T03:00:00Z');
 
 test('version 0.2.6-alpha in version.js, package.json and the CHANGELOG', () => {
-  assert.equal(VERSION, '0.2.6-alpha');
+  assert.match(VERSION, /^0\.2\.6-alpha(\.\d+)?$/);   // v0.2.6-alpha.1: exact version is checked in v026a1.test.mjs
   assert.equal(JSON.parse(read('package.json')).version, VERSION);
   assert.match(read('CHANGELOG.md'), /## \[0\.2\.6-alpha\]/);
 });
@@ -70,7 +70,7 @@ test('JSON-LD: Recipe found in @graph; sections, ISO times, yield and image obje
   assert.equal(d.title, 'Chicken Street Tacos');
   assert.equal(d.servings, 4);
   assert.deepEqual(d.times, { prep: 15, cook: 15, total: 30 });
-  assert.equal(d.image, 'https://example-recipes.com/img/tacos.jpg');
+  assert.equal(d.image, '', 'M11 (v0.2.6-alpha.1): an imported photo URL is dropped, never kept or loaded');
   assert.equal(d.lines.length, 7);
   assert.deepEqual(d.steps, ['Season the chicken.', 'Grill 6 minutes a side.', 'Fill the tortillas.']);
   assert.equal(d.url, 'https://example-recipes.com/tacos');

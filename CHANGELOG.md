@@ -2,6 +2,53 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.6-alpha.1] - 2026-11-16 (alpha)
+
+Hotfix for Tester's v0.2.6-alpha gate (566ff52): one High (M11, privacy) and four Lows.
+
+### Security
+- **M11: an imported recipe never loads a remote image.** In v0.2.6 the import preview fetched the payload's photo
+  URL the moment an import link opened (before Save), and again on every card, Cook row, Favorites tile and the
+  detail page, so anyone who sent a `#recipes/import` link could plant a tracking pixel that learns the opener's IP,
+  browser and timing. Now:
+  - Imported recipes show the themed pot placeholder (with the Imported tag) everywhere: preview, detail, Cook,
+    Favorites › Recipes and My recipes. The photo URL from JSON-LD, pasted text, the bookmarklet / Shortcut
+    payload, a saved v0.2.6 row, a backup file or a Favorites snapshot is dropped, never stored or requested.
+  - **Decision: no "Load photo" button for imported recipes.** The tightened CSP below only lets the browser load
+    images from the recipe feed's host. A tap-to-load for an arbitrary site's photo would need either a wider
+    `img-src` (which reopens M11 for every link, since the CSP can't tell a tap from an automatic load) or a fetch
+    through a server (there is none, and `connect-src` is `'self'`). Keeping the placeholder only is the
+    privacy-safe choice: opening, previewing, saving and viewing an imported recipe makes zero requests outside
+    the app's own site.
+  - **CSP `img-src` is now `'self' data: blob: https://images.wegmans.com`** (was `'self' https: data: blob:`).
+    images.wegmans.com is the only photo host in the recipe feed (the crawler's parser test and every fixture
+    recipe); the price feed carries no images. Feed photos are also filtered in code (`src/imghost.js`
+    `feedImage`: https, exact host, no credentials, port or odd characters), so a feed or Favorites row with any
+    other host shows the placeholder instead of a CSP error. Inline script hashes are unchanged and still pinned.
+  - Import was re-checked for other requests: no favicons, prefetch/preconnect, CSS `url()` or link previews; the
+    source link is a plain `rel="noopener noreferrer"` link that only opens when tapped.
+
+### Fixed
+- **L55:** the L53 fix went too far. Chicken Broth, Vegetable Broth, Beef Stock, Chicken/Pork Sausage and
+  Strawberry Jam on the list count again for a bare broth / stock / sausage / jam line (Already on your list,
+  Cook ranking), so Add missing no longer bumps those lines a second time. Oil and juice stay strict: Coconut Oil
+  isn't "oil" and Apple Juice isn't "juice". A bare list name still doesn't cover a flavoured line.
+- **L56:** the Restore sheet names the file's imported recipes ("Favorites, store picks, 2 imported recipes and
+  settings are replaced too. Your current imported recipes are removed." / Merge: "Its 2 imported recipes are
+  added too (yours are kept)."), and the toasts count them: "Backup restored · 1 item, 2 imported recipes,
+  2 settings", "Backup merged · 1 item, 1 imported recipe added".
+- **L57:** Cook "Missing N:" uses a new `--color-miss-text` token, at least 4.5:1 on both the surface and the page
+  background in all 5 themes, light and dark (Tomato light #8F5C00, 5.7:1; Blueberry and Espresso light darkened
+  too). `--color-orange-text` stays as the non-text star colour.
+- **L58:** pasting more than 60,000 characters says "That's too large to import (over 60,000 characters). Paste just
+  the ingredients and steps." instead of being cut mid-JSON and reporting no ingredients.
+
+### Tests
+- test/v026a1.test.mjs: CSP img-src exact host and pinned hashes, `feedImage` host checks, image URLs dropped from
+  every import path and from Favorites snapshots, feed photos kept only on the host, renderer wiring; L55 both
+  sides and Add missing; L56 wording and toast counts; L57 contrast per theme block; L58 cap. Updated the L53/L51
+  and L50 tests for the new behaviour.
+
 ## [0.2.6-alpha] - 2026-11-16 (alpha)
 
 Recipes Phase 2: **Cook from my list** and **Import a recipe**. Everything runs on the device; nothing is sent anywhere.

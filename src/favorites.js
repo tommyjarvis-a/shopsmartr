@@ -2,6 +2,7 @@
 // Every function returns a new value; nothing touches the DOM. Persistence helpers take an
 // injectable storage object so tests can use memoryStorage().
 import { cleanItemInput, addItem, newId, storeKeyOf } from './list.js';
+import { feedImage } from './imghost.js';
 
 export const FAVORITES_KEY = 'shopsmartr:favorites:v1';
 export const FAVORITES_BACKUP_KEY = 'shopsmartr:favorites:v1.bak';
@@ -204,8 +205,10 @@ function cleanSavedRecipe(r) {
   const title = String(r.title ?? '').trim().replace(/\s+/g, ' ').slice(0, 160);
   if (!id || !title) return null;
   const savedAt = Number.isFinite(Date.parse(r.savedAt)) ? new Date(Date.parse(r.savedAt)).toISOString() : new Date(0).toISOString();
-  const image = typeof r.image === 'string' && /^https:\/\/[^\s"'<>]+$/.test(r.image) ? r.image.slice(0, 600) : null;
-  return { id, source: r.source === 'import' ? 'import' : 'wegmans', title, image, savedAt };
+  const source = r.source === 'import' ? 'import' : 'wegmans';
+  // M11: an imported recipe's snapshot never keeps a photo URL; a Wegmans one only on the feed's image host.
+  const image = source === 'import' ? null : feedImage(r.image);
+  return { id, source, title, image, savedAt };
 }
 function cleanSavedRecipes(rows) {
   const out = []; const seen = new Set();

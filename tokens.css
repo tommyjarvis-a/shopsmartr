@@ -53,6 +53,7 @@
   --color-sun-soft: #FFF0C7;
   --color-on-sun: #3D2604;
   --color-orange-text: #B47500;
+  --color-miss-text: #8F5C00;   /* L57: Cook "Missing N:" text, AA 4.5:1 (orange-text #B47500 is non-text only) */
   --color-on-sun-soft: #5A3A00;
   --color-track: rgba(255,255,255,.8);
   --color-heart: #D81B55;
@@ -125,6 +126,7 @@
     --color-sun-soft: #3B2D12;
     --color-on-sun: #2B1A03;
     --color-orange-text: #FFC94D;
+    --color-miss-text: var(--color-orange-text);
     --color-on-sun-soft: #FFD36E;
     --color-track: rgba(255,255,255,.16);
     --color-heart: #FF85A1;
@@ -166,6 +168,7 @@
   --color-sun-soft: #3B2D12;
   --color-on-sun: #2B1A03;
   --color-orange-text: #FFC94D;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #FFD36E;
   --color-track: rgba(255,255,255,.16);
   --color-heart: #FF85A1;
@@ -208,6 +211,7 @@
   --color-sun-soft: #FEF6C8;
   --color-on-sun: #3A2E00;
   --color-orange-text: #9A6A00;
+  --color-miss-text: #855B00;   /* L57: AA on the page background too */
   --color-on-sun-soft: #5A4500;
   --color-track: rgba(255,255,255,.85);
   --color-heart: #D81B55;
@@ -280,6 +284,7 @@
     --color-sun-soft: #33300F;
     --color-on-sun: #2B2400;
     --color-orange-text: #FDE047;
+    --color-miss-text: var(--color-orange-text);
     --color-on-sun-soft: #FDE68A;
     --color-track: rgba(255,255,255,.16);
     --color-heart: #FF85A1;
@@ -321,6 +326,7 @@
   --color-sun-soft: #33300F;
   --color-on-sun: #2B2400;
   --color-orange-text: #FDE047;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #FDE68A;
   --color-track: rgba(255,255,255,.16);
   --color-heart: #FF85A1;
@@ -363,6 +369,7 @@
   --color-sun-soft: #FCEFD8;
   --color-on-sun: #3D2604;
   --color-orange-text: #9C6206;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #5A3A00;
   --color-track: rgba(255,255,255,.85);
   --color-heart: #C2185B;
@@ -435,6 +442,7 @@
     --color-sun-soft: #382A12;
     --color-on-sun: #2B1A03;
     --color-orange-text: #F2C14E;
+    --color-miss-text: var(--color-orange-text);
     --color-on-sun-soft: #FFD98A;
     --color-track: rgba(255,255,255,.16);
     --color-heart: #FF85A1;
@@ -476,6 +484,7 @@
   --color-sun-soft: #382A12;
   --color-on-sun: #2B1A03;
   --color-orange-text: #F2C14E;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #FFD98A;
   --color-track: rgba(255,255,255,.16);
   --color-heart: #FF85A1;
@@ -518,6 +527,7 @@
   --color-sun-soft: #FFE5DF;
   --color-on-sun: #3D1208;
   --color-orange-text: #C2381F;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #8A2513;
   --color-track: rgba(255,255,255,.85);
   --color-heart: #E0245E;
@@ -591,6 +601,7 @@
     --color-sun-soft: #3A1E19;
     --color-on-sun: #2B0D06;
     --color-orange-text: #FF9A87;
+    --color-miss-text: var(--color-orange-text);
     --color-on-sun-soft: #FFB4A6;
     --color-track: rgba(255,255,255,.16);
     --color-heart: #FF85A1;
@@ -632,6 +643,7 @@
   --color-sun-soft: #3A1E19;
   --color-on-sun: #2B0D06;
   --color-orange-text: #FF9A87;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #FFB4A6;
   --color-track: rgba(255,255,255,.16);
   --color-heart: #FF85A1;
@@ -674,6 +686,7 @@
   --color-sun-soft: #FFEFCC;
   --color-on-sun: #2B1A00;
   --color-orange-text: #A35F00;
+  --color-miss-text: #8F5300;   /* L57: AA on the page background too */
   --color-on-sun-soft: #5C3600;
   --color-track: rgba(255,255,255,.85);
   --color-heart: #D81B55;
@@ -746,6 +759,7 @@
     --color-sun-soft: #3A2C12;
     --color-on-sun: #241500;
     --color-orange-text: #FFB547;
+    --color-miss-text: var(--color-orange-text);
     --color-on-sun-soft: #FFD08A;
     --color-track: rgba(255,255,255,.16);
     --color-heart: #FF85A1;
@@ -787,6 +801,7 @@
   --color-sun-soft: #3A2C12;
   --color-on-sun: #241500;
   --color-orange-text: #FFB547;
+  --color-miss-text: var(--color-orange-text);
   --color-on-sun-soft: #FFD08A;
   --color-track: rgba(255,255,255,.16);
   --color-heart: #FF85A1;

@@ -4,6 +4,7 @@
 // Recipe data is never shipped in this repo: it arrives encrypted in data/recipes.enc.
 import { tokenize, getItem, estimate, unitOf, storeKey, editDistance1, hiddenStoreIdx } from './catalog.js';
 import { convert, parsePackSize, linePrice, compareNames } from './list.js';
+import { feedImage } from './imghost.js';
 
 export const RECIPES_SCHEMA = 'shopsmartr.recipes/1';
 export const RECIPE_FEED_SCHEMA = 'shopsmartr.recipefeed/1';
@@ -144,7 +145,7 @@ export function prepareRecipes(doc) {
     const rec = {
       id, title, cat: str(r.cat, 60) ?? 'other', servings: pos(r.servings) ? Math.round(r.servings) : null,
       times: { prep: mins(t.prep), cook: mins(t.cook), total: mins(t.total) },
-      image: https(r.image), url: https(r.url), rating, ratingCount: rating && Number.isInteger(r.ratingCount) && r.ratingCount > 0 ? r.ratingCount : 0,
+      image: feedImage(r.image), url: https(r.url), rating, ratingCount: rating && Number.isInteger(r.ratingCount) && r.ratingCount > 0 ? r.ratingCount : 0,
       ing, steps: (Array.isArray(r.steps) ? r.steps : []).map((s) => str(typeof s === 'string' ? s : s?.text, 4000)).filter(Boolean).slice(0, 60),
     };
     rec.time = recipeTime(rec);
@@ -576,8 +577,16 @@ export function listIndex(items) {
   return items.map((item) => { const { core } = normName(item.name); return { item, core, set: new Set(core), head: core[core.length - 1] }; }).filter((x) => x.core.length);
 }
 /** M10: a list name covers an ingredient under the same rule as product matching (foodRelation). */
-// L53: the flavoured-fallback allowance (r.mod: Coconut Oil for "oil", Apple Juice for "juice") is for product offers only, never the list check.
-const covers = (ic, pc) => { const r = foodRelation(ic, pc); return !r.other && (!r.processed || r.soft); };
+// L53: the flavoured-fallback allowance (r.mod: Coconut Oil for "oil", Apple Juice for "juice") is for product offers only.
+// L55 (v0.2.6-alpha.1): except for heads where any flavour is still that food in a recipe: Chicken Broth, Beef Stock,
+// Chicken Sausage, Strawberry Jam on the list count for a bare broth / stock / sausage / jam line (so Add missing skips them).
+// Oil and juice stay strict (Coconut Oil is not "oil", Apple Juice is not "juice").
+const LIST_MOD_OK = new Set('broth stock sausage jam jelly preserves'.split(' '));
+const covers = (ic, pc, { flavour = false } = {}) => {
+  const r = foodRelation(ic, pc);
+  const same = !r.other || (flavour && r.mod && LIST_MOD_OK.has(ic[ic.length - 1]));
+  return same && (!r.processed || r.soft);
+};
 /**
  * The list item an ingredient is already covered by, or null. M10: the same head-noun and
  * modifier rules as product matching, through foodRelation(): "Unsalted Butter" or "Chicken
@@ -590,7 +599,7 @@ export function onListItem(ing, lidx) {
   if (!core.length) return null;
   const head = core[core.length - 1];
   for (const x of lidx) {
-    if (covers(core, x.core)) return x.item;
+    if (covers(core, x.core, { flavour: true })) return x.item;
     if (x.head === head && covers(x.core, core)) return x.item;
   }
   return null;

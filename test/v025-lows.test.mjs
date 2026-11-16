@@ -16,10 +16,12 @@ function mini(items) {
   return (q) => R.matchRows(mi, q, 0).map((c) => catalog.cols.name[c.row]);
 }
 
-test('L50: Replace description reads "Favorites and store picks" without settings, a list of three with', () => {
-  const src = read('src/app.js');
-  assert.ok(src.includes("'Favorites, store picks and settings' : 'Favorites and store picks'} are replaced too."));
-  assert.ok(!src.includes("Favorites, store picks${sm.settings"), 'old "Favorites, store picks are replaced" form is gone');
+test('L50: Replace description reads "Favorites and store picks" without settings, a list of three with', async () => {
+  // v0.2.6-alpha.1 (L56): the wording moved to backup.js replaceText(), which also names imported recipes.
+  const { replaceText } = await import('../src/backup.js');
+  assert.equal(replaceText({ settings: 0 }), 'Favorites and store picks are replaced too.');
+  assert.equal(replaceText({ settings: 3 }), 'Favorites, store picks and settings are replaced too.');
+  assert.ok(read('src/app.js').includes('Bk.replaceText(sm)'));
 });
 
 test('L51: bare broth / stock / jam / sausage match their own products instead of nothing', () => {
@@ -45,7 +47,7 @@ test('L51: the M10 look-alikes stay out (no fallback for cream, butter, bread, m
   assert.deepEqual(mini(['Peanut Butter'])('butter'), []);
   assert.deepEqual(mini(['Banana Bread'])('bread'), []);
   assert.deepEqual(mini(['Almond Milk'])('milk'), []);
-  assert.equal(onList('broth', 'Chicken Broth'), null, 'L53 (v0.2.6): the fallback offers Chicken Broth but the list check no longer counts it as broth');
+  assert.equal(onList('broth', 'Chicken Broth'), 'Chicken Broth', 'L55 (v0.2.6-alpha.1): a flavoured broth counts as broth on the list again');
   assert.equal(onList('chicken', 'Chicken Broth'), null, 'M10 pair unchanged');
 });
 

@@ -586,10 +586,10 @@ async function onLoadFile(file) {
   const fi = n('items', 'item');
   el('load-fs').hidden = cur === 0;
   el('load-legend').textContent = `What should happen to your current ${cur} item${cur === 1 ? '' : 's'}?`;
-  el('load-merge-d').textContent = `Keep my items and add the file's ${sm.items}. Matching items are combined.`;
+  el('load-merge-d').textContent = Bk.mergeText(sm);
   const d = el('load-replace-d');
   const b = document.createElement('b'); b.textContent = `Removes your ${cur} current item${cur === 1 ? '' : 's'}`;
-  d.replaceChildren(b, `, then loads the file's ${sm.items}. ${sm.settings ? 'Favorites, store picks and settings' : 'Favorites and store picks'} are replaced too.`);
+  d.replaceChildren(b, `, then loads the file's ${sm.items}. ${Bk.replaceText(sm)}`);
   el('load-form').elements.mode.value = 'merge';
   pendingLoad.empty = cur === 0;
   pendingLoad.fileItems = fi;
@@ -655,12 +655,8 @@ function applyLoad(mode) {
   const wrote = writePrefs(res.prefs ?? {});
   if (wrote.length) applyPrefsLive();
   const undo = () => { restore(before); Bk.saveMerged(mergedBefore); if (wrote.length) { restorePrefs(prefSnap); applyPrefsLive(); } };
-  const st = wrote.length ? ` and ${wrote.length} setting${wrote.length === 1 ? '' : 's'}` : '';
-  if (mode === 'replace' || wasEmpty) UI.toast(`Backup restored · ${res.added} item${res.added === 1 ? '' : 's'}${st}`, undo, 10000);
-  else {
-    const n = res.added; const c = res.combined;
-    UI.toast(`Backup merged · ${n} item${n === 1 ? '' : 's'} added${c ? `, ${c} combined` : ''}${st}`, undo);
-  }
+  if (mode === 'replace' || wasEmpty) UI.toast(Bk.restoreToast('replace', mode === 'replace' ? res : { ...res, rxOut: 0 }, wrote.length), undo, 10000);
+  else UI.toast(Bk.restoreToast('merge', res, wrote.length), undo);
 }
 /** Raw values of every settings key, to put back exactly on Undo. */
 function snapshotPrefs() {

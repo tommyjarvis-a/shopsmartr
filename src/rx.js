@@ -8,6 +8,7 @@ import * as L from './list.js';
 import { makeDecoder } from './pricefeed.js';
 import * as Imp from './importer.js';
 import { isStandalone, LIVE_URL } from './brand.js';
+import { feedImage } from './imghost.js';
 
 export const RX_MANIFEST_URL = 'data/recipes.json';
 export const RX_SLOT = 'aes-recipes';
@@ -58,16 +59,22 @@ function icon(id, cls = 'icon icon-18') {
   const u = document.createElementNS('http://www.w3.org/2000/svg', 'use'); u.setAttribute('href', `#${id}`); s.append(u);
   return s;
 }
-/** Photo hotlinked from the feed (never stored in the repo); a pot tile if it's missing or fails. */
-function photo(url, { eager = false } = {}) {
+/**
+ * Photo hotlinked from the recipe feed (never stored in the repo); a pot tile if it's missing or fails.
+ * M11 (v0.2.6-alpha.1): only feed photos on the allowed image host load (imghost.js, matching the CSP);
+ * an imported recipe always gets the placeholder and never makes a request, not even in the preview.
+ */
+function photo(url, { eager = false, imported = false } = {}) {
   const box = h('div', { class: 'ph' });
   const fallback = () => { box.replaceChildren(h('span', { class: 'ph-none' }, icon('i-pot', 'icon'))); };
-  if (!url) { fallback(); return box; }
-  const img = h('img', { src: url, alt: '', loading: eager ? 'eager' : 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+  const src = imported ? null : feedImage(url);
+  if (!src) { fallback(); return box; }
+  const img = h('img', { src, alt: '', loading: eager ? 'eager' : 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
   img.addEventListener('error', fallback, { once: true });
   box.append(img);
   return box;
 }
+const isImp = (r) => !!(r.imported || r.source === 'import' || /^u-/.test(String(r.id ?? '')));
 function ratingSlot(r, big = false) {
   if (!R.hasRating(r)) return null;   // no ratings: the slot isn't rendered at all
   return h('span', { class: `rx-rating${big ? ' big' : ''}`, role: 'img', 'aria-label': R.ratingAria(r) },
@@ -264,7 +271,7 @@ export function initRecipes(ctx) {
       ctx.commitFavs(F.unsaveRecipe(favs, r.id));
       ctx.toast(`Removed ${r.title} from Favorites`, () => { const f = ctx.getFavs(); if (!F.isRecipeSaved(f, r.id)) ctx.commitFavs({ ...f, recipes: [row, ...f.recipes] }); });
     } else {
-      ctx.commitFavs(F.saveRecipe(favs, { id: r.id, title: r.title, image: r.image, source: r.imported ? 'import' : 'wegmans' }));
+      ctx.commitFavs(F.saveRecipe(favs, { id: r.id, title: r.title, image: r.imported ? null : r.image, source: r.imported ? 'import' : 'wegmans' }));
       ctx.toast(`Saved ${r.title} to Favorites › Recipes`);
     }
   }
@@ -284,7 +291,7 @@ export function initRecipes(ctx) {
     const t = R.timeText(r.time);
     return h('li', { class: `rx-card${small ? ' sm' : ''}` },
       h('a', { class: 'rx-card-link', href: `#recipes/r/${encodeURIComponent(r.id)}` },
-        withTag(photo(r.image), r),
+        withTag(photo(r.image, { imported: isImp(r) }), r),
         h('span', { class: 'bd' },
           h('span', { class: 'ttl', text: r.title }),
           small ? null : h('span', { class: 'rx-meta' }, t ? h('span', { class: 'm' }, icon('i-clock', 'icon icon-14'), t) : null, ratingSlot(r)),
@@ -331,7 +338,7 @@ export function initRecipes(ctx) {
   function landing() {
     const favs = ctx.getFavs();
     const saved = F.savedRecipes(favs);
-    const pics = rx.data ? R.sortRecipes(rx.data.recipes.filter((r) => r.image), { by: 'rating' }).slice(0, 3) : [];
+    const pics = rx.data ? R.sortRecipes(rx.data.recipes.filter((r) => feedImage(r.image)), { by: 'rating' }).slice(0, 3) : [];
     const kids = [
       h('h1', { class: 'rx-h1', tabindex: '-1', text: 'Recipes' }),
       h('p', { class: 'rx-lead', text: 'Find something to cook and put what it needs on your list.' }),
@@ -418,10 +425,10 @@ export function initRecipes(ctx) {
     kids.push(h('div', { class: 'rx-quick', role: 'group', 'aria-label': 'Quick picks' }, ...quicks.map(([k, q]) => chip(q.label, b.quick === k, () => { b.quick = b.quick === k ? '' : k; b.shown = PAGE; renderResults(); }))));
     if (idle) {
       const top = new Map();
-      for (const r of R.sortRecipes(rx.data.recipes.filter((x) => x.image), { by: 'rating' })) if (!top.has(r.cat)) top.set(r.cat, r);
+      for (const r of R.sortRecipes(rx.data.recipes.filter((x) => feedImage(x.image)), { by: 'rating' })) if (!top.has(r.cat)) top.set(r.cat, r);
       kids.push(h('h2', { class: 'sr-only', text: 'Categories' }));
       kids.push(h('div', { class: 'rx-cats' }, ...cats.map((c) => h('button', { type: 'button', class: 'rx-cat', onclick: () => { b.cat = c.slug; b.shown = PAGE; render(); } },
-        h('span', { class: 'th', 'aria-hidden': 'true' }, top.get(c.slug) ? h('img', { src: top.get(c.slug).image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(icon('i-pot', 'icon icon-20')) }) : icon('i-pot', 'icon icon-20')),
+        h('span', { class: 'th', 'aria-hidden': 'true' }, top.get(c.slug) ? h('img', { src: feedImage(top.get(c.slug).image), alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(icon('i-pot', 'icon icon-20')) }) : icon('i-pot', 'icon icon-20')),
         h('span', {}, h('span', { class: 'n', text: c.label }), h('span', { class: 'c', text: `${fmt(c.count)} recipe${c.count === 1 ? '' : 's'}` }))))));
       box.replaceChildren(...kids);
       rx.perf.browseRender = performance.now() - t0;
@@ -483,7 +490,7 @@ export function initRecipes(ctx) {
     const miss = c.missing.length;
     return h('li', {},
       h('a', { class: 'rx-row', href: `#recipes/r/${encodeURIComponent(r.id)}` },
-        h('span', { class: 'th' }, withTag(photo(r.image), r)),
+        h('span', { class: 'th' }, withTag(photo(r.image, { imported: isImp(r) }), r)),
         h('span', { class: 'bd' },
           h('span', { class: 'ttl', text: r.title }),
           h('span', { class: 'cov' }, h('span', { class: 'lbl', text: `${c.have} of ${c.total} on your list` }), bar),
@@ -559,7 +566,7 @@ export function initRecipes(ctx) {
       h('label', { class: 'label', for: 'rx-imp-link', text: 'Paste a link' }),
       h('div', { class: 'imp-row' }, link, paste),
       h('button', { type: 'submit', class: 'btn btn-primary btn-block mt-2', id: 'rx-imp-link-btn', text: 'Import from link' }));
-    const ta = h('textarea', { class: 'input imp-text', id: 'rx-imp-text', rows: '6', maxlength: String(Imp.CAPS.text), placeholder: 'Paste the title, ingredients and steps', 'aria-describedby': 'rx-imp-status' });
+    const ta = h('textarea', { class: 'input imp-text', id: 'rx-imp-text', rows: '6', maxlength: String(Imp.CAPS.text + 1), placeholder: 'Paste the title, ingredients and steps', 'aria-describedby': 'rx-imp-status' });
     ta.value = rx.imp.text;
     ta.addEventListener('input', () => { rx.imp.text = ta.value; });
     const textForm = h('form', { class: 'imp-field', novalidate: true, onsubmit: (e) => { e.preventDefault(); importText(ta.value); } },
@@ -587,9 +594,10 @@ export function initRecipes(ctx) {
     const payload = Imp.payloadFromLink(text);
     if (payload) { readPayload(payload, false); render(); return; }
     let d = null;
-    try { d = Imp.parseRecipeText(text, Imp.cleanUrl(rx.imp.link.trim())); } catch { d = null; }
+    let tooBig = '';
+    try { d = Imp.parseRecipeText(text, Imp.cleanUrl(rx.imp.link.trim())); } catch (e) { d = null; if (e instanceof Imp.ImportError) tooBig = e.message; }
     if (!d || !d.lines.length) {
-      rx.imp.error = String(text ?? '').trim() ? 'Couldn\'t find ingredients in that text. Put each ingredient on its own line, under an "Ingredients" heading.' : 'Paste the recipe text first.';
+      rx.imp.error = tooBig || String(text ?? '').trim() ? 'Couldn\'t find ingredients in that text. Put each ingredient on its own line, under an "Ingredients" heading.' : 'Paste the recipe text first.';
       render(); root.querySelector('#rx-imp-text')?.focus();
       return;
     }
@@ -609,7 +617,7 @@ export function initRecipes(ctx) {
     const tm = R.recipeTime({ times: d.times });
     const time = h('input', { class: 'input', id: 'rx-imp-time', type: 'number', inputmode: 'numeric', min: '0', max: '6000', value: tm ?? '', placeholder: 'min' });
     time.addEventListener('input', () => { const n = Number(time.value); d.times = { prep: null, cook: null, total: time.value !== '' && Number.isInteger(n) && n >= 0 && n < 100000 ? n : null }; });
-    const top = h('div', { class: 'top' }, photo(d.image, { eager: true }),
+    const top = h('div', { class: 'top' }, photo(null, { imported: true }),
       h('div', {}, h('label', { class: 'sr-only', for: 'rx-imp-title', text: 'Recipe name' }), title,
         dom ? h('p', { class: 'src' }, icon('i-link', 'icon icon-14'), dom) : h('p', { class: 'src', text: 'Pasted text' })));
     const fields = h('div', { class: 'prev-fields' },
@@ -676,7 +684,7 @@ export function initRecipes(ctx) {
     const rows = [row, ...rx.userRows];
     if (!Imp.saveUserRecipes(rows)) { rx.imp.error = 'Couldn\'t save: this device\'s storage is full. Back up, then delete something you don\'t need.'; render({ keepScroll: true }); return; }
     loadUser();
-    try { ctx.commitFavs(F.saveRecipe(ctx.getFavs(), { id: row.id, title: row.title, image: row.image || null, source: 'import' })); } catch { /* still in My recipes */ }
+    try { ctx.commitFavs(F.saveRecipe(ctx.getFavs(), { id: row.id, title: row.title, image: null, source: 'import' })); } catch { /* still in My recipes */ }
     resetImport();
     ctx.toast(`Saved ${row.title} to Favorites › Recipes`);
     location.hash = `#recipes/r/${encodeURIComponent(row.id)}`;
@@ -809,7 +817,7 @@ export function initRecipes(ctx) {
     const t = R.timeText(r.time);
     const crumb = r.imported ? h('a', { class: 'crumb desk-only', href: '#recipes' }, icon('i-back', 'icon icon-16'), 'My recipes')
       : h('a', { class: 'crumb desk-only', href: '#recipes/browse', onclick: () => { rx.browse.cat = r.cat; rx.browse.shown = PAGE; } }, icon('i-back', 'icon icon-16'), R.categoryLabel(r.cat));
-    const hero = h('div', { class: 'rx-hero' }, withTag(photo(r.image, { eager: true }), r), h('span', { class: 'mob-only' }, back(r.imported ? '#recipes' : '#recipes/browse')), rxStar(r));
+    const hero = h('div', { class: 'rx-hero' }, withTag(photo(r.image, { eager: true, imported: isImp(r) }), r), h('span', { class: 'mob-only' }, back(r.imported ? '#recipes' : '#recipes/browse')), rxStar(r));
     hero.querySelector('.back')?.classList.add('ovl', 'l');
     const stepper = h('div', { class: 'stepper' },
       h('button', { type: 'button', 'aria-label': 'Fewer servings', 'aria-disabled': String(serv <= 1), onclick: () => { if (serv > 1) { rx.detailServ = serv - 1; renderKeep('[aria-label="Fewer servings"]'); } } }, icon('i-minus', 'icon icon-20')),

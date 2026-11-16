@@ -1273,7 +1273,7 @@ body:not([data-screen="list"]) .gmenu [data-list-only] { display: none; }
 .cov .bar { flex: 1; height: 8px; background: var(--color-primary-soft); border-radius: var(--radius-pill); overflow: hidden; min-width: 40px; }
 .cov .bar i { display: block; height: 100%; width: 0; background: var(--color-primary); border-radius: inherit; }
 .rx-row .miss { font-size: var(--fs-xs); line-height: var(--lh-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
-.rx-row .miss b { color: var(--color-orange-text); font-weight: var(--fw-semibold); }
+.rx-row .miss b { color: var(--color-miss-text, var(--color-orange-text)); font-weight: var(--fw-semibold); }   /* L57 */
 .rx-row .miss.ok b { color: var(--color-primary-text); }
 .rx-row:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .rx-import-row .ico { flex: none; }

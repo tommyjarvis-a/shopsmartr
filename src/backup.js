@@ -191,6 +191,30 @@ export function summarize(b, dropped = 0) {
   };
 }
 
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** L56 (v0.2.6-alpha.1): Restore sheet wording that names the file's imported recipes. */
+export function replaceText(sm) {
+  const parts = ['Favorites', 'store picks'];
+  if (sm.userRecipes) parts.push(plural(sm.userRecipes, 'imported recipe'));
+  if (sm.settings) parts.push('settings');
+  const what = parts.length > 2 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts.join(' and ');
+  return `${what} ${parts.length === 1 ? 'is' : 'are'} replaced too.${sm.userRecipes ? ' Your current imported recipes are removed.' : ''}`;
+}
+export function mergeText(sm) {
+  return `Keep my items and add the file's ${sm.items}. Matching items are combined.${sm.userRecipes ? ` Its ${plural(sm.userRecipes, 'imported recipe')} ${sm.userRecipes === 1 ? 'is' : 'are'} added too (yours are kept).` : ''}`;
+}
+/** L56: the toast after Replace or Merge, with item, imported-recipe and settings counts. */
+export function restoreToast(mode, res, settings = 0) {
+  const st = settings ? `, ${plural(settings, 'setting')}` : '';
+  const items = plural(res.added, 'item');
+  if (mode === 'replace') {
+    const rx = res.rxIn || res.rxOut ? `, ${plural(res.rxIn ?? 0, 'imported recipe')}` : '';
+    return `Backup restored · ${items}${rx}${st}`;
+  }
+  const rx = res.rxIn ? `, ${plural(res.rxIn, 'imported recipe')}` : '';
+  return `Backup merged · ${items}${rx} added${res.combined ? `, ${res.combined} combined` : ''}${st}`;
+}
+
 /** "12 list items · 4 Favorites · 2 meals · 3 stores" */
 export function summaryText(s) {
   const n = (k, one, many = `${one}s`) => `${s[k]} ${s[k] === 1 ? one : many}`;
@@ -256,7 +280,9 @@ export function applyBackup(cur, b, mode) {
     // A backup/2 file's saved recipes replace this device's; a backup/1 file has none, so they stay.
     // v0.2.4: the file's settings are restored too (a file without them leaves this device's alone).
     // v0.2.6: a file with a userRecipes section replaces the imported recipes; one without keeps this device's.
-    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: b.prefs?.listSort ?? cur.listSort, prefs: { ...(b.prefs ?? {}) }, userRecipes: b.hasUserRecipes ? (b.userRecipes ?? []) : (cur.userRecipes ?? []), added: b.state.items.length, combined: 0 };
+    return { state: b.state, favs: { ...dedupeFavorites(b.favs).favorites, recipes: b.hasRecipes ? (b.favs.recipes ?? []) : (cur.favs.recipes ?? []) }, shopStore: b.shopStore || cur.shopStore, listSort: b.prefs?.listSort ?? cur.listSort, prefs: { ...(b.prefs ?? {}) }, userRecipes: b.hasUserRecipes ? (b.userRecipes ?? []) : (cur.userRecipes ?? []), added: b.state.items.length, combined: 0,
+      // L56: imported-recipe counts for the toast (a file without the section leaves this device's alone)
+      rxIn: b.hasUserRecipes ? (b.userRecipes ?? []).length : 0, rxOut: b.hasUserRecipes ? (cur.userRecipes ?? []).length : 0, rxKept: !b.hasUserRecipes };
   }
   if (mode !== 'merge') throw new Error('Choose merge or replace');
   const items = mergeRows(cur.state.items, b.state.items, lineKey, true);
@@ -271,6 +297,7 @@ export function applyBackup(cur, b, mode) {
   }
   const base = emptyState();
   const s = cur.state;
+  const ur = mergeUserRecipes(cur.userRecipes ?? [], b.userRecipes ?? []);
   return {
     state: {
       ...s,
@@ -283,7 +310,8 @@ export function applyBackup(cur, b, mode) {
     favs: { ...cur.favs, items: favItems.rows, meals, recipes: mergeRecipes(cur.favs.recipes ?? [], b.favs.recipes ?? []) },
     shopStore: cur.shopStore || b.shopStore,
     listSort: cur.listSort,
-    userRecipes: mergeUserRecipes(cur.userRecipes ?? [], b.userRecipes ?? []),
+    userRecipes: ur,
+    rxIn: ur.length - (cur.userRecipes ?? []).length,   // L56: imported recipes added
     // Merge only fills in settings this device doesn't have yet.
     prefs: Object.fromEntries(Object.entries(b.prefs ?? {}).filter(([k]) => !(k in (cur.prefs ?? {})))),
     added: items.added,

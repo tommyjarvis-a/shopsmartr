@@ -247,8 +247,11 @@ const looksLikeIngredient = (l) => l.length <= 140 && (QTY_RE.test(plainFraction
  * Uses "Ingredients" / "Instructions" headings when present; otherwise short lines that start with an
  * amount or a bullet are ingredients and longer sentences are steps. "Serves 4" sets servings.
  */
+export const TOO_LARGE_TEXT = `That's too large to import (over ${CAPS.text.toLocaleString('en-US')} characters). Paste just the ingredients and steps.`;
 export function parseRecipeText(input, pageUrl = '') {
-  const raw = typeof input === 'string' ? input.slice(0, CAPS.text) : '';
+  // L58 (v0.2.6-alpha.1): over the cap is refused with a clear message instead of being cut mid-JSON.
+  if (typeof input === 'string' && input.length > CAPS.text) throw new ImportError(TOO_LARGE_TEXT);
+  const raw = typeof input === 'string' ? input : '';
   if (!raw.trim()) return null;
   // structured data first: page source with JSON-LD, or the JSON itself
   if (/application\/ld\+json/i.test(raw)) { for (const j of jsonLdBlocks(raw)) { const r = findRecipeObject(j); if (r) return draftFromJsonLd(r, pageUrl); } }
@@ -299,7 +302,7 @@ export function sanitizeDraft(x) {
   const mins = (v) => (Number.isInteger(v) && v >= 0 && v < 100000 ? v : null);
   const tm = isObj(x.times) ? x.times : {};
   const serv = Number.isInteger(x.servings) && x.servings >= 1 && x.servings <= 100 ? x.servings : null;
-  return { title: cleanText(x.title, CAPS.title) || 'Imported recipe', url: cleanUrl(x.url), image: cleanUrl(x.image), servings: serv, times: { prep: mins(tm.prep), cook: mins(tm.cook), total: mins(tm.total) }, lines, steps };
+  return { title: cleanText(x.title, CAPS.title) || 'Imported recipe', url: cleanUrl(x.url), image: '', servings: serv, times: { prep: mins(tm.prep), cook: mins(tm.cook), total: mins(tm.total) }, lines, steps };
 }
 /** Draft -> preview model: parsed lines; noAmount marks lines without an amount (sun-tinted row). */
 export function previewOf(draft) {
@@ -341,7 +344,7 @@ export function saveUserRecipes(rows, storage = globalThis.localStorage) {
 }
 /** Saved rows -> recipe objects in the feed's prepared shape (cat "imported", imported: true). */
 export function prepareUserRecipes(rows) {
-  const doc = { schema: RECIPES_SCHEMA, recipes: rows.map((r) => ({ id: r.id, title: r.title, cat: IMPORT_CAT, servings: r.servings, times: r.times, image: r.image || null, url: r.url || null, ing: r.lines.map((l) => parseIngredientLine(l)).filter(Boolean), steps: r.steps })) };
+  const doc = { schema: RECIPES_SCHEMA, recipes: rows.map((r) => ({ id: r.id, title: r.title, cat: IMPORT_CAT, servings: r.servings, times: r.times, image: null, url: r.url || null, ing: r.lines.map((l) => parseIngredientLine(l)).filter(Boolean), steps: r.steps })) };
   const out = prepareRecipes(doc).recipes;
   for (const r of out) r.imported = true;
   return out;
