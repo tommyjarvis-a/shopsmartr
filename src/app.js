@@ -586,7 +586,7 @@ async function onLoadFile(file) {
   el('load-merge-d').textContent = `Keep my items and add the file's ${sm.items}. Matching items are combined.`;
   const d = el('load-replace-d');
   const b = document.createElement('b'); b.textContent = `Removes your ${cur} current item${cur === 1 ? '' : 's'}`;
-  d.replaceChildren(b, `, then loads the file's ${sm.items}. Favorites, store picks${sm.settings ? ' and settings' : ''} are replaced too.`);
+  d.replaceChildren(b, `, then loads the file's ${sm.items}. ${sm.settings ? 'Favorites, store picks and settings' : 'Favorites and store picks'} are replaced too.`);
   el('load-form').elements.mode.value = 'merge';
   pendingLoad.empty = cur === 0;
   pendingLoad.fileItems = fi;

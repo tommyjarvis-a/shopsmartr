@@ -2,6 +2,26 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.5-alpha.1] - 2026-11-15 (alpha)
+
+Tester's Lows from the v0.2.4 gate (26ec923), on top of themes v2. The v0.2.5-alpha tag was already
+pushed before these landed, so they ship as 0.2.5-alpha.1 (tags are never moved).
+
+### Fixed
+- **L50:** the Replace description in Load now reads "Favorites and store picks are replaced too" for a
+  file without settings (and "Favorites, store picks and settings" with them).
+- **L51:** bare broth, stock, jam, jelly, preserves, sausage, oil and juice no longer match nothing when every
+  product has a food word in front: with no plainer product they offer Chicken/Beef/Vegetable Broth,
+  Chicken Stock, Strawberry Jam, Chicken Sausage, ranked behind any plain product. "oil" offers
+  Vegetable Oil alongside Canola. The M10 look-alikes (Ice Cream for cream, Peanut Butter, Banana
+  Bread, Almond Milk) stay out. The list check agrees (Chicken Broth on the list covers "broth").
+- **L52:** Brown Sugar and Sugar no longer cover each other, and Green Beans no longer count as beans.
+  A flavour word in front of a multi-word ingredient keeps it the same food, so Vanilla Ice Cream on the list
+  counts for "ice cream" and Add missing no longer bumps that line.
+
+### Tests
+- New test/v025-lows.test.mjs (7 tests: L50, L51 ×4, L52 ×2). 248 tests in total.
+
 ## [0.2.5-alpha] - 2026-11-15 (alpha)
 
 **Themes.** Five approved themes (Designer's themes v2), each with its own colours, fonts, icon set,

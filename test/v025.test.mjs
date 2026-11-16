@@ -15,8 +15,9 @@ import { VERSION } from '../src/version.js';
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const IDS = ['tomato-parmesan', 'blueberry-lemon', 'blackberry-lavender', 'coconut-lagoon', 'espresso-mango'];
 
-test('version 0.2.5-alpha in version.js and package.json', () => {
-  assert.equal(VERSION, '0.2.5-alpha');
+test('version 0.2.5-alpha.1 in version.js and package.json', () => {
+  assert.equal(VERSION, '0.2.5-alpha.1');
+  assert.match(read('CHANGELOG.md'), /## \[0\.2\.5-alpha\.1\]/);
   assert.equal(JSON.parse(read('package.json')).version, VERSION);
   assert.match(read('CHANGELOG.md'), /## \[0\.2\.5-alpha\]/);
 });

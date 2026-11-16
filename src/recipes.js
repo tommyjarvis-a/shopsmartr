@@ -359,6 +359,14 @@ const PRE_PROCESSED = new Set('popcorn rotisserie fried breaded battered crispy 
 const OTHER_MOD = new Set(('ice sour whipped peanut almond cashew hazelnut pistachio coconut soy oat banana pumpkin zucchini apple '
   + 'chocolate vanilla strawberry blueberry cinnamon garlic onion corn cookie cottage cream buttermilk condensed evaporated powdered '
   + 'confectioner chicken beef pork turkey vegetable veggie bone fish clam seafood tomato lemon lime orange').split(' '));
+/** L52: words in front of one food that make another product of it (Brown Sugar is not sugar, Green Beans are not beans). */
+const OTHER_FRONT = { sugar: new Set(['brown']), bean: new Set(['green', 'string', 'wax', 'snap']) };
+/**
+ * L51: bare words whose every product carries a food word in front (Chicken Broth, Strawberry Jam,
+ * Pork Sausage). When nothing plainer exists, those still count as the food, ranked behind any
+ * plain product, instead of matching nothing.
+ */
+const MOD_OK = new Set('broth stock jam jelly preserves sausage oil juice'.split(' '));
 /** M10: a generic-looking word after a food that still makes another product of it (Cream Cheese is not cream). */
 const OTHER_TAIL = { cream: new Set(['cheese']), butter: new Set(['cheese']) };
 /**
@@ -385,17 +393,24 @@ export function foodRelation(ic, pc) {
     else if (!GENERIC.has(w) && !FORM.has(w)) return out;
   }
   let front = false;
+  let mod = false;
   for (let j = 0; j < at; j += 1) {
     const w = pc[j];
     if (ic.includes(w) || PLAIN[head]?.has(w)) continue;
-    if (OTHER_MOD.has(w)) return out;
-    if ((PROCESSED.has(w) || PRE_PROCESSED.has(w))) { proc.push(w); if (w !== 'frozen') front = true; }
+    if (OTHER_FRONT[head]?.has(w)) return out;
+    // L52: a flavour or source word in front of an already specific (multi-word) ingredient keeps it
+    // the same food (Vanilla Ice Cream is ice cream); for a bare word it names another product.
+    if (OTHER_MOD.has(w) && ic.length === 1) mod = true;
+    else if ((PROCESSED.has(w) || PRE_PROCESSED.has(w))) { proc.push(w); if (w !== 'frozen') front = true; }
   }
-  return { other: false, processed: proc.length > 0, front, soft: proc.length > 0 && proc.every((w) => w === 'frozen') };
+  const processed = proc.length > 0; const soft = processed && proc.every((x) => x === 'frozen');
+  // L51: `mod` = another food only because of a front modifier; a MOD_OK word may still fall back to it.
+  if (mod) return { other: true, processed, front, soft, mod: MOD_OK.has(head) };
+  return { other: false, processed, front, soft };
 }
 /** The everyday form of a bare ingredient word ("cream" means heavy or whipping cream). */
 const PLAIN = Object.fromEntries(Object.entries({
-  cream: 'heavy whipping', bread: 'sandwich white wheat sliced', milk: 'whole', rice: 'white long grain', flour: 'all purpose', sugar: 'granulated white cane',
+  cream: 'heavy whipping', bread: 'sandwich white wheat sliced', milk: 'whole', oil: 'vegetable canola', rice: 'white long grain', flour: 'all purpose', sugar: 'granulated white cane',
 }).map(([k, v]) => [k, new Set(v.split(' '))]));
 /** A word that is itself a food: the head noun of some product in the catalog ("ice" in Bagged Ice, "banana"). Cached. */
 function isFood(mi, t) {
@@ -428,6 +443,7 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
   const storeCol = mi.cat.cols.store;
   const hid = storeIdx < 0 ? hiddenStoreIdx(mi.cat) : null;   // v0.2.4: never match at a hidden chain
   const out = [];
+  const fallback = [];
   // Scan the head noun's rows; when that list is long ("cheese", "sauce") and the name has other
   // words, scan the rarest of those instead (still requiring the head), which keeps it fast.
   let scan = rowsWith(mi, head);
@@ -467,11 +483,14 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
       // offered, so it is no Swap option and never sets the cost range. L45: a processed word in
       // front (Popcorn Chicken, Rotisserie Chicken) drops a level and sorts behind plain cuts.
       const rel = foodRelation(core, pc);
-      if (rel.other) conf = CONF.WEAK;
+      if (rel.other) { if (rel.mod) fallback.push({ row, conf: CONF.GOOD, extra, proc: 1 }); conf = CONF.WEAK; }
       else if (rel.front) { conf -= 1; proc = 1; }
     }
     out.push({ row, conf, extra, proc });
   }
+  // L51: a bare broth/stock/jam/sausage/oil/juice with no plain product offers the modified ones
+  // (Chicken Broth, Strawberry Jam) rather than nothing.
+  if (fallback.length && !out.some((c) => c.conf >= CONF.GOOD)) out.push(...fallback);
   out.sort((a, b) => b.conf - a.conf || a.proc - b.proc || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
   const best = out[0]?.conf ?? 0;
   // The shortlist: the best level and the one below it. Head-noun-only (WEAK) hits are dropped:
@@ -557,7 +576,7 @@ export function listIndex(items) {
   return items.map((item) => { const { core } = normName(item.name); return { item, core, set: new Set(core), head: core[core.length - 1] }; }).filter((x) => x.core.length);
 }
 /** M10: a list name covers an ingredient under the same rule as product matching (foodRelation). */
-const covers = (ic, pc) => { const r = foodRelation(ic, pc); return !r.other && (!r.processed || r.soft); };
+const covers = (ic, pc) => { const r = foodRelation(ic, pc); return (!r.other || r.mod) && (!r.processed || r.soft); };
 /**
  * The list item an ingredient is already covered by, or null. M10: the same head-noun and
  * modifier rules as product matching, through foodRelation(): "Unsalted Butter" or "Chicken
