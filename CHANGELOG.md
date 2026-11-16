@@ -2,10 +2,27 @@
 
 All notable changes to ShopSmartR. This project is in **alpha**; data and UI may change.
 
+## [0.2.2-alpha] - 2026-11-15 (alpha)
+
+Second Recipes hotfix (Tester gate on 24f2513). Match review, Swap, "Already on your list", Add
+missing and backup/2 move to v0.2.3; Cook from my list and Import to v0.2.4.
+
+### Fixed
+- **One-word ingredients match again (M9).** v0.2.1's L39 fix rejected every product whose name
+  ended in another word, so "parmesan", "ricotta", "cheddar", "avocado" and "chicken" showed
+  No match. A one-word ingredient now matches when the words after it are a class, cut or
+  variety of the same food (Parmesan Cheese, Chicken Breast, Chicken Thighs, Avocados Hass,
+  Garlic Bulb, Turkey Slices), and is still rejected when they name another food (Ice Cream,
+  Garlic Ham, Potato Chips).
+- **Toast and button say the same thing (L41):** "Added 3 items", "Updated 2 items" or "Added 1,
+  updated 2", with "· Undo" on the button.
+- **Holding Enter adds once (L42).** Key auto-repeat no longer flips between add and Undo, and a
+  tap right after Undo doesn't add again.
+
 ## [0.2.1-alpha] - 2026-11-15 (alpha)
 
 Hotfix for the v0.2.0 Recipes slice (Tester gate on ce512d3). Match review, Swap, "Already on
-your list", Add missing and backup/2 move to v0.2.2; Cook from my list and Import to v0.2.3.
+your list", Add missing and backup/2 later moved to v0.2.3; Cook from my list and Import to v0.2.4.
 
 ### Fixed
 - **Add all merges into your list (M7).** An ingredient whose product is already an open line
@@ -29,8 +46,8 @@ your list", Add missing and backup/2 move to v0.2.2; Cook from my list and Impor
 
 First Recipes slice. Still alpha; recipes and prices are saved household snapshots (encrypted,
 opened with the household passphrase), not official checkout prices. Match review, Swap,
-"Already on your list", Add missing and backup/2 follow in v0.2.2 (moved from v0.2.1); Cook
-from my list and Import in v0.2.3.
+"Already on your list", Add missing and backup/2 follow in v0.2.3 (moved from v0.2.1); Cook
+from my list and Import in v0.2.4.
 
 ### Added
 - **Recipes tab** in the middle of the tab bar: List · Shop · Recipes · Favorites · Ads. Stores

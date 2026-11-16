@@ -64,14 +64,23 @@ function costSlot(c) {
 /** M8: taps on the CTA slot are ignored this long after an add (double tap / double click). */
 export const TAP_GUARD_MS = 500;
 
+/** L41: one wording for the toast and the CTA: "Added 3 items", "Updated 2 items", "Added 1, updated 2". */
+export function addedText(added, updated) {
+  const items = (n) => `${n} item${n === 1 ? '' : 's'}`;
+  if (added && updated) return `Added ${added}, updated ${updated}`;
+  return updated ? `Updated ${items(updated)}` : `Added ${items(added)}`;
+}
+
 export function initRecipes(ctx) {
   const root = document.getElementById('rx-root');
+  // L42: a held Enter auto-repeats; only a fresh press activates the add / Undo button.
+  root?.addEventListener('keydown', (e) => { if (e.repeat && (e.key === 'Enter' || e.key === ' ') && e.target.closest?.('.rx-cta')) e.preventDefault(); }, true);
   const rx = {
     status: 'checking',   // checking | none | locked | ready | error
     manifest: null, env: null, data: null, byId: new Map(), decoder: null,
     mi: null, miFeed: null, cands: new Map(), pricing: null, costMemo: new Map(),
     view: 'landing', id: null, browse: { cat: '', q: '', quick: '', shown: PAGE }, sort: loadRxSort(),
-    servings: loadHousehold(), detailServ: null, lastAdd: null, perf: {},
+    servings: loadHousehold(), detailServ: null, lastAdd: null, undoAt: 0, perf: {},
   };
   globalThis.__shopsmartrRx = rx.perf;
 
@@ -478,7 +487,7 @@ export function initRecipes(ctx) {
     let btn;
     if (last && Date.now() - last.at < 6000) {
       // M8: Undo takes the Add button's place, so taps right after the add are ignored.
-      btn = h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { if (Date.now() - last.at >= TAP_GUARD_MS) undoAdd(); } }, icon('i-check', 'icon icon-20'), `Added ${last.n} · Undo`);
+      btn = h('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { if (Date.now() - last.at >= TAP_GUARD_MS) undoAdd(); } }, icon('i-check', 'icon icon-20'), `${last.what} · Undo`);
     } else if (last) {
       btn = h('a', { class: 'btn btn-secondary', href: '#list', text: 'View list' });
     } else {
@@ -489,7 +498,8 @@ export function initRecipes(ctx) {
   /** Adds the best match for every non-pantry line (or the name as text when nothing matched),
    * merging into matching open lines (M7). Undo removes what was added and restores merged lines. */
   function addAll(r, m, pc) {
-    if (Date.now() - (rx.lastAdd?.at ?? 0) < TAP_GUARD_MS) return;   // M8: a double tap adds once
+    // M8: a double tap adds once; L42: and an Undo isn't followed by an instant re-add.
+    if (Date.now() - Math.max(rx.lastAdd?.at ?? 0, rx.undoAt) < TAP_GUARD_MS) return;
     let s = ctx.getState();
     const ids = []; const prev = new Map();
     const feed = ctx.getFeed();
@@ -512,8 +522,8 @@ export function initRecipes(ctx) {
     const n = ids.length + prev.size;
     if (!n) return;
     ctx.commit(s);
-    rx.lastAdd = { id: r.id, ids, prev, n, at: Date.now() };
-    const what = prev.size ? `Added ${ids.length}, updated ${prev.size}` : `Added ${ids.length} item${ids.length === 1 ? '' : 's'}`;
+    const what = addedText(ids.length, prev.size);
+    rx.lastAdd = { id: r.id, ids, prev, n, what, at: Date.now() };
     ctx.toast(`${what} from ${r.title}`, undoAdd, 6000);
     renderKeep('.rx-cta .btn');
     const mine = rx.lastAdd;
@@ -526,6 +536,7 @@ export function initRecipes(ctx) {
     const s = ctx.getState();
     ctx.commit({ ...s, items: s.items.filter((i) => !drop.has(i.id)).map((i) => last.prev.get(i.id) ?? i) });
     rx.lastAdd = null;
+    rx.undoAt = Date.now();
     ctx.toast('Removed them from your list');
     if (rx.view === 'detail') renderKeep('.rx-cta .btn');
   }

@@ -94,3 +94,28 @@ test('L39: head-noun matches win; multi-word lines keep the softer rule', () => 
   assert.equal(R.headOf(['garlic', 'bulb']), 'garlic');
   assert.equal(R.headOf(['ice', 'cream']), 'cream');
 });
+
+// ---------- v0.2.2-alpha hotfix: M9, L41 ----------
+test('M9: a one-word ingredient matches products named after it with a generic class or cut word', () => {
+  const m = mini('Parmesan Cheese', 'Ricotta Cheese', 'Sharp Cheddar Cheese', 'Avocados Hass', 'Boneless Skinless Chicken Breast', 'Chicken Thighs Bone-In',
+    'Garlic Bulb', 'Garlic Ham', 'Fresh Ice Cream Value Pack', 'Chicken Noodle Soup', 'Potato Chips', 'Fresh Turkey Slices');
+  assert.deepEqual(m('parmesan'), ['Parmesan Cheese']);
+  assert.deepEqual(m('ricotta'), ['Ricotta Cheese']);
+  assert.deepEqual(m('cheddar'), ['Sharp Cheddar Cheese']);
+  assert.deepEqual(m('avocado'), ['Avocados Hass']);
+  assert.deepEqual(m('avocados'), ['Avocados Hass']);
+  assert.deepEqual(m('chicken').sort(), ['Boneless Skinless Chicken Breast', 'Chicken Thighs Bone-In']);
+  assert.deepEqual(m('turkey'), ['Fresh Turkey Slices']);
+  assert.deepEqual(m('garlic'), ['Garlic Bulb']);
+  assert.deepEqual(m('ice'), []);
+  assert.deepEqual(m('potatoes'), []);
+});
+
+test('L41: one wording for the toast and the button', async () => {
+  const { addedText } = await import('../src/rx.js');
+  assert.equal(addedText(3, 0), 'Added 3 items');
+  assert.equal(addedText(1, 0), 'Added 1 item');
+  assert.equal(addedText(0, 3), 'Updated 3 items');
+  assert.equal(addedText(0, 1), 'Updated 1 item');
+  assert.equal(addedText(2, 1), 'Added 2, updated 1');
+});

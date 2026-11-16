@@ -331,6 +331,17 @@ export function itemAt(mi, row) {
 }
 /** Pack and form words that can end a product name without being what it is ("Garlic Bulb", "Limes Bag"). */
 const FORM = new Set('bulb head bunch clove stalk sprig ear bag box carton jar can bottle tub container tray pkg package ct count multipack variety pound lb oz each'.split(' '));
+/** Class, cut and variety words that can follow a food's name without making it another food. */
+const GENERIC = new Set(('cheese breast thigh wing drumstick drumette tender tenderloin cutlet leg quarter fillet filet loin chop '
+  + 'steak strip half breast bulb clove head root stalk floret crown spear leaf hass haas roma plum vine cluster ball log '
+  + 'wedge block shred crumble round link patty piece nugget kernel ear slice').split(' '));
+/** M9: the product words after the ingredient word are all generic or pack words. */
+function sameFoodTail(pc, w) {
+  const i = pc.indexOf(w);
+  if (i < 0) return false;
+  for (let j = i + 1; j < pc.length; j += 1) if (!GENERIC.has(pc[j]) && !FORM.has(pc[j])) return false;
+  return true;
+}
 /** A product's head noun: its last word that isn't a pack or form word. */
 export function headOf(pc) {
   for (let i = pc.length - 1; i >= 0; i -= 1) if (!FORM.has(pc[i])) return pc[i];
@@ -368,10 +379,12 @@ export function matchRows(mi, name, storeIdx, limit = 8) {
     if (hits === want.size) conf = extra === 0 ? 4 : extra <= 2 ? 3 : 2;
     else if (hits * 2 > want.size && extra <= 2) conf = 2;
     else conf = 1;
-    // L39: the product's own head noun decides what it is. A name that ends in another noun drops
-    // a level ("green bean casserole"); for a one-word ingredient that only appears as a modifier
-    // ("ice" in Ice Cream, "garlic" in Garlic Ham) it drops two, so it is never offered.
-    if (conf > 1 && headOf(pc) !== head) conf -= core.length === 1 ? 2 : 1;
+    // The product's own head noun decides what it is. A name that ends in another noun drops a
+    // level ("green bean casserole"). L39/M9: for a one-word ingredient, the words after it in the
+    // product name must be a generic class or cut of the same food (Parmesan Cheese, Chicken
+    // Breast, Avocados Hass, Garlic Bulb); when they name a different food (Ice Cream, Garlic Ham)
+    // it drops two levels and is never offered.
+    if (conf > 1 && headOf(pc) !== head) conf -= core.length === 1 && !sameFoodTail(pc, head) ? 2 : 1;
     out.push({ row, conf, extra });
   }
   out.sort((a, b) => b.conf - a.conf || a.extra - b.extra || mi.cat.cols.name[a.row].length - mi.cat.cols.name[b.row].length || a.row - b.row);
