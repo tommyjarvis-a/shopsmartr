@@ -12,8 +12,8 @@ const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const ing = (base) => ({ text: `1 ${base}`, base, qty: 1, unit: null, k: base });
 const link = { id: 'r1', title: 'Glazed Salmon' };
 
-test('version 0.2.6-alpha.2 in version.js, package.json and the CHANGELOG', () => {
-  assert.equal(VERSION, '0.2.6-alpha.2');
+test('version 0.2.6-alpha.2+ in version.js, package.json and the CHANGELOG', () => {
+  assert.match(VERSION, /^0\.2\.6-alpha\.([2-9]|[1-9]\d+)$/);
   assert.equal(JSON.parse(read('package.json')).version, VERSION);
   assert.match(read('CHANGELOG.md'), /## \[0\.2\.6-alpha\.2\]/);
 });

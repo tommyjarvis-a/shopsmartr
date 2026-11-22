@@ -2,6 +2,16 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.6-alpha.3] - 2026-11-21 (alpha)
+
+Patch for Tester's v0.2.6-alpha.2 gate (fe087b6, GO): one Low.
+
+### Fixed
+- **L60: a backup Merge keeps what Add missing remembered.** Merging a backup into a list that already had the same
+  line (say Orange Juice you typed) combined the two lines but dropped the incoming line's recipe back-link and the
+  ingredient it was added for (L59), so "juice" showed missing again and Add missing bumped Orange Juice from 2 to 3.
+  Combined lines now keep both when the existing line has none, the same rule Add missing uses.
+
 ## [0.2.6-alpha.2] - 2026-11-21 (alpha)
 
 Patch for Tester's v0.2.6-alpha.1 gate (7525179, GO): one Low.

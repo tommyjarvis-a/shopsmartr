@@ -243,6 +243,10 @@ export function combineLines(a, b) {
   const newer = !a.priced || (b.priced && asOf(b) > asOf(a)) ? b.priced : a.priced;
   if (newer) out.priced = newer; else delete out.priced;
   if (!out.notes && b.notes) out.notes = b.notes;
+  // L60 (v0.2.6-alpha.3): like addOrMergeItem (list.js), keep the incoming line's recipe back-link and the
+  // ingredient it covers (L59) when the existing line has none, so a Merge restore doesn't undo Add missing.
+  if (!out.recipe && b.recipe) out.recipe = b.recipe;
+  if (!out.covers && b.covers) out.covers = b.covers;
   return out;
 }
 
