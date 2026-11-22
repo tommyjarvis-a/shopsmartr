@@ -983,9 +983,9 @@ export function initRecipes(ctx) {
         let res;
         if (o && feed && pc?.cands) {
           const f = C.pricedFields(feed.catalog, o.it, ctx.directory());
-          res = L.addOrMergeItem(s, { name: o.it.name, qty: o.buy.listQty ?? 1, unit: o.buy.listUnit || '', storeId: f.storeId, priced: f.priced, notes: lineLabel(l).slice(0, 200), recipe: link });
+          res = L.addOrMergeItem(s, { name: o.it.name, qty: o.buy.listQty ?? 1, unit: o.buy.listUnit || '', storeId: f.storeId, priced: f.priced, notes: lineLabel(l).slice(0, 200), recipe: link, covers: R.normName(l.ing.base).core.join(' ') });
         } else {
-          res = L.addOrMergeItem(s, { name: l.name, qty: null, unit: '', notes: l.amount ? `${l.amount}` : '', recipe: link });
+          res = L.addOrMergeItem(s, { name: l.name, qty: null, unit: '', notes: l.amount ? `${l.amount}` : '', recipe: link, covers: R.normName(l.ing.base).core.join(' ') });
         }
         s = res.state;
         if (!res.prev) ids.push(res.id);

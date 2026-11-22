@@ -2,6 +2,19 @@
 
 All notable changes to Happy Wife Helper (formerly ShopSmartR; the repo keeps the shopsmartr name). This project is in **alpha**; data and UI may change.
 
+## [0.2.6-alpha.2] - 2026-11-21 (alpha)
+
+Patch for Tester's v0.2.6-alpha.1 gate (7525179, GO): one Low.
+
+### Fixed
+- **L59: Add missing no longer re-adds a flavoured pick for a bare "juice" or "oil" line.** When the store only had a
+  flavoured product for a bare line (Orange Juice for "1 cup juice"), Add missing put it on the list, but the list
+  check, which keeps oil and juice strict on purpose (Apple Juice you typed is not "juice"), still called the line
+  missing, so the detail showed 1 of 2, Cook said "Missing 1: juice", and a second Add missing bumped Orange Juice to 2.
+  A line added by Add missing now remembers the ingredient it was added for (`covers`, kept through merges, saves and
+  backups, dropped when you rename the line), and that line counts the ingredient as on the list. Lines you type
+  yourself still follow the strict rule.
+
 ## [0.2.6-alpha.1] - 2026-11-16 (alpha)
 
 Hotfix for Tester's v0.2.6-alpha gate (566ff52): one High (M11, privacy) and four Lows.

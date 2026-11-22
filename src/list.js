@@ -50,6 +50,10 @@ export function cleanItemInput(input = {}) {
   const rid = input.recipe && (typeof input.recipe.id === 'string' || typeof input.recipe.id === 'number') ? String(input.recipe.id).slice(0, 40) : '';
   const rt = typeof input.recipe?.title === 'string' ? input.recipe.title.trim().slice(0, 160) : '';
   if (rid && rt) out.recipe = { id: rid, title: rt };
+  // L59 (v0.2.6-alpha.2): the recipe ingredient (normalized core words, e.g. "juice") this line was added
+  // for by Add missing, so a flavoured fallback pick (Orange Juice for "juice") counts that line as on the list.
+  const cv = typeof input.covers === 'string' ? input.covers.trim().toLowerCase().slice(0, 60) : '';
+  if (cv && /^[a-z0-9]+( [a-z0-9]+)*$/.test(cv)) out.covers = cv;
   return out;
 }
 
@@ -212,6 +216,7 @@ export function addOrMergeItem(state, input, id = newId()) {
   const notes = [hit.notes, add.notes].filter(Boolean).filter((n, i, a) => a.indexOf(n) === i).join('; ').slice(0, 500);
   const merged = { ...hit, qty, notes };
   if (!merged.recipe && add.recipe) merged.recipe = add.recipe;
+  if (!merged.covers && add.covers) merged.covers = add.covers;
   if (!merged.priced && add.priced) merged.priced = add.priced;
   return { state: { ...state, items: state.items.map((it) => (it === hit ? merged : it)) }, id: hit.id, prev: hit };
 }
@@ -222,7 +227,10 @@ export function updateItem(state, id, patch) {
     items: state.items.map((it) => {
       if (it.id !== id) return it;
       const merged = cleanItemInput({ ...it, ...patch });
-      return { ...it, ...merged, checked: patch.checked ?? it.checked };
+      const out = { ...it, ...merged, checked: patch.checked ?? it.checked };
+      // L59: a renamed line no longer stands for the ingredient it was added for.
+      if (patch.name != null && !sameName(patch.name, it.name)) delete out.covers;
+      return out;
     }),
   };
 }

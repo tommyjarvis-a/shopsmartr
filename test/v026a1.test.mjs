@@ -19,8 +19,8 @@ const ing = (base) => ({ text: `1 ${base}`, base, qty: 1, unit: null, k: base })
 const lidx = (...names) => R.listIndex(names.map((name, i) => ({ id: `i${i}`, name, checked: false })));
 const onList = (base, ...names) => R.onListItem(ing(base), lidx(...names))?.name ?? null;
 
-test('version 0.2.6-alpha.1 in version.js, package.json and the CHANGELOG', () => {
-  assert.equal(VERSION, '0.2.6-alpha.1');
+test('version 0.2.6-alpha.1+ in version.js, package.json and the CHANGELOG', () => {
+  assert.match(VERSION, /^0\.2\.6-alpha\.[1-9]\d*$/);
   assert.equal(JSON.parse(read('package.json')).version, VERSION);
   assert.match(read('CHANGELOG.md'), /## \[0\.2\.6-alpha\.1\]/);
 });

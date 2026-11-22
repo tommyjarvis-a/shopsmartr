@@ -598,7 +598,10 @@ export function onListItem(ing, lidx) {
   const { core } = normName(ing.base);
   if (!core.length) return null;
   const head = core[core.length - 1];
+  const key = core.join(' ');
   for (const x of lidx) {
+    // L59: a line Add missing put on the list for this ingredient (even a flavoured fallback pick) covers it.
+    if (x.item.covers === key) return x.item;
     if (covers(core, x.core, { flavour: true })) return x.item;
     if (x.head === head && covers(x.core, core)) return x.item;
   }

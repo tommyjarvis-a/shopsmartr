@@ -1,6 +1,6 @@
 {
   "name": "shopsmartr",
-  "version": "0.2.6-alpha.1",
+  "version": "0.2.6-alpha.2",
   "private": true,
   "description": "Client-side shopping list for nearby Western NY grocery stores. No backend, no build step.",
   "type": "module",
